@@ -31,8 +31,6 @@ export class Board {
     this.shapes = []; // { from, to } arrows drawn by the player, from === to is a circle
     this.autoShapes = []; // arrows the app draws (engine's best move)
     this.drawing = null;
-    this.carry = null; // a piece picked up by a click, following the mouse until it's put down
-    this.pointer = null; // last mouse position, for the carried piece
 
     root.classList.add('board');
     this.inner = el('div', 'board-inner', root);
@@ -54,6 +52,9 @@ export class Board {
     window.addEventListener('pointermove', (e) => this._move(e));
     window.addEventListener('pointerup', (e) => this._up(e));
     window.addEventListener('pointercancel', () => this._cancelDrag());
+    // if the browser takes the pointer away mid-drag (window switch, gesture), drop where it was
+    root.addEventListener('lostpointercapture', (e) => { if (this.drag) this._up({ ...e, clientX: this.drag.px ?? e.clientX, clientY: this.drag.py ?? e.clientY }); });
+    window.addEventListener('blur', () => this._cancelDrag());
     root.addEventListener('contextmenu', (e) => e.preventDefault());
 
     this._layoutSquares();
@@ -224,7 +225,6 @@ export class Board {
       s.classList.toggle('hover', !!this.drag?.moved && this.drag.over === sq);
       s.classList.toggle('can-move', !!movable && dests.has(sq));
     }
-    this._syncCarry();
     this.root.classList.toggle('movable', !!movable);
     this.root.classList.toggle('dragging-piece', !!this.drag);
   }
@@ -238,7 +238,6 @@ export class Board {
   }
 
   _down(e) {
-    this.pointerType = e.pointerType;
     const sq = this._eventSquare(e);
     if (!sq) return;
     if (e.button === 2) {
@@ -251,17 +250,6 @@ export class Board {
     const targets = this.selected ? this.state.dests.get(this.selected) || [] : [];
     if (this.selected && targets.includes(sq)) {
       const from = this.selected;
-      // a carried piece is put down right there, without sliding over from its square
-      if (this.carry) {
-        const p = this.pieces.get(from);
-        this.root.classList.add('no-anim');
-        this.pieces.get(sq)?.el.remove();
-        this.pieces.delete(from);
-        this.pieces.set(sq, p);
-        this._place(p.el, sq);
-        reflow(p.el);
-        this.root.classList.remove('no-anim');
-      }
       this.selected = null;
       this._highlight();
       this.onMove(from, sq);
@@ -300,12 +288,11 @@ export class Board {
   }
 
   _move(e) {
-    if (e.pointerType === 'mouse') this.pointer = { x: e.clientX, y: e.clientY };
     const d = this.drag;
-    if (!d) {
-      if (this.carry) this._carryFollow();
-      return;
-    }
+    if (!d) return;
+    // the button is already up but no pointerup reached us (seen with trackpad tap-to-drag):
+    // treat this as the drop, so the piece never stays stuck to the pointer
+    if (e.pointerType === 'mouse' && e.buttons === 0) { this._up(e); return; }
     if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 3) d.moved = true;
     this._follow(e.clientX, e.clientY);
     const over = this._eventSquare(e);
@@ -358,47 +345,6 @@ export class Board {
     this.drag = null;
     this.selected = null;
     this._highlight();
-  }
-
-  /* ---------- carrying: click a piece, it follows the mouse, click a square to put it down ---------- */
-
-  _syncCarry() {
-    const want = this.selected && !this.drag && this.pointerType === 'mouse' && this.pointer ? this.selected : null;
-    if (this.carry && this.carry.from === want && this.carry.el === this.pieces.get(want)?.el) return;
-    if (this.carry) {
-      this.carry.ghost.remove();
-      this.carry.el.classList.remove('carried');
-      this._sqByName.get(this.carry.over)?.classList.remove('hover');
-      this.root.classList.remove('carrying');
-      this.carry = null;
-    }
-    const p = want && this.pieces.get(want);
-    if (!p) return;
-    const ghost = el('div', `piece piece-img ${p.code} ghost`, this.piecesEl);
-    p.el.classList.add('carried');
-    this.root.classList.add('carrying');
-    this.carry = { from: want, el: p.el, ghost, over: null };
-    this._carryFollow();
-  }
-
-  _carryFollow() {
-    const c = this.carry;
-    if (!c || !this.pointer) return;
-    if (c.raf) return;
-    c.raf = requestAnimationFrame(() => {
-      c.raf = 0;
-      if (this.carry !== c) return;
-      const rect = this.inner.getBoundingClientRect();
-      const size = rect.width / 8;
-      c.ghost.style.transform = `translate3d(${this.pointer.x - rect.left - size / 2}px, ${this.pointer.y - rect.top - size / 2}px, 0) scale(1.14)`;
-      const over = this._eventSquare({ clientX: this.pointer.x, clientY: this.pointer.y });
-      if (over !== c.over) {
-        this._sqByName.get(c.over)?.classList.remove('hover');
-        c.over = over;
-        const targets = this.state.dests.get(c.from) || [];
-        if (targets.includes(over)) this._sqByName.get(over)?.classList.add('hover');
-      }
-    });
   }
 
   /* ---------- arrows & circles ---------- */

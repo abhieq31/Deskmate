@@ -92,7 +92,8 @@ h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; colo
 body { padding-left: var(--sb-w); }
 .game {
   --bar-h: 42px; --pw: clamp(300px, 26vw, 400px); --tools: 40px;
-  --board: min(calc(100vh - 2 * var(--bar-h) - 48px), calc(100vw - var(--sb-w) - var(--pw) - var(--tools) - 116px), 1000px);
+  /* the same size in focus mode (which inherits it): hiding the menu never resizes or moves the board */
+  --board: min(calc(100vh - 2 * var(--bar-h) - 48px), calc(100vw - 64px - var(--pw) - var(--tools) - 116px), 1000px);
   display: grid;
   grid-template-columns: var(--board) var(--tools) var(--pw);
   grid-template-rows: var(--bar-h) var(--board) var(--bar-h);
@@ -130,6 +131,14 @@ body[data-view="home"] #btn-focus { display: none; }
 .evalbar.flip.black-better .evalbar-num { top: auto; bottom: 4px; }
 .evalbar-num { position: absolute; left: 0; right: 0; bottom: 4px; text-align: center; font: 700 9px/1 var(--font); color: #333; }
 .evalbar.black-better .evalbar-num { bottom: auto; top: 4px; color: #ddd; }
+/* during play: a slim, quiet version with each side's chances at its ends */
+.evalbar { overflow: visible; }
+.evalbar-fill { border-radius: inherit; }
+.evalbar.quiet { width: 6px; opacity: 0.75; right: calc(100% + 10px); }
+.evalbar.quiet .evalbar-num { display: none; }
+.wb-pct { display: none; position: absolute; right: calc(100% + 5px); top: 0; font: 600 10px/1 var(--font); color: var(--muted); font-variant-numeric: tabular-nums; }
+.wb-pct.bot { top: auto; bottom: 0; }
+.evalbar.quiet .wb-pct { display: block; }
 
 /* the right panel: opening, analysis, the moves, navigation, actions */
 .panel {
@@ -156,6 +165,8 @@ body[data-view="home"] #btn-focus { display: none; }
 .txt-btn.act-resign:hover:not(:disabled) { color: #f08c8c; }
 .txt-btn.offer, .sq-btn.offer { color: var(--gold); animation: offerPulse 1.4s ease-in-out infinite; }
 .panel-actions .act-analyse { flex: 1; }
+.panel-actions .txt-btn { padding: 0 8px; gap: 6px; font-size: 0.9rem; }
+.panel-actions .flip-btn { width: 32px; }
 .icon-btn {
   display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 6px; flex: none;
   background: transparent; color: var(--text); cursor: pointer; transition: background 0.15s, color 0.15s;
@@ -335,7 +346,6 @@ body.focus { --sb-w: 0px; }
 body.focus .sidebar, body.focus .mobile-bar, body.focus .panel { display: none; }
 body.focus .game {
   --lw: 200px; --rw: 120px;
-  --board: min(calc(100vh - 48px), calc(100vw - var(--lw) - var(--rw) - 444px), 1100px); /* gaps 48 + padding 76 */
   grid-template-columns: var(--lw) var(--board) var(--rw);
   grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, 1fr) auto;
   grid-template-areas:
@@ -484,10 +494,6 @@ body.focus .focus-acts { grid-area: acts; display: flex; flex-direction: column;
   filter: drop-shadow(0 14px 14px rgba(0, 0, 0, 0.45)); /* lifted: a bit bigger, a deeper shadow */
 }
 .piece.fade { opacity: 0; z-index: 1; }
-/* carried after a click: the piece rides under the mouse, its square keeps a faint copy */
-.piece.ghost { transition: none; z-index: 10; pointer-events: none; filter: drop-shadow(0 14px 14px rgba(0, 0, 0, 0.45)); }
-.piece.carried { opacity: 0.35; }
-.board.carrying, .board.carrying .sq { cursor: grabbing !important; }
 .piece.appear { animation: appear 0.24s ease-out; }
 @keyframes appear { from { opacity: 0; } }
 .board.movable { cursor: default; }
@@ -755,7 +761,8 @@ kbd {
   .evalbar { right: auto; left: 0; top: auto; bottom: calc(100% + 2px); width: 100%; height: 6px; }
   .evalbar-fill { top: 0; height: 100%; width: var(--w, 50%); }
   .evalbar.flip .evalbar-fill { left: auto; right: 0; }
-  .evalbar-num { display: none; }
+  .evalbar-num, .wb-pct, .evalbar.quiet .wb-pct { display: none; }
+  .evalbar.quiet { right: auto; width: 100%; height: 4px; }
   /* the panel shrinks to its action row; after a game it also holds the review */
   .panel, body.focus .panel { display: flex; margin: 0 10px; border: 0; background: transparent; }
   .panel-head, .panel-nav { display: none; }

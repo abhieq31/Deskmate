@@ -49,6 +49,11 @@ Please use it in line with your employer's policies.
 - **Focus mode** (on by default, **Z** or the button by the board's top
   right corner): just the board, the players at its top and bottom edge,
   both clocks between them, and Draw / Resign as two buttons beside it.
+  The board keeps exactly the same size and height in both views.
+- **Winning chances, quietly.** A slim bar beside the board shows each
+  side's chances (lichess's win% from a short Stockfish search), updated
+  after every move. No best moves, no arrows, nothing in the move list;
+  turn it off in Settings.
 - **Opening names** for every game, from lichess's open
   [chess-openings](https://github.com/lichess-org/chess-openings) data set
   (3,865 named lines, transpositions included).
@@ -61,9 +66,8 @@ Please use it in line with your employer's policies.
   a little bigger with a deeper shadow, and follows the pointer once per
   screen frame. Drop it on any square; the target is outlined while you
   drag. The cursor shows an open hand over pieces you can move and a
-  closed one while you hold one. Or click a piece once: it rides along
-  under the mouse until you click the square to put it on. Touch and
-  trackpad double-tap-drag work the same way.
+  closed one while you hold one. Touch and trackpad double-tap-drag work
+  too, and the piece always lets go when you do. Click-to-move works too.
 - **Post-game analysis with Stockfish.** Once a game ends (or for any saved
 , Stockfish 11 analyses every move in your browser. You
   get an evaluation bar, the engine's best line and an arrow for its best

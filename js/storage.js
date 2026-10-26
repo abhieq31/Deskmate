@@ -37,6 +37,7 @@ export const DEFAULT_SETTINGS = {
   coords: true,
   theme: 'ember',
   focus: true, // during a game: only the board, the players and the clocks
+  winBar: true, // a slim bar by the board with each side's winning chances
   white: 'White',
   black: 'Black',
   tc: 'none',

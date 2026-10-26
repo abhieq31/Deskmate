@@ -78,6 +78,7 @@ function render() {
   renderControls();
   renderAnalysis();
   applyFocus();
+  scheduleWinBar();
 }
 
 function renderPlayers() {
@@ -121,10 +122,9 @@ function playerStatus(g, color, { here, toMove, won, offers, inCheck }) {
   if (r && color !== r.me && relaysUp === 0) return 'Reconnecting…';
   if (offers) return 'Offers a draw';
   if (inCheck && toMove) return 'Check!';
-  if (!toMove) return '';
-  if (!review && g.ai) return color === g.ai.color ? 'Thinking…' : 'Your move';
-  if (!r) return 'To move';
-  return color === r.me ? 'Your move' : 'Thinking…';
+  // whose turn it is only needs saying when two people share one laptop
+  if (!toMove || r || g.ai) return '';
+  return 'To move';
 }
 
 function fmtClock(ms) {
@@ -292,6 +292,51 @@ function applyMove(from, to, promotion) {
   if (game.over) onGameOver();
   else { scheduleFlip(); computerMove(); }
   return ply;
+}
+
+/* ---------------- win chances during the game ---------------- */
+
+// A slim bar by the board with each side's chances (lichess's win% from a short Stockfish search),
+// refreshed after every move. Quiet on purpose: no numbers in the move list, no best move, no arrows.
+const WIN_LIMITS = { wasm: { depth: 12, movetime: 350 }, asm: { depth: 8, movetime: 300 } };
+let liveEngine = null;
+let liveTurn = 0;
+const liveEvals = new Map(); // fen → evaluation, so stepping back and forth costs nothing
+
+function winBarWanted() {
+  return settings.winBar && view === 'game' && !an && !review && game.length > 0;
+}
+
+async function scheduleWinBar() {
+  if (!winBarWanted()) return renderWinBar();
+  const fen = game.fenAt(viewPly);
+  if (liveEvals.has(fen)) return renderWinBar();
+  const turn = ++liveTurn;
+  try {
+    liveEngine = liveEngine || new Engine();
+    const flavor = await liveEngine.start();
+    if (turn !== liveTurn) return;
+    const ev = terminalEval(fen) || await liveEngine.analyse(fen, WIN_LIMITS[flavor]);
+    if (ev) liveEvals.set(fen, ev);
+  } catch { return; } // no engine in this browser: no bar, nothing else changes
+  if (turn === liveTurn) renderWinBar();
+}
+
+function renderWinBar() {
+  const bar = $('#evalbar');
+  const ev = winBarWanted() && liveEvals.get(game.fenAt(viewPly));
+  if (an && an.game === active()) return; // the analysis owns the bar
+  bar.classList.toggle('hidden', !ev);
+  if (!ev) return;
+  const white = winPct(ev);
+  bar.style.setProperty('--w', `${white}%`);
+  bar.classList.toggle('flip', board.orientation === 'b');
+  bar.classList.toggle('black-better', white < 50);
+  const top = other(board.orientation);
+  const pct = (c) => `${Math.round(c === 'w' ? white : 100 - white)}%`;
+  $('#wb-top').textContent = pct(top);
+  $('#wb-bot').textContent = pct(board.orientation);
+  bar.title = `Winning chances: White ${Math.round(white)}%, Black ${Math.round(100 - white)}%`;
 }
 
 /* ---------------- playing the computer ---------------- */
@@ -772,10 +817,11 @@ function renderAnalysis() {
   const g = active();
   const on = !!an && an.game === g;
   $('#analysis').classList.toggle('hidden', !on);
-  $('#evalbar').classList.toggle('hidden', !on);
+  $('#evalbar').classList.toggle('quiet', !on);
   $$('#board .sq-glyph').forEach((e) => e.remove());
   $('#an-acc').classList.toggle('hidden', !on);
-  if (!on) { board.setAutoShapes([]); return; }
+  if (!on) { board.setAutoShapes([]); renderWinBar(); return; }
+  $('#evalbar').classList.remove('hidden');
   const ev = an.evals[viewPly];
   const white = winPct(ev);
 
@@ -1165,6 +1211,7 @@ bindSwitch('#set-autoflip', 'autoFlip', () => { render(); if (settings.autoFlip)
 bindSwitch('#set-dests', 'showDests', applyPrefs);
 bindSwitch('#set-coords', 'coords', applyPrefs);
 bindSwitch('#set-sound', 'sound', applyPrefs);
+bindSwitch('#set-winbar', 'winBar', render);
 
 $$('.swatch').forEach((s) => s.addEventListener('click', () => {
   settings.theme = s.dataset.theme;

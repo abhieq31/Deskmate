@@ -97,7 +97,7 @@
     <div class="clock-wrap clock-top"><div class="clock" id="clock-top" role="timer"><svg class="clock-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span data-time></span></div></div>
 
     <section class="board-area">
-      <div class="evalbar hidden" id="evalbar" aria-label="Evaluation"><div class="evalbar-fill" id="evalbar-fill"></div><span class="evalbar-num" id="evalbar-num"></span></div>
+      <div class="evalbar hidden" id="evalbar" aria-label="Evaluation"><div class="evalbar-fill" id="evalbar-fill"></div><span class="evalbar-num" id="evalbar-num"></span><span class="wb-pct" id="wb-top"></span><span class="wb-pct bot" id="wb-bot"></span></div>
       <div class="board-frame">
         <div id="board" aria-label="Chess board"></div>
       </div>
@@ -167,6 +167,7 @@
       <label class="switch"><input type="checkbox" id="set-dests" /><span class="track"></span><span>Show legal moves</span></label>
       <label class="switch"><input type="checkbox" id="set-coords" /><span class="track"></span><span>Coordinates</span></label>
       <label class="switch"><input type="checkbox" id="set-sound" /><span class="track"></span><span>Capture sound</span></label>
+      <label class="switch"><input type="checkbox" id="set-winbar" /><span class="track"></span><span>Winning chances by the board</span></label>
     </div>
     <h3>Board</h3>
     <div class="themes" role="radiogroup" aria-label="Board theme">
@@ -330,7 +331,7 @@
       <button class="btn icon-only ghost" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
     <ul class="help">
-      <li>Drag a piece, or click it once to pick it up and click the square to put it on. Dots show where it can go; rings show captures.</li>
+      <li>Drag a piece, or click it and then click where it goes. Dots show where it can go; rings show captures.</li>
       <li>On one laptop, the board turns to the side of whoever is to move (setting: <em>Turn the board for each player</em>).</li>
       <li>Right-click and drag to draw arrows; right-click a square to circle it.</li>
       <li><em>Play a colleague</em>: create a game and share its 6-character code once. Moves then appear on both laptops as they are played.</li>
