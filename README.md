@@ -5,98 +5,96 @@
 # Deskmate
 
 **Chess with your colleagues: on one laptop, or across two.**
-Put the laptop between you and play, or send game codes through the chat tool you already use.
+Share one short code and play live, each on your own work laptop. Or put one laptop between you.
 
-[**▶ Play now**](https://abhieq31.com/deskmate) · [**⬇ Offline version**](https://abhieq31.github.io/Deskmate/deskmate.html) · [Report a bug](https://github.com/abhieq31/Deskmate/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/Deskmate/issues/new?template=feature_request.md)
+[**▶ Play now**](https://abhieq31.com/deskmate) · [**⬇ Offline version**](https://github.com/abhieq31/Deskmate/raw/main/deskmate.html) · [Report a bug](https://github.com/abhieq31/Deskmate/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/Deskmate/issues/new?template=feature_request.md)
 
-<img src="docs/screenshot.png" alt="Deskmate on a laptop: a large board, each player with a clock above and below it, and Draw, Resign and Menu beside it" width="760" />
-<img src="docs/phone.png" alt="Deskmate on a phone: players with clocks above and below the board, Draw, Resign and Menu underneath" width="190" />
+<img src="docs/screenshot.png" alt="A live game on a laptop: each player and their clock above and below the board, and the move list with Draw and Resign beside it" width="760" />
+<img src="docs/phone.png" alt="The same game on a phone: players with clocks above and below the board, Draw, Resign and Menu underneath" width="190" />
 
 </div>
 
 ## Why
 
 Chess sites get blocked on work networks. Deskmate is a static page with no
-server, no account, no tracking and no third-party requests. It runs from
-GitHub Pages or `localhost`, or as **one HTML file you open by
-double-click**. It also works with no network at all.
+account, no tracking and no Deskmate server. Two colleagues can play on one
+laptop, or each on their own laptop with one short code.
 
-Please use it in line with your employer's policies. Deskmate keeps
-everything local; it is not designed to get around IT controls.
+Please use it in line with your employer's policies.
 
 ## Features
 
-- **Play a colleague on another laptop with game codes.** After your move
-  you get a short code like `DM1-eyJp…`. Paste it into Teams, Slack, email
-  or any chat. Your colleague pastes it and moves, then sends a code back.
-  There's no server and no account, and nothing to block apart from the chat
-  you already use. ([how it works](#play-a-colleague-remotely))
-- **The board turns to face whoever is to move.** After every move it spins
-  180° and the pieces stay upright. You can turn this off.
-- **Move hints like lichess and chess.com.** Click or drag a piece: dots show
-  its legal moves and rings show captures.
-- **Last move and check highlights.** The from/to squares are tinted and a
-  king in check glows red.
+- **Play a colleague on their own laptop.** One of you creates a game and
+  gets a 6-character code like `K7Q-M2X`. The other types it in once, and
+  moves appear on both screens within moments. Clocks, draw offers,
+  resignations and rematches sync too. ([How it works](#play-a-colleague))
+- **chess.com-style view.** Each player row has the avatar and name on the
+  left and the clock on the right, above and below the board. Beside the
+  board there is only the move list, **Draw** and **Resign**. Everything else
+  is under ☰. On phones, Draw · Resign · Menu sit under the board.
+- **Same-laptop games.** After each move the board switches to the side of
+  whoever moves next. The view just changes; nothing spins. (Auto-flip can be
+  turned off in the menu.)
+- **Move hints.** Click or drag a piece: dots show its legal moves, rings
+  show captures. The last move is highlighted, and a king in check glows.
 - **Full rules.** Castling, en passant and promotion (with a piece picker).
   The game ends on checkmate, stalemate, threefold repetition, the 50-move
   rule or insufficient material.
-- **Chess clocks.** Choose from bullet to classical, with increment, pause
-  and a low-time warning.
+- **Clocks** from bullet to classical, with increment.
+- **Quiet.** The only sound is a soft water drop when a piece is captured.
 - **Games stay in your browser.** A game in progress survives a reload.
-  Finished games go to **Saved games**, where you can review, resume or
-  download them as PGN.
-- **PGN import and export**, plus copying the FEN of any position.
-- **The board is the page.** On screen there are only the two players
-  (profile and clock, above and below the board) and a slim rail with
-  **Draw**, **Resign** and **Menu**. Code and Pause show up only in games
-  that need them. New game, remote play, saved games, the move list,
-  settings and PGN tools are all in the menu.
-- **Move list with replay.** Use ← → ↑ ↓, or open the menu and click any move.
-- **Takeback, agreed draw, resign and rematch** (rematch swaps colours).
-- **Right-click arrows and circles** for explaining a line to your opponent.
-- **Five board themes**, synthesized move sounds, and the screen stays on
-  during a game.
-- **Responsive.** Works on a desktop, a tablet or a phone. It can be
-  installed as an app (PWA).
+  Finished games go to **Saved games** (review, resume, PGN download).
+- **PGN import/export**, FEN copy, takeback (same-laptop games), five board themes.
 
-<img src="docs/flip.png" alt="The board halfway through its flip animation" width="560" />
+## Play a colleague
 
-## Play a colleague remotely
+1. **☰ → Play a colleague → Start a game.** Enter your name, pick a colour
+   and a clock, then press **Create game**. You get a code like `K7Q-M2X`.
+2. Your colleague opens Deskmate and goes to **☰ → Play a colleague → Join
+   with a code**, then types the code and their name. You can also send them
+   the link (`…/deskmate#K7QM2X`), which fills the code in for them.
+3. That's it. The game is live on both laptops until it ends, and **Rematch**
+   swaps colours in the same room. If a laptop reloads or loses its connection,
+   it rejoins the game by itself.
 
-1. Click **Play remotely → Start a game**, enter both names and pick your colour.
-2. You get a **game code** (and a link). Send it to your colleague in any chat.
-3. They click the link, or press **Play remotely → I have a code** and paste
-   it. They can also press **Ctrl+V** anywhere on the page.
-4. After each move Deskmate copies the new code to your clipboard. Send it,
-   and paste the reply when it comes back. Repeat until mate. 🙂
+<img src="docs/invite.png" alt="The Share this code dialog showing a 6-character game code" width="560" />
 
-Draw offers, resignations and the final result travel inside the codes too.
-Each code contains the whole game (one byte per move: a full 30-move game
-is about 180 characters). If a code gets lost, the newest one always works.
-Codes are checked against the rules, and a code that rewrites earlier
-moves is rejected.
+### How it works
 
-How this compares to real-time play: a live "room code" needs a relay
-server, or WebRTC with STUN/TURN servers. On a corporate network that's an
-outside domain or a UDP path that may be blocked, plus a server someone has
-to run and pay for. Text codes need neither: if your chat works, the game
-works. The trade-off is that each move takes a paste (a few seconds),
-which is fine for a game at your desk.
+Deskmate has no server of its own. The two browsers exchange the game
+through public [Nostr](https://nostr.com) relays: plain secure WebSockets on
+port 443 to `relay.damus.io`, `nos.lol`, `relay.primal.net` and
+`offchain.pub`. Every update goes to all four at once, so the game keeps
+going while any one of them is up.
+
+Each update is the whole game state, a few hundred bytes: one byte per move,
+plus the clocks and the result. It is signed with a key derived from the room
+code, so a relay can't alter it. Anyone who has the code can see the game,
+so treat it like a meeting link.
+
+**Company networks.** If your network blocks those relays, you can run any
+Nostr relay internally and point Deskmate at it. Run this in the browser
+console:
+`localStorage['deskmate:relays'] = '["wss://relay.your-company.internal"]'`.
+If you host Deskmate behind a Content-Security-Policy, allow the relays in
+`connect-src`.
 
 ## Offline version (one file)
 
-[`deskmate.html`](https://abhieq31.github.io/Deskmate/deskmate.html) is the
-whole app (about 225 KB) in a single file. Save it anywhere and open it by
-double-click. It makes no network requests. Build it yourself with
-`npm run build` (writes `deskmate.html`).
+[`deskmate.html`](https://github.com/abhieq31/Deskmate/raw/main/deskmate.html)
+is the whole app (about 300 KB) in a single file. Save it anywhere and open
+it by double-click. Same-laptop games need no network at all. Live games with
+a colleague need to reach the relays. Build it yourself with `npm run build`
+(writes `deskmate.html`).
 
 ## Hosting it on your own site
 
 `deskmate.html` is self-contained (inline CSS, JS and images), so any web
 server can host it at any path. Drop it in as `deskmate/index.html`. That's
 how [abhieq31.com/deskmate](https://abhieq31.com/deskmate) runs: the file sits
-in the site's `public/` folder. It needs `script-src 'unsafe-inline'` and
-`img-src data:` if your site sends a Content-Security-Policy.
+in the site's `public/` folder. If your site sends a Content-Security-Policy,
+it needs `script-src 'unsafe-inline'`, `img-src data:` and the relays in
+`connect-src`.
 
 ## Run it locally
 
@@ -134,7 +132,8 @@ css/style.css         all styling (themes, board, animations, responsive layout)
 js/app.js             controller: UI wiring, clocks, persistence, dialogs
 js/board.js           interactive board: render, click/drag, hints, arrows, flip
 js/game.js            game model on top of chess.js: plies, results, PGN (pure, tested)
-js/remote.js          game codes for remote play: encode/decode/compare (pure, tested)
+js/live.js            live rooms: room codes, signed snapshots over Nostr relays (tested)
+js/remote.js          compact move encoding for snapshots, one byte per move (tested)
 js/storage.js         localStorage wrapper
 js/sound.js           Web Audio synthesized sounds
 js/confetti.js        celebration effect
@@ -142,7 +141,8 @@ sw.js                 offline cache (service worker)
 scripts/build-single.mjs  bundles everything into deskmate.html (no deps)
 deskmate.html         generated offline build (commit it after changes: `npm run build`)
 vendor/chess.js       chess rules engine (chess.js 1.4.0, BSD-2-Clause)
-tests/                node:test unit tests for js/game.js and js/remote.js
+vendor/secp256k1.js   Schnorr signatures for room snapshots (noble-secp256k1 3.2.0, MIT)
+tests/                node:test unit tests for the game model, move encoding and live rooms
 ```
 
 ## Contributing
@@ -155,13 +155,13 @@ Contributions are welcome, from typo fixes to new features. See
 - More piece sets and board themes
 - Play from a custom FEN position or Chess960
 - Translations
-- An optional real-time mode for networks that allow it (WebRTC/WebSocket), with codes as the fallback
-- Clocks for remote games (store the time used per move in the code)
+- A direct WebRTC connection between the two laptops when the network allows it, with relays as the fallback
 
 ## Credits & licenses
 
 - Deskmate source code: [MIT](LICENSE)
 - Rules engine: [chess.js](https://github.com/jhlywa/chess.js) by Jeff Hlywa, BSD-2-Clause
+- Signatures: [noble-secp256k1](https://github.com/paulmillr/noble-secp256k1) by Paul Miller, MIT
 - Pieces: *cburnett* set by Colin M.L. Burnett, GPLv2+, via [lichess](https://github.com/lichess-org/lila). See [assets/pieces/cburnett/LICENSE.md](assets/pieces/cburnett/LICENSE.md)
 - Visual language inspired by [lichess.org](https://lichess.org). Please support them.
 

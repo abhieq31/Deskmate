@@ -1,9 +1,9 @@
 // Offline support: cache the app shell, serve cache-first, refresh in the background.
-const CACHE = 'deskmate-v3';
+const CACHE = 'deskmate-v4';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'assets/icon.svg',
-  'js/app.js', 'js/board.js', 'js/game.js', 'js/storage.js', 'js/sound.js', 'js/confetti.js', 'js/remote.js',
-  'vendor/chess.js',
+  'js/app.js', 'js/board.js', 'js/game.js', 'js/storage.js', 'js/sound.js', 'js/confetti.js', 'js/remote.js', 'js/live.js',
+  'vendor/chess.js', 'vendor/secp256k1.js',
   ...['K', 'Q', 'R', 'B', 'N', 'P'].flatMap((r) => [`assets/pieces/cburnett/w${r}.svg`, `assets/pieces/cburnett/b${r}.svg`]),
 ];
 

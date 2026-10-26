@@ -4,18 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Deskmate · Chess with your colleagues</title>
-  <meta name="description" content="Free, open-source over-the-board chess for two players on one screen. Auto-flipping board, legal move hints, clocks and local game history. No account, no tracking." />
+  <meta name="description" content="Free, open-source chess for colleagues: two players on one laptop, or on two laptops with one short game code. Clocks, legal move hints, local game history. No account." />
   <meta name="theme-color" content="#161512" />
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
-
   <main class="game">
     <section class="player top" id="player-top">
-      <span class="avatar" data-avatar aria-hidden="true"></span>
+      <span class="avatar" aria-hidden="true"></span>
       <div class="pmeta">
         <div class="pline"><span class="pname" data-name></span><span class="material" data-material></span></div>
         <div class="pstatus" data-status></div>
@@ -34,7 +32,7 @@
     </section>
 
     <section class="player bottom" id="player-bottom">
-      <span class="avatar" data-avatar aria-hidden="true"></span>
+      <span class="avatar" aria-hidden="true"></span>
       <div class="pmeta">
         <div class="pline"><span class="pname" data-name></span><span class="material" data-material></span></div>
         <div class="pstatus" data-status></div>
@@ -42,14 +40,27 @@
     </section>
     <div class="clock clock-bottom" id="clock-bottom" role="timer"><svg class="clock-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span data-time></span></div>
 
-    <!-- the only controls on screen; everything else is in the menu -->
+    <!-- desktop: chess.com-style side panel with the moves, Draw and Resign -->
+    <aside class="panel" aria-label="Moves">
+      <div class="panel-head">
+        <span class="panel-title">Moves</span>
+        <span class="tc-badge" id="panel-tc"></span>
+        <button class="icon-btn act-menu" title="Menu (O)" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      </div>
+      <div class="moves-slot" id="moves-slot-panel"></div>
+      <div class="panel-actions">
+        <button class="btn action act-draw"><span class="half">½</span><span>Draw</span></button>
+        <button class="btn action danger act-resign"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg><span>Resign</span></button>
+        <button class="btn action act-pause hidden"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
+      </div>
+    </aside>
+
+    <!-- phones: the same actions in one row under the board -->
     <nav class="rail" aria-label="Game actions">
-      <button class="rb" id="btn-draw" title="Agree to a draw"><span class="half">½</span><span>Draw</span></button>
-      <button class="rb danger" id="btn-resign" title="Resign"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg><span>Resign</span></button>
-      <button class="rb hidden" id="btn-code" title="Paste or show a game code"><svg viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg><span>Code</span></button>
-      <button class="rb hidden" id="btn-pause" title="Pause clocks (Space)"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
-      <span class="rail-gap"></span>
-      <button class="rb" id="btn-options" title="Menu (O)"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Menu</span></button>
+      <button class="rb act-draw"><span class="half">½</span><span>Draw</span></button>
+      <button class="rb danger act-resign"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg><span>Resign</span></button>
+      <button class="rb act-pause hidden"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
+      <button class="rb act-menu" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Menu</span></button>
     </nav>
   </main>
 
@@ -62,7 +73,7 @@
 
     <section class="opt-sec menu-main">
       <button class="btn primary" id="btn-new"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New game</button>
-      <button class="btn" id="btn-remote"><svg viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>Play remotely</button>
+      <button class="btn" id="btn-remote"><svg viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>Play a colleague</button>
       <button class="btn" id="btn-archive"><svg viewBox="0 0 24 24"><path d="M3 5h18v4H3zM5 9h14v10H5zM9 13h6"/></svg>Saved games</button>
     </section>
 
@@ -75,6 +86,7 @@
       <p class="muted" id="status-sub"></p>
     </section>
 
+    <div class="moves-slot" id="moves-slot-menu"></div>
     <section class="opt-sec" id="moves-block">
       <div class="sec-head">
         <h3>Moves</h3>
@@ -121,23 +133,6 @@
     <p class="side-foot muted">Games are stored only in this browser. <a href="https://github.com/abhieq31/Deskmate" target="_blank" rel="noopener">Open source</a> — contributions welcome.<span class="offline-dl"> · <a href="deskmate.html" download>Download the offline version</a> (one HTML file, no internet needed).</span></p>
   </dialog>
 
-  <!-- Remote: paste / show code -->
-  <dialog id="dlg-code" class="modal">
-    <div class="modal-head">
-      <h2>Game code</h2>
-      <button class="btn icon-only ghost" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-    </div>
-    <div id="remote-card">
-      <p class="remote-who" id="remote-who"></p>
-      <textarea id="remote-paste" rows="3" spellcheck="false" placeholder="Paste your opponent's code here…"></textarea>
-      <div class="remote-btns">
-        <button class="btn" id="remote-copy">Show my code</button>
-        <button class="btn primary" id="remote-apply">Apply code</button>
-      </div>
-      <p class="muted tiny">Tip: on a computer you can press Ctrl+V anywhere on the page.</p>
-    </div>
-  </dialog>
-
   <!-- New game -->
   <dialog id="dlg-new" class="modal">
     <form method="dialog" id="form-new">
@@ -164,65 +159,52 @@
     <div class="modal-actions wrap">
       <button class="btn" id="over-review">Review game</button>
       <button class="btn" id="over-pgn">Download PGN</button>
-      <button class="btn hidden" id="over-code">Show final code</button>
       <button class="btn" id="over-new">New game</button>
       <button class="btn primary" id="over-rematch">Rematch</button>
     </div>
   </dialog>
 
-  <!-- Remote: create / join -->
+  <!-- Play a colleague: one short code, then the game is live on both laptops -->
   <dialog id="dlg-remote" class="modal">
     <div class="modal-head">
-      <h2>Play a colleague remotely</h2>
+      <h2 id="remote-title">Play a colleague</h2>
       <button class="btn icon-only ghost" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
-    <ol class="steps">
-      <li><b>Make a move.</b> Deskmate gives you a short game code.</li>
-      <li><b>Send the code</b> through Teams, Slack, email or any chat.</li>
-      <li><b>They paste it</b>, make their move and send a code back.</li>
-    </ol>
-    <p class="muted tiny">No server and no account. The whole game is inside the code.</p>
-    <div class="tabs" role="tablist">
+    <div class="tabs" role="tablist" id="remote-tabs">
       <button type="button" role="tab" data-tab="create" aria-selected="true">Start a game</button>
-      <button type="button" role="tab" data-tab="join" aria-selected="false">I have a code</button>
+      <button type="button" role="tab" data-tab="join" aria-selected="false">Join with a code</button>
     </div>
     <form method="dialog" id="form-remote-create" data-pane="create">
-      <div class="names two">
-        <label class="field"><span>Your name</span><input id="remote-my-name" maxlength="24" autocomplete="off" placeholder="Me" /></label>
-        <label class="field"><span>Colleague's name</span><input id="remote-opp-name" maxlength="24" autocomplete="off" placeholder="Opponent" /></label>
-      </div>
+      <label class="field"><span>Your name</span><input id="remote-create-name" maxlength="24" autocomplete="off" placeholder="Your name" required /></label>
       <h3>You play</h3>
       <div class="color-pick">
         <label><input type="radio" name="remote-color" value="w" checked /><span><i class="pc wK"></i>White</span></label>
         <label><input type="radio" name="remote-color" value="random" /><span><b class="duo"><i class="pc wK"></i><i class="pc bK"></i></b>Random</span></label>
         <label><input type="radio" name="remote-color" value="b" /><span><i class="pc bK"></i>Black</span></label>
       </div>
+      <h3>Clock</h3>
+      <div class="chips" id="remote-tc"></div>
       <div class="modal-actions">
-        <button type="button" class="btn" data-close>Cancel</button>
-        <button type="submit" class="btn primary">Create game</button>
+        <button type="submit" class="btn primary wide-btn">Create game</button>
       </div>
     </form>
     <form method="dialog" id="form-remote-join" data-pane="join" class="hidden">
-      <textarea id="remote-join-text" rows="4" spellcheck="false" placeholder="Paste the code your colleague sent (it starts with DM1-)"></textarea>
+      <label class="field"><span>Game code</span><input id="remote-join-code" class="code-input" maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K7Q-M2X" required /></label>
+      <label class="field"><span>Your name</span><input id="remote-join-name" maxlength="24" autocomplete="off" placeholder="Your name" required /></label>
+      <p class="error hidden" id="remote-join-error"></p>
       <div class="modal-actions">
-        <button type="button" class="btn" data-close>Cancel</button>
-        <button type="submit" class="btn primary">Join game</button>
+        <button type="submit" class="btn primary wide-btn" id="remote-join-btn">Join game</button>
       </div>
     </form>
-  </dialog>
-
-  <!-- Remote: send code -->
-  <dialog id="dlg-send" class="modal">
-    <div class="modal-head">
-      <h2 id="send-title">Send this code</h2>
-      <button class="btn icon-only ghost" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    <div data-pane="invite" class="hidden invite">
+      <p class="muted">Give your colleague this code. They open Deskmate, choose <b>Play a colleague → Join with a code</b> and type it in.</p>
+      <div class="room-code" id="room-code">K7Q-M2X</div>
+      <div class="modal-actions center-actions">
+        <button class="btn" id="room-copy-link">Copy link</button>
+        <button class="btn primary" id="room-copy">Copy code</button>
+      </div>
+      <p class="room-status" id="room-status"><span class="pulse"></span>Waiting for your colleague…</p>
     </div>
-    <textarea id="send-code" class="code-box" rows="3" readonly spellcheck="false"></textarea>
-    <div class="modal-actions wrap">
-      <button class="btn" id="send-link">Copy as link</button>
-      <button class="btn primary" id="send-copy"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>Copy code</button>
-    </div>
-    <p class="muted tiny center" id="send-hint"></p>
   </dialog>
 
   <!-- Resign -->
@@ -281,16 +263,16 @@
     </div>
     <ul class="help">
       <li>Click or drag a piece. Dots show where it can go; rings show captures.</li>
-      <li>After each move the board turns to face the player whose turn it is (toggle <em>Auto-flip</em>).</li>
+      <li>On one laptop, the board turns to the side of whoever is to move (toggle <em>Auto-flip</em>).</li>
       <li>Right-click and drag to draw arrows; right-click a square to circle it.</li>
-      <li><em>Play remotely</em>: after each move you get a code. Send it in any chat, and paste the code your colleague sends back.</li>
+      <li><em>Play a colleague</em>: create a game and share its 6-character code once. Moves then appear on both laptops as they are played.</li>
       <li>Your current game survives a page reload. Finished games go to <em>Saved games</em>.</li>
     </ul>
     <table class="keys">
       <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous / next move</td></tr>
       <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>First / last move</td></tr>
       <tr><td><kbd>F</kbd></td><td>Flip board</td></tr>
-      <tr><td><kbd>Space</kbd></td><td>Pause / resume clocks</td></tr>
+      <tr><td><kbd>Space</kbd></td><td>Pause / resume clocks (same-laptop games)</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>Takeback</td></tr>
       <tr><td><kbd>N</kbd></td><td>New game</td></tr>
       <tr><td><kbd>H</kbd></td><td>Saved games</td></tr>

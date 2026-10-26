@@ -86,8 +86,9 @@ export class Game {
     this.termination = data.termination || null; // human readable reason
     const tc = timeControl(this.tc);
     this.clocks = data.clocks || { w: tc.base * 60000, b: tc.base * 60000 };
-    // remote (code-exchange) games: which colour this browser plays, and a pending draw offer
-    this.remote = data.remote ? { me: data.remote.me, offer: data.remote.offer || null } : null;
+    // live remote games: room code, the colour this browser plays, the player id in each
+    // colour's seat (empty until someone sits there) and a pending draw offer
+    this.remote = data.remote ? { offer: null, ...data.remote } : null;
     this.chess = new Chess();
     this.plies = [];
     for (const san of data.moves || []) this._push(this.chess.move(san));

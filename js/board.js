@@ -30,7 +30,6 @@ export class Board {
     this.drag = null;
     this.shapes = []; // { from, to } arrows, from === to is a circle
     this.drawing = null;
-    this.busy = false;
 
     root.classList.add('board');
     this.inner = el('div', 'board-inner', root);
@@ -91,7 +90,7 @@ export class Board {
 
   _place(pieceEl, sq) {
     const [c, r] = this._pos(sq);
-    pieceEl.style.transform = `translate(${c * 100}%, ${r * 100}%) rotate(var(--counter, 0deg))`;
+    pieceEl.style.transform = `translate(${c * 100}%, ${r * 100}%)`;
   }
 
   /* ---------- public API ---------- */
@@ -117,44 +116,23 @@ export class Board {
 
   setOrientation(color) {
     if (color === this.orientation) return;
+    this.root.classList.add('no-anim');
     this.orientation = color;
     this._layoutSquares();
     for (const [sq, p] of this.pieces) this._place(p.el, sq);
     this._renderShapes();
     this._highlight();
+    reflow(this.root);
+    this.root.classList.remove('no-anim');
   }
 
-  /** Spin the board 180° (pieces counter-rotate so they stay upright), then swap orientation. */
-  flip(animate = true) {
-    const target = this.orientation === 'w' ? 'b' : 'w';
-    if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      this.setOrientation(target);
-      return Promise.resolve();
-    }
+  /** Turn the board to the other side, instantly: no spin, no pieces sliding across. */
+  flip() {
     this._cancelDrag();
-    this.busy = true;
-    return new Promise((resolve) => {
-      const done = () => {
-        this.inner.removeEventListener('transitionend', onEnd);
-        clearTimeout(timer);
-        this.root.classList.add('no-anim');
-        this.root.classList.remove('flipping');
-        this.inner.style.removeProperty('--rot');
-        this.inner.style.removeProperty('--counter');
-        this.setOrientation(target);
-        reflow(this.root);
-        this.root.classList.remove('no-anim');
-        this.busy = false;
-        resolve();
-      };
-      const onEnd = (e) => { if (e.target === this.inner && e.propertyName === 'transform') done(); };
-      const timer = setTimeout(done, 1200);
-      this.inner.addEventListener('transitionend', onEnd);
-      this.root.classList.add('flipping');
-      reflow(this.inner);
-      this.inner.style.setProperty('--rot', '180deg');
-      this.inner.style.setProperty('--counter', '-180deg');
-    });
+    this.root.classList.add('no-anim');
+    this.setOrientation(this.orientation === 'w' ? 'b' : 'w');
+    reflow(this.root);
+    this.root.classList.remove('no-anim');
   }
 
   /** Show the promotion picker over the target file; resolves to 'q'|'r'|'b'|'n' or null. */
@@ -252,7 +230,6 @@ export class Board {
   }
 
   _down(e) {
-    if (this.busy) return;
     const sq = this._eventSquare(e);
     if (!sq) return;
     if (e.button === 2) {
@@ -293,7 +270,6 @@ export class Board {
     }
     const size = d.rect.width / 8;
     const x = e.clientX - d.rect.left - size / 2, y = e.clientY - d.rect.top - size / 2;
-    // the board may be visually rotated mid-flip; drags are blocked then, so plain px works
     d.el.style.transform = `translate(${x}px, ${y}px) scale(1.12)`;
     const over = this._eventSquare(e);
     if (over !== d.over) { d.over = over; this._highlight(); }

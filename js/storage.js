@@ -35,12 +35,14 @@ export const DEFAULT_SETTINGS = {
   sound: true,
   showDests: true,
   coords: true,
-  theme: 'brown',
+  theme: 'green',
   white: 'White',
   black: 'Black',
   tc: 'none',
   myName: '',
-  oppName: '',
+  remoteTc: 'none',
+  // anonymous id for this browser: tells the two laptops in a live game which seat is whose
+  pid: '',
 };
 
 export const storage = {

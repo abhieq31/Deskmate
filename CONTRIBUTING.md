@@ -32,9 +32,12 @@ npm test                      # unit tests (Node 18+, no install needed)
   the single-file offline version still works, and **commit the rebuilt
   `deskmate.html`**. CI fails if it is stale, because GitHub Pages serves
   the committed file.
-- **Game codes (`js/remote.js`) are a wire format.** Keep old codes
-  decodable. If the format has to change, use a new prefix (`DM2-`) and
-  keep decoding `DM1-` (and the legacy `OBC1-`).
+- **Live snapshots are a wire format** (`snapshot()` in `js/app.js`,
+  `js/remote.js`, `js/live.js`). Two laptops may run different versions:
+  only add fields, and bump `v` if a change can't be read by older versions.
+- To try live play without the internet, run any Nostr relay locally and set
+  `localStorage['deskmate:relays'] = '["ws://localhost:7447"]'` in two
+  browser profiles.
 
 ## Pull requests
 
