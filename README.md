@@ -7,7 +7,7 @@
 **Chess with the person at the next desk.**
 Share one short code and play live, each on your own work laptop. Or put one laptop between you.
 
-[**▶ Play now**](https://abhieq31.com/deskmate) · [**⬇ Offline version**](https://github.com/abhieq31/Deskmate/raw/main/deskmate.html) · [Report a bug](https://github.com/abhieq31/Deskmate/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/Deskmate/issues/new?template=feature_request.md)
+[**▶ Play now**](https://abhieq31.com/deskmate) · [Report a bug](https://github.com/abhieq31/Deskmate/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/Deskmate/issues/new?template=feature_request.md)
 
 <img src="docs/home.png" alt="Deskmate home page: Play a colleague, Join with a code, Play on this laptop, recent games" width="760" />
 <img src="docs/screenshot.png" alt="Focus mode: a large board with each player, their captured pieces and clock above and below it" width="760" />
@@ -41,11 +41,17 @@ Please use it in line with your employer's policies.
 - **A home page** with Play a colleague, Join with a code, Play on this
   laptop, Resume, your recent games and the office table. The logo always
   brings you back to it.
-- **Focus mode while you play** (on by default). The board is as large as
-  the window allows: players and the pieces they've taken on the left,
-  both clocks on the right with Draw and Resign between them, and nothing
-  else. The expand button in the top-right corner (or **Z**) brings back
-  the menu and the line of moves.
+- **The game view.** Each player's bar sits above and below the board,
+  exactly as wide as it: name and the pieces they've taken on the left,
+  the clock flush with the board's right edge. The panel on the right is
+  level with both bars and holds the opening's name, every move, move
+  navigation, and ½ Draw / ⚑ Resign.
+- **Focus mode** (on by default, **Z** or the button by the board's top
+  right corner): just the board, the players at its top and bottom edge,
+  both clocks between them, and Draw / Resign as two buttons beside it.
+- **Opening names** for every game, from lichess's open
+  [chess-openings](https://github.com/lichess-org/chess-openings) data set
+  (3,865 named lines, transpositions included).
 - **Replay with clocks.** Stepping back through a game shows each clock as
   it stood at that move, and exported PGNs carry `[%clk]` times.
 - **Ink and ember.** Black, white and one red. Three boards: Ember (ivory
@@ -55,9 +61,11 @@ Please use it in line with your employer's policies.
   a little bigger with a deeper shadow, and follows the pointer once per
   screen frame. Drop it on any square; the target is outlined while you
   drag. The cursor shows an open hand over pieces you can move and a
-  closed one while you hold one. Click-to-move works too.
+  closed one while you hold one. Or click a piece once: it rides along
+  under the mouse until you click the square to put it on. Touch and
+  trackpad double-tap-drag work the same way.
 - **Post-game analysis with Stockfish.** Once a game ends (or for any saved
-  or imported game), Stockfish 11 analyses every move in your browser. You
+, Stockfish 11 analyses every move in your browser. You
   get an evaluation bar, the engine's best line and an arrow for its best
   move, an evaluation graph, accuracy for both players, and ?? / ? / ?!
   marks on blunders, mistakes and inaccuracies, the way lichess calculates
@@ -78,7 +86,7 @@ Please use it in line with your employer's policies.
 - **Quiet.** The only sound is a soft water drop when a piece is captured.
 - **Games stay in your browser.** A game in progress survives a reload.
   Finished games go to **Saved games** (review, resume, PGN download).
-- **PGN import/export**, FEN copy and takeback (same-laptop games).
+- **PGN export**, FEN copy and takeback.
 
 <img src="docs/analysis.png" alt="Post-game analysis: evaluation bar, best-move arrow, evaluation graph and accuracy for both players" width="760" />
 
@@ -115,20 +123,12 @@ console:
 If you host Deskmate behind a Content-Security-Policy, allow the relays in
 `connect-src`.
 
-## Offline version (one file)
-
-[`deskmate.html`](https://github.com/abhieq31/Deskmate/raw/main/deskmate.html)
-is the whole app (about 310 KB) in a single file. Save it anywhere and open
-it by double-click. Same-laptop games need no network at all. Live games with
-a colleague need to reach the relays. Analysis needs the hosted page, because
-browsers don't run the engine's worker from a local file. Build it yourself with `npm run build`
-(writes `deskmate.html`).
-
 ## Hosting it on your own site
 
 `deskmate.html` is self-contained (inline CSS, JS and images), so any web
 server can host it at any path. Drop it in as `deskmate/index.html`, with
-`vendor/stockfish/` next to it (`deskmate/vendor/stockfish/`) for analysis. That's
+`vendor/` next to it (`deskmate/vendor/stockfish/` for analysis and the
+computer opponent, `deskmate/vendor/openings/` for opening names). That's
 how [abhieq31.com/deskmate](https://abhieq31.com/deskmate) runs: the file sits
 in the site's `public/` folder. If your site sends a Content-Security-Policy,
 it needs `script-src 'unsafe-inline'`, `img-src data:` and the relays in
@@ -179,10 +179,11 @@ js/sound.js           Web Audio synthesized sounds
 js/confetti.js        celebration effect
 sw.js                 offline cache (service worker)
 scripts/build-single.mjs  bundles everything into deskmate.html (no deps)
-deskmate.html         generated offline build (commit it after changes: `npm run build`)
+deskmate.html         generated single-file build for hosting (commit it after changes: `npm run build`)
 vendor/chess.js       chess rules engine (chess.js 1.4.0, BSD-2-Clause)
 vendor/secp256k1.js   Schnorr signatures for room snapshots (noble-secp256k1 3.2.0, MIT)
-vendor/stockfish/     Stockfish 11 (WebAssembly + plain-JS fallback), loaded only for analysis (GPLv3)
+vendor/stockfish/     Stockfish 11 (WebAssembly + plain-JS fallback), for analysis and the computer opponent (GPLv3)
+vendor/openings/      opening names from lichess's chess-openings (CC0), built by scripts/build-openings.mjs
 tests/                node:test unit tests for the game model, move encoding and live rooms
 ```
 
@@ -202,6 +203,7 @@ Contributions are welcome, from typo fixes to new features. See
 - Deskmate source code: [MIT](LICENSE)
 - Rules engine: [chess.js](https://github.com/jhlywa/chess.js) by Jeff Hlywa, BSD-2-Clause
 - Signatures: [noble-secp256k1](https://github.com/paulmillr/noble-secp256k1) by Paul Miller, MIT
+- Opening names: lichess's [chess-openings](https://github.com/lichess-org/chess-openings), CC0 1.0. See [vendor/openings/README.md](vendor/openings/README.md)
 - Analysis: [Stockfish](https://stockfishchess.org) 11, compiled to WebAssembly by [stockfish.js](https://github.com/nmrugg/stockfish.js), GPLv3. It is a separate program that Deskmate runs in a Web Worker. See [vendor/stockfish/README.md](vendor/stockfish/README.md)
 - Pieces: *cburnett* set by Colin M.L. Burnett, GPLv2+, via [lichess](https://github.com/lichess-org/lila). See [assets/pieces/cburnett/LICENSE.md](assets/pieces/cburnett/LICENSE.md)
 - Visual language inspired by [lichess.org](https://lichess.org). Please support them.

@@ -8,6 +8,7 @@ import { packMoves, unpackMoves } from './remote.js';
 import { Room, newRoomCode, parseRoomCode, formatRoomCode } from './live.js';
 import { Engine } from './engine.js';
 import { standings } from './office.js';
+import { loadOpenings, openingName } from './openings.js';
 import { summarize, winPct, formatEval, MARKS } from './analysis.js';
 import { Chess } from '../vendor/chess.js';
 
@@ -137,11 +138,10 @@ function fmtClock(ms) {
 function renderClocks() {
   const g = active();
   const bottom = board.orientation;
-  for (const [sel, color, card] of [['#clock-top', other(bottom), '#player-top'], ['#clock-bottom', bottom, '#player-bottom']]) {
+  for (const [sel, color] of [['#clock-top', other(bottom)], ['#clock-bottom', bottom]]) {
     const clock = $(sel);
     clock.parentElement.classList.toggle('hidden', !g.hasClock);
-    const pclock = $(`${card} [data-pclock]`);
-    pclock.classList.toggle('hidden', !g.hasClock);
+
     const time = clock.querySelector('[data-time]');
     clock.classList.toggle('active', !g.over && !review && viewPly === g.length && g.turn === color && bothSeated());
     clock.classList.toggle('unlimited', !g.hasClock);
@@ -155,7 +155,6 @@ function renderClocks() {
     const past = review || viewPly < g.length;
     const ms = past ? g.clocksAt(viewPly)[color] : g.clocks[color];
     time.textContent = fmtClock(ms);
-    pclock.textContent = fmtClock(ms);
     clock.classList.toggle('running', !past && clockRunning() && game.turn === color);
     clock.classList.toggle('low', ms < 20000 && !past);
     clock.classList.toggle('paused', !review && paused && game.turn === color && game.length > 0 && !game.over);
@@ -183,6 +182,10 @@ function renderMoves() {
     else if (r > list.scrollLeft + list.clientWidth - 20) list.scrollLeft = r - list.clientWidth + 40;
   } else if (viewPly === 0) list.scrollLeft = 0;
   else list.scrollLeft = list.scrollWidth;
+
+  renderAnMoves();
+  renderOpening(g);
+  $('#tc-label').textContent = g.tcInfo.base ? g.tcInfo.label.replace(/ /g, '') : '';
 
   const rl = $('#result-line');
   rl.classList.toggle('hidden', !g.result);
@@ -237,6 +240,20 @@ function renderControls() {
     b.innerHTML = paused ? ICON_RESUME : ICON_PAUSE;
     b.title = paused ? 'Resume clocks (Space)' : 'Pause clocks (Space)';
   }
+}
+
+/** The opening's name above the moves, from lichess's open data set (loaded once, on first use). */
+let openings = null;
+function renderOpening(g) {
+  const el = $('#opening');
+  if (!g.length) { el.textContent = 'Starting position'; return; }
+  if (!openings) {
+    loadOpenings().then((t) => { openings = t; renderOpening(active()); }).catch(() => {});
+    return;
+  }
+  const fens = [];
+  for (let i = 1; i <= Math.min(viewPly || g.length, g.length); i++) fens.push(g.fenAt(i));
+  el.textContent = openingName(openings, fens) || el.textContent;
 }
 
 /* ---------------- moves ---------------- */
@@ -757,6 +774,7 @@ function renderAnalysis() {
   $('#analysis').classList.toggle('hidden', !on);
   $('#evalbar').classList.toggle('hidden', !on);
   $$('#board .sq-glyph').forEach((e) => e.remove());
+  $('#an-acc').classList.toggle('hidden', !on);
   if (!on) { board.setAutoShapes([]); return; }
   const ev = an.evals[viewPly];
   const white = winPct(ev);
@@ -825,13 +843,12 @@ function renderAnalysis() {
     return `<div><small>${esc(g.nameOf(c) || colorName(c))}</small><b>${acc}</b><span class="tally">${tally}</span></div>`;
   };
   $('#an-acc').innerHTML = card('w') + card('b');
-  renderAnMoves();
 }
 
-/** The whole game under the graph, two moves a row, with the analysis marks. */
+/** The whole game in the panel, two moves a row, with the analysis marks once there are some. */
 function renderAnMoves() {
   const g = active();
-  const marks = an?.summary?.moves || [];
+  const marks = an && an.game === g ? an.summary?.moves || [] : [];
   const rows = [];
   for (let i = 0; i < g.length; i += 2) {
     const cell = (j) => {
@@ -843,14 +860,15 @@ function renderAnMoves() {
     rows.push(`<span class="an-num">${i / 2 + 1}.</span>${cell(i)}${cell(i + 1)}`);
   }
   const list = $('#an-moves');
-  list.innerHTML = rows.join('');
+  list.innerHTML = rows.join('') || '<span class="an-empty">No moves yet</span>';
   // keep the current move in view by scrolling the list itself (never the page)
   const act = list.querySelector('.active');
   if (act) {
-    const t = act.offsetTop - list.offsetTop;
-    if (t < list.scrollTop + 8) list.scrollTop = t - 40;
-    else if (t + act.offsetHeight > list.scrollTop + list.clientHeight - 8) list.scrollTop = t - list.clientHeight + 60;
-  }
+    // offsets relative to the list itself (it is positioned), so this never scrolls the page
+    const t = act.offsetTop;
+    if (t < list.scrollTop) list.scrollTop = t - 8;
+    else if (t + act.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = t + act.offsetHeight - list.clientHeight + 8;
+  } else if (viewPly === g.length) list.scrollTop = list.scrollHeight;
 }
 
 $('#an-moves').addEventListener('click', (e) => { const b = e.target.closest('[data-ply]'); if (b) goto(+b.dataset.ply); });
@@ -972,29 +990,6 @@ $('#archive-export').addEventListener('click', () => {
   saveFile(`deskmate-games-${Date.now()}.pgn`, list.map((g) => new Game(g).pgn()).join('\n'));
 });
 
-$('#form-import').addEventListener('submit', (e) => {
-  const text = $('#import-text').value.trim();
-  const err = $('#import-error');
-  try {
-    if (!text) throw new Error('Paste a PGN first.');
-    const g = Game.fromPGN(text);
-    if (!g.length) throw new Error('No moves found in this PGN.');
-    storage.archive(g.toJSON());
-    err.classList.add('hidden');
-    $('#import-text').value = '';
-    openReview(g);
-    toast('Game imported and saved');
-  } catch (ex) {
-    e.preventDefault();
-    err.textContent = `Could not read PGN: ${ex.message}`;
-    err.classList.remove('hidden');
-  }
-});
-$('#import-file').addEventListener('change', async (e) => {
-  const f = e.target.files[0];
-  if (f) $('#import-text').value = await f.text();
-});
-
 /* ---------------- export helpers ---------------- */
 
 function saveFile(name, text) {
@@ -1054,6 +1049,7 @@ $('#over-analyse').addEventListener('click', () => { $('#dlg-over').close(); sta
 $('[data-nav="prev"]').addEventListener('click', () => goto(viewPly - 1));
 $('[data-nav="next"]').addEventListener('click', () => goto(viewPly + 1));
 $$('.act-pause').forEach((b) => b.addEventListener('click', togglePause));
+$('#btn-flip2').addEventListener('click', () => $('#btn-flip').click());
 $('#btn-flip').addEventListener('click', () => { clearTimeout(flipTimer); board.flip(); renderPlayers(); renderAnalysis(); });
 $('#btn-undo').addEventListener('click', takeback);
 
@@ -1133,7 +1129,6 @@ $('#review-exit').addEventListener('click', () => (review ? exitReview() : goto(
 $('#btn-pgn-copy').addEventListener('click', () => copy(active().pgn(), 'PGN'));
 $('#btn-pgn-download').addEventListener('click', () => download(active()));
 $('#btn-fen').addEventListener('click', () => copy(active().fenAt(viewPly), 'FEN'));
-$('#btn-import').addEventListener('click', () => { $('#import-error').classList.add('hidden'); openDialog('#dlg-import'); });
 
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, textarea') || $$('dialog[open]').length) return;
@@ -1184,10 +1179,6 @@ function applyPrefs() {
   $$('.swatch').forEach((s) => s.setAttribute('aria-checked', String(s.dataset.theme === settings.theme)));
 }
 
-// The one-line move strip sits under the top clock on wide screens and above the board on phones.
-const phoneLayout = matchMedia('(max-width: 760px)');
-const placeMoves = () => $(phoneLayout.matches ? '#moveline-slot-mobile' : '#moveline-slot-side').appendChild($('#moveline'));
-phoneLayout.addEventListener('change', placeMoves);
 
 /* ---------------- sidebar ---------------- */
 
@@ -1293,16 +1284,12 @@ $('#form-ai').addEventListener('submit', () => {
   startGame({ white: me === 'w' ? name : bot, black: me === 'b' ? name : bot, tc, ai: { color: other(me), level } });
 });
 $('#home-all').addEventListener('click', () => { renderArchive(); openDialog('#dlg-archive'); });
-$('#home-import').addEventListener('click', () => { $('#import-error').classList.add('hidden'); openDialog('#dlg-import'); });
 $('#sb-home').addEventListener('click', (e) => { e.preventDefault(); setSidebar(false); setView('home'); });
 $('#btn-focus').addEventListener('click', toggleFocus);
 
 /* ---------------- boot ---------------- */
 
-placeMoves();
 applyPrefs();
-// the offline download link only makes sense on the hosted site
-if (!/^https?:$/.test(location.protocol)) $('.offline-dl')?.remove();
 board.setOrientation(homeOrientation());
 setView(inProgress() ? 'game' : 'home');
 if (game.remote) connectRoom(game.remote.room);

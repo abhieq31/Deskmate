@@ -80,46 +80,43 @@ h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; colo
 .half { font-size: 1.25rem; font-weight: 700; line-height: 1; }
 
 /* ---------- layout (desktop game view) ----------
-   [sidebar] [avatar name     ][eval][        ][ clock     ]   [⤢]
-             [  taken pieces  ]      [        ][ ‹ moves › ]   [⚙]
-             [                ]      [ board  ][ ½ Draw    ]
-             [ result/analysis]      [        ][ ⚑ Resign  ]
-             [avatar name     ]      [        ][ clock     ]
-   Players on the left, clocks on the right, each pair level with the board's top and bottom edge.
-   The board takes whatever is left: width = sidebar + both columns + gaps + padding + eval bar. */
+   [sidebar] [avatar name · pieces        clock] [⚙] [ opening          ]
+             [                                 ] [⤢] [ analysis         ]
+             [             board               ]     [ 1. e4  e5        ]
+             [                                 ]     [ |<  <  >  >|     ]
+             [avatar name · pieces        clock]     [ ½ Draw  ⚑ Resign ]
+   Every track is a fixed size, so the edges line up exactly: each bar is as wide as the board
+   with its clock flush to the board's right edge, and the panel's top and bottom are level with
+   the top bar's top and the bottom bar's bottom.
+   Board = whatever is left: height minus both bars, width minus sidebar, panel, tools, gaps, padding. */
 body { padding-left: var(--sb-w); }
 .game {
-  --card-h: 44px; --lw: 220px; --rw: 210px;
-  --board: min(calc(100vh - 48px), calc(100vw - var(--sb-w) - var(--lw) - var(--rw) - 160px), 1000px);
+  --bar-h: 42px; --pw: clamp(300px, 26vw, 400px); --tools: 40px;
+  --board: min(calc(100vh - 2 * var(--bar-h) - 48px), calc(100vw - var(--sb-w) - var(--pw) - var(--tools) - 116px), 1000px);
   display: grid;
-  grid-template-columns: var(--lw) var(--board) var(--rw);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: var(--board) var(--tools) var(--pw);
+  grid-template-rows: var(--bar-h) var(--board) var(--bar-h);
   grid-template-areas:
-    "ptop  board ctop"
-    "panel board side"
-    "pbot  board cbot";
-  gap: 14px 22px;
-  justify-content: center;
-  /* centred by padding, not min-height: a min-height would stretch the 1fr row past the board */
-  padding: max(24px, calc((100vh - var(--board)) / 2)) 64px 0 50px; /* left: eval bar; right: corner buttons */
+    "ptop  tools panel"
+    "board tools panel"
+    "pbot  .     panel";
+  gap: 8px 10px;
+  justify-content: center; align-content: center;
+  min-height: 100vh; min-height: 100dvh;
+  padding: 16px 16px 16px 40px; /* left: room for the eval bar */
 }
-/* analysing: the review takes the right column, between the clocks */
-.game.analysing { --lw: 200px; --rw: 320px; }
-.game.analysing .side, .game.analysing .clock-wrap { display: none; }
-.pclock { display: none; font: 600 0.95rem var(--mono); color: var(--text-strong); font-variant-numeric: tabular-nums; }
-.game.analysing .pclock:not(.hidden) { display: block; }
-.player.top { grid-area: ptop; align-self: start; }
-.player.bottom { grid-area: pbot; align-self: end; }
-.clock-top { grid-area: ctop; align-self: start; }
-.clock-bottom { grid-area: cbot; align-self: end; }
+.game.analysing { --pw: clamp(340px, 30vw, 440px); }
+.player.top { grid-area: ptop; }
+.player.bottom { grid-area: pbot; }
+.player { align-self: center; justify-self: start; max-width: calc(var(--board) - 170px); }
+.clock-top { grid-area: ptop; }
+.clock-bottom { grid-area: pbot; }
+.clock-wrap { align-self: center; justify-self: end; }
 .board-area { grid-area: board; position: relative; }
+.board-tools { grid-area: 1 / 2 / 3 / 3; align-self: start; display: flex; flex-direction: column; gap: 4px; }
+.board-tools .icon-btn { color: #9a958e; width: 40px; }
 .panel { grid-area: panel; }
-.side { grid-area: side; }
-.mobile-bar { display: none; }
-
-/* focus and settings, stacked in the top-right corner of the page */
-.corner-tools { position: fixed; top: 12px; right: 12px; z-index: 20; display: flex; flex-direction: column; gap: 4px; }
-.corner-tools .icon-btn { color: #9a958e; }
+.focus-acts, .mobile-bar { display: none; }
 body[data-view="home"] #btn-focus { display: none; }
 
 /* eval bar, left of the board (analysis only) */
@@ -134,11 +131,31 @@ body[data-view="home"] #btn-focus { display: none; }
 .evalbar-num { position: absolute; left: 0; right: 0; bottom: 4px; text-align: center; font: 700 9px/1 var(--font); color: #333; }
 .evalbar.black-better .evalbar-num { bottom: auto; top: 4px; color: #ddd; }
 
-/* left column: result line, analysis after a game */
-.panel { align-self: center; display: flex; flex-direction: column; min-height: 0; max-height: 100%; }
-/* taken out of flow so it fills the space between the players without ever stretching the grid */
-.game { position: relative; }
-.game.analysing .panel { grid-area: 1 / 3 / 4 / 4; position: absolute; inset: 0; align-self: stretch; justify-self: stretch; background: #161617; border-radius: 8px; overflow: hidden; }
+/* the right panel: opening, analysis, the moves, navigation, actions */
+.panel {
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  background: #161617; border: 1px solid var(--line); border-radius: 8px;
+}
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex: none;
+  padding: 0 14px; height: 42px; border-bottom: 1px solid var(--line);
+}
+.opening { color: var(--text); font-size: 0.9rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-label { color: var(--muted); font: 600 0.8rem var(--mono); flex: none; }
+.panel-nav { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--line); flex: none; }
+.panel-actions { display: flex; align-items: center; gap: 4px; padding: 6px 8px 8px; flex: none; min-height: 50px; }
+.panel-actions .flip-btn { margin-left: auto; color: var(--muted); }
+.txt-btn {
+  display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 10px; border: 0; border-radius: 6px;
+  background: transparent; color: #bdbab5; font: 600 0.95rem var(--font); cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.txt-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); color: #fff; }
+.txt-btn:disabled { opacity: 0.35; cursor: default; }
+.txt-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.txt-btn .half, .sq-btn .half { font-size: 1.15rem; font-weight: 700; line-height: 1; }
+.txt-btn.act-resign:hover:not(:disabled) { color: #f08c8c; }
+.txt-btn.offer, .sq-btn.offer { color: var(--gold); animation: offerPulse 1.4s ease-in-out infinite; }
+.panel-actions .act-analyse { flex: 1; }
 .icon-btn {
   display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 6px; flex: none;
   background: transparent; color: var(--text); cursor: pointer; transition: background 0.15s, color 0.15s;
@@ -179,28 +196,11 @@ body[data-view="home"] #btn-focus { display: none; }
 .result-line strong { font-size: 1.3rem; color: var(--text-strong); }
 .result-line span { font-size: 0.85rem; color: var(--muted); font-style: italic; }
 
-.game.analysing .analysis { flex: 1 1 auto; overflow-y: auto; }
-
-/* right column: moves under the top clock, then Draw / Resign centred between the clocks */
-.side { display: flex; flex-direction: column; min-height: 0; }
-.side .moveline { border-radius: 6px; }
-.side-acts { margin: auto 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 0; }
-.act {
-  display: flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; background: #161617; color: #bdbab5;
-  font: 600 0.95rem var(--font); cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-.act:hover:not(:disabled) { background: #222224; color: #fff; border-color: rgba(255, 255, 255, 0.16); }
-.act:disabled { opacity: 0.4; cursor: default; }
-.act svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.act .half { font-size: 1.1rem; }
-.act.act-resign:hover:not(:disabled) { color: #f08c8c; border-color: rgba(240, 140, 140, 0.4); }
-.act.primary { background: linear-gradient(180deg, #e5383b, #c1121f); border-color: transparent; color: #fff; height: 44px; }
-.act.primary:hover:not(:disabled) { background: linear-gradient(180deg, #ef4b4e, #d01b28); }
-.act.offer { color: var(--gold); border-color: rgba(232, 182, 76, 0.6); animation: offerPulse 1.4s ease-in-out infinite; }
+/* while analysing, the moves list gets the slack; everything else keeps its height */
+.game.analysing .analysis { flex: none; }
 
 /* analysis */
-.analysis { padding: 12px 12px 6px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.analysis { padding: 12px 12px 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .an-verdict { margin: 0; padding: 10px 12px; border-radius: 8px; background: #f2f2f2; color: #2a2926; font-size: 0.95rem; min-height: 42px; }
 .an-verdict:empty { display: none; }
 .an-verdict b { font-weight: 800; }
@@ -221,19 +221,22 @@ body[data-view="home"] #btn-focus { display: none; }
 .an-progress span { display: block; height: 100%; width: 0; background: var(--accent-2); transition: width 0.2s; }
 .an-progress.done { visibility: hidden; }
 .an-moves {
-  flex: 1 1 200px; min-height: 140px; overflow-y: auto; display: grid; grid-template-columns: 30px 1fr 1fr;
-  align-content: start; gap: 1px 2px; padding: 4px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
-  scrollbar-width: thin;
+  position: relative; flex: 1 1 0; min-height: 96px; overflow-y: auto; display: grid; grid-template-columns: 40px 1fr 1fr;
+  align-content: start; gap: 1px 4px; padding: 6px 10px; scrollbar-width: thin;
 }
-.an-num { color: var(--muted); font-size: 0.85rem; padding: 4px 0 0 2px; }
+.an-moves > :nth-child(6n + 1), .an-moves > :nth-child(6n + 2), .an-moves > :nth-child(6n + 3) { background: rgba(255, 255, 255, 0.025); }
+.an-empty { grid-column: 1 / -1; color: var(--muted); font-size: 0.9rem; padding: 8px 4px; }
+.an-num { color: var(--muted); font-size: 0.85rem; display: flex; align-items: center; padding-left: 4px; }
 .an-moves .mv { text-align: left; }
 .tk { border: 0; background: none; padding: 1px 3px; border-radius: 3px; font: inherit; color: var(--muted); cursor: pointer; }
 .tk:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
 .tk:disabled { cursor: default; opacity: 0.6; }
 .tk.k-blunder:not(:disabled) { color: #e35b58; } .tk.k-mistake:not(:disabled) { color: #e58f2a; } .tk.k-inaccuracy:not(:disabled) { color: #f7c045; }
-.an-acc { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85rem; }
-.an-acc div { display: flex; flex-direction: column; align-items: center; padding: 8px; border-radius: 6px; background: #111112; }
-.an-acc b { font-size: 1.35rem; color: var(--text-strong); }
+.an-acc { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85rem; padding: 8px 10px 0; border-top: 1px solid var(--line); flex: none; }
+.an-acc.hidden { display: none; }
+.an-acc div { display: flex; flex-direction: column; align-items: center; padding: 6px; border-radius: 6px; background: #111112; min-width: 0; }
+.an-acc b { font-size: 1.25rem; color: var(--text-strong); }
+.an-acc small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .an-acc small { color: var(--muted); }
 .an-acc .tally { font-size: 0.78rem; color: var(--muted); }
 .an-nav { display: flex; justify-content: space-between; gap: 6px; }
@@ -319,11 +322,49 @@ body[data-view="home"] .game, body[data-view="game"] .home { display: none; }
 .link-btn:hover { color: var(--text-strong); text-decoration: none; }
 .link-btn svg { width: 16px; height: 16px; fill: currentColor; }
 
-/* ---------- focus mode: just the board, the players and the clocks ---------- */
+/* ---------- focus mode (Z): the board, the players, both clocks and two buttons ----------
+   [avatar name ]  [          ]  [⚙ ⤢]
+   [            ]  [          ]
+   [   clock    ]  [  board   ]  [ ½ ]
+   [   clock    ]  [          ]  [ ⚑ ]
+   [avatar name ]  [          ]
+   Centred by padding, not min-height, so the 1fr rows never grow past the board. */
 #btn-focus .ico-compress, body.focus #btn-focus .ico-expand { display: none; }
 body.focus #btn-focus .ico-compress { display: block; }
 body.focus { --sb-w: 0px; }
-body.focus .sidebar, body.focus .mobile-bar, body.focus .side .moveline-slot { display: none; }
+body.focus .sidebar, body.focus .mobile-bar, body.focus .panel { display: none; }
+body.focus .game {
+  --lw: 200px; --rw: 120px;
+  --board: min(calc(100vh - 48px), calc(100vw - var(--lw) - var(--rw) - 444px), 1100px); /* gaps 48 + padding 76 */
+  grid-template-columns: var(--lw) var(--board) var(--rw);
+  grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "ptop board tools"
+    ".    board ."
+    "ctop board acts"
+    "cbot board acts"
+    ".    board ."
+    "pbot board .";
+  gap: 8px 24px;
+  min-height: 0;
+  padding: max(24px, calc((100vh - var(--board)) / 2)) 24px 0 52px;
+}
+body.focus .player.top { grid-area: ptop; align-self: start; max-width: 100%; }
+body.focus .player.bottom { grid-area: pbot; align-self: end; max-width: 100%; }
+body.focus .clock-top { grid-area: ctop; justify-self: stretch; }
+body.focus .clock-bottom { grid-area: cbot; justify-self: stretch; }
+body.focus .clock { width: 100%; }
+body.focus .board-area { grid-area: 1 / 2 / 7 / 3; }
+body.focus .board-tools { grid-area: tools; flex-direction: row; justify-self: start; }
+body.focus .focus-acts { grid-area: acts; display: flex; flex-direction: column; gap: 10px; align-self: center; justify-self: start; }
+.sq-btn {
+  display: grid; place-items: center; width: 56px; height: 56px; border-radius: 8px; border: 1px solid var(--line);
+  background: #1d1d1f; color: #d6d4d1; cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.sq-btn:hover:not(:disabled) { background: #29292c; color: #fff; }
+.sq-btn:disabled { opacity: 0.35; cursor: default; }
+.sq-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.sq-btn.act-resign:hover:not(:disabled) { color: #f08c8c; }
 
 
 .set-grid { display: grid; gap: 2px; }
@@ -443,6 +484,10 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .side .moveline-slot { d
   filter: drop-shadow(0 14px 14px rgba(0, 0, 0, 0.45)); /* lifted: a bit bigger, a deeper shadow */
 }
 .piece.fade { opacity: 0; z-index: 1; }
+/* carried after a click: the piece rides under the mouse, its square keeps a faint copy */
+.piece.ghost { transition: none; z-index: 10; pointer-events: none; filter: drop-shadow(0 14px 14px rgba(0, 0, 0, 0.45)); }
+.piece.carried { opacity: 0.35; }
+.board.carrying, .board.carrying .sq { cursor: grabbing !important; }
 .piece.appear { animation: appear 0.24s ease-out; }
 @keyframes appear { from { opacity: 0; } }
 .board.movable { cursor: default; }
@@ -496,26 +541,25 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .side .moveline-slot { d
 @keyframes fadeIn { from { opacity: 0; } }
 
 /* ---------- player cards ---------- */
-.player { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.player { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .avatar {
-  width: var(--card-h); height: var(--card-h); flex: none; border-radius: 6px;
+  width: 40px; height: 40px; flex: none; border-radius: 5px;
   background: #cfcac2 center / 78% no-repeat; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
   transition: box-shadow 0.25s;
 }
 .player[data-color="w"] .avatar { background-image: url(../assets/pieces/cburnett/wP.svg); background-color: #b9b4ab; }
 .player[data-color="b"] .avatar { background-image: url(../assets/pieces/cburnett/bP.svg); background-color: #d8d4cc; }
 .player.to-move .avatar { box-shadow: 0 0 0 2px var(--accent-2), 0 0 18px rgba(229, 56, 59, 0.45); }
-.pmeta { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; min-height: var(--card-h); }
-.pline { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
-.pname { color: var(--text-strong); font-weight: 700; font-size: 1.08rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pstatus { font-size: 0.82rem; color: var(--muted); min-height: 1.2em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pmeta { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.pline { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.pname { color: var(--text-strong); font-weight: 700; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pstatus { font-size: 0.8rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player.to-move .pstatus { color: var(--accent-2); }
 .player.winner .pstatus { color: var(--gold); font-weight: 600; }
 .player.offer .pstatus { color: var(--gold); }
-.material { display: flex; flex-wrap: wrap; align-items: center; row-gap: 2px; color: var(--muted); font-size: 0.85rem; min-height: 1.45em; }
-.material:empty { display: none; }
+.material { display: flex; align-items: center; color: var(--muted); font-size: 0.82rem; height: 1.35em; white-space: nowrap; overflow: hidden; }
 .material .cap { display: inline-flex; margin-right: 4px; }
-.material .pc { width: 1.45em; height: 1.45em; margin-right: -0.6em; }
+.material .pc { width: 1.35em; height: 1.35em; margin-right: -0.55em; }
 .material .cap .pc:last-child { margin-right: 0; }
 .material .pc[class*=" b"] { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.6)); }
 .material b { margin-left: 0.6em; font-weight: 600; }
@@ -523,12 +567,12 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .side .moveline-slot { d
 /* ---------- clocks ---------- */
 .clock {
   display: flex; align-items: center; justify-content: flex-end; gap: 10px;
-  height: 52px; width: 100%; padding: 0 16px; border-radius: 6px;
-  font: 600 1.75rem/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+  height: 42px; width: 150px; padding: 0 12px; border-radius: 5px;
+  font: 600 1.55rem/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
   background: #121213; color: #9a958e; border: 1px solid var(--line);
   transition: background 0.25s, color 0.25s, box-shadow 0.25s;
 }
-.clock-ico { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; opacity: 0; transition: opacity 0.2s; margin-right: auto; }
+.clock-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; opacity: 0; transition: opacity 0.2s; margin-right: auto; }
 .clock.active { background: #f4f2ee; color: #0e0e0f; box-shadow: 0 0 24px rgba(255, 255, 255, 0.12); }
 .clock.active .clock-ico { opacity: 1; }
 .clock.running .clock-ico { animation: tick 1s steps(2) infinite; }
@@ -680,45 +724,49 @@ kbd {
 
 /* ---------- responsive ---------- */
 @media (max-width: 760px) {
-  /* rows: move strip, 2 player rows, action row, gaps, padding */
+  /* rows: menu + move strip, top bar, board, bottom bar, actions (+ the review after a game) */
   :root { --sb-w: 0px; }
   body { font-size: 14px; }
-  .game {
-    --board: min(100vw, calc(100vh - 250px)); --board: min(100vw, calc(100dvh - 250px));
+  .game, body.focus .game {
+    --board: min(100vw, calc(100vh - 230px)); --board: min(100vw, calc(100dvh - 230px));
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: none;
-    grid-template-areas: "mbar mbar" "ptop ctop" "board board" "pbot cbot" "side side" "panel panel";
-    gap: 8px;
+    grid-template-areas: "mbar mbar" "ptop ptop" "board board" "pbot pbot" "panel panel";
+    gap: 6px; min-height: 0;
     padding: 6px 0 calc(8px + env(safe-area-inset-bottom));
     justify-content: stretch; align-content: start;
   }
-  .game.analysing { --lw: 0px; }
-  .player.top, .player.bottom, .clock-top, .clock-bottom { align-self: center; }
-  .corner-tools { top: 6px; right: 6px; flex-direction: row; }
-  .mobile-bar { grid-area: mbar; display: flex; align-items: center; gap: 4px; padding: 0 84px 0 6px; min-width: 0; }
+  .player, body.focus .player.top, body.focus .player.bottom { margin-left: 10px; max-width: calc(100% - 140px); align-self: center; }
+  .player.top, body.focus .player.top { grid-area: ptop; }
+  .player.bottom, body.focus .player.bottom { grid-area: pbot; }
+  .clock-top, body.focus .clock-top { grid-area: ptop; justify-self: end; }
+  .clock-bottom, body.focus .clock-bottom { grid-area: pbot; justify-self: end; }
+  .clock-wrap { margin-right: 10px; }
+  .clock, body.focus .clock { width: 120px; height: 40px; font-size: 1.35rem; padding: 0 10px; }
+  .clock-ico { width: 18px; height: 18px; }
+  .board-area, body.focus .board-area { grid-area: board; justify-self: center; width: var(--board); }
+  .board-frame { border-radius: 0; }
+  .mobile-bar, body.focus .mobile-bar { grid-area: mbar; display: flex; align-items: center; gap: 4px; padding: 0 90px 0 6px; min-width: 0; }
+  body.focus .mobile-bar .moveline-slot { visibility: hidden; }
   .mobile-bar .moveline-slot { flex: 1; min-width: 0; }
   .moveline { border-radius: 8px; min-height: 40px; }
-  .player { padding-left: 10px; }
-  .pline { flex-direction: row; align-items: center; gap: 8px; }
-  .material:empty { display: flex; }
-  .clock-wrap { margin-right: 6px; }
-  .clock { width: auto; min-width: 108px; height: 44px; font-size: 1.45rem; padding: 0 10px; }
-  .clock-ico { width: 20px; height: 20px; }
-  .board-area { justify-self: center; width: var(--board); }
-  .board-frame { border-radius: 0; }
+  .board-tools, body.focus .board-tools { grid-area: mbar; justify-self: end; align-self: center; flex-direction: row; margin-right: 6px; }
+  .focus-acts, body.focus .focus-acts { display: none; }
   .evalbar { right: auto; left: 0; top: auto; bottom: calc(100% + 2px); width: 100%; height: 6px; }
   .evalbar-fill { top: 0; height: 100%; width: var(--w, 50%); }
   .evalbar.flip .evalbar-fill { left: auto; right: 0; }
   .evalbar-num { display: none; }
-  .side .moveline-slot { display: none; }
-  .side-acts { margin: 0; flex-direction: row; padding: 0 10px; }
-  .side-acts .act { flex: 1; height: 44px; }
-  .panel { margin: 0 10px; }
-  .game.analysing .panel { position: static; }
+  /* the panel shrinks to its action row; after a game it also holds the review */
+  .panel, body.focus .panel { display: flex; margin: 0 10px; border: 0; background: transparent; }
+  .panel-head, .panel-nav { display: none; }
+  .an-moves { display: none; }
+  .game.analysing .an-moves { display: grid; max-height: 40vh; }
+  .game.analysing .panel { background: #161617; }
+  .panel-actions { padding: 0; }
+  .panel-actions .txt-btn { flex: 1; justify-content: center; height: 44px; background: #1d1d1f; }
   .sidebar { width: 0; padding: 10px 0; }
   .sidebar.open { width: 240px; padding: 10px 8px; }
   .sb-backdrop.open { display: block; position: fixed; inset: 0; z-index: 25; background: rgba(0, 0, 0, 0.5); }
-  body.focus .game { --board: min(100vw, calc(100dvh - 200px)); grid-template-areas: "ptop ctop" "board board" "pbot cbot" "side side" "panel panel"; padding-top: 52px; align-content: center; }
   .home { padding: 28px 16px; }
   .home-hero h1 { font-size: 1.9rem; }
   .home-games li { grid-template-columns: 54px 1fr; }

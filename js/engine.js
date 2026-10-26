@@ -7,7 +7,9 @@ function appBase() {
   const last = p.slice(p.lastIndexOf('/') + 1);
   return last.includes('.') ? p.slice(0, p.lastIndexOf('/') + 1) : `${p}/`;
 }
-const engineFile = (file) => new URL(`${appBase()}vendor/stockfish/${file}`, location.href).href;
+/** URL of a file under vendor/, next to the app on any host. */
+export const vendorUrl = (path) => new URL(`${appBase()}vendor/${path}`, location.href).href;
+const engineFile = (file) => vendorUrl(`stockfish/${file}`);
 export const engineUrl = () => engineFile('stockfish.js');
 
 /**

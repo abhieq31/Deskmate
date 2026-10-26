@@ -25,6 +25,8 @@ Third-party components keep their own licenses:
 
 * vendor/chess.js — chess.js by Jeff Hlywa, BSD-2-Clause (see vendor/chess.js.LICENSE)
 * vendor/secp256k1.js — noble-secp256k1 by Paul Miller, MIT (see vendor/secp256k1.js.LICENSE)
+* vendor/openings — opening names from lichess's chess-openings data set, CC0 1.0
+  (public domain; see vendor/openings/COPYING.txt)
 * vendor/stockfish — Stockfish 11 (WebAssembly build by stockfish.js), GPLv3; a separate
   program run in a Web Worker (see vendor/stockfish/README.md and COPYING.txt)
 * assets/pieces/cburnett — piece set by Colin M.L. Burnett, GPLv2+
