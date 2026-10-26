@@ -1,0 +1,13 @@
+{
+  "name": "OBChess — over-the-board chess",
+  "short_name": "OBChess",
+  "description": "Two players, one screen. Auto-flipping board, clocks and local game history.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#161512",
+  "theme_color": "#161512",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

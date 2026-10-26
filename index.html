@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>OBChess · Over-the-board chess</title>
+  <meta name="description" content="Free, open-source over-the-board chess for two players on one screen. Auto-flipping board, legal move hints, clocks and local game history. No account, no tracking." />
+  <meta name="theme-color" content="#161512" />
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="OBChess home">
+      <img src="assets/icon.svg" alt="" width="30" height="30" />
+      <span>OB<b>Chess</b></span>
+    </a>
+    <nav class="top-actions">
+      <button class="btn ghost" id="btn-archive" title="Saved games (H)"><svg viewBox="0 0 24 24"><path d="M3 5h18v4H3zM5 9h14v10H5zM9 13h6"/></svg><span>Saved games</span></button>
+      <button class="btn ghost icon-only" id="btn-help" title="Help & shortcuts (?)" aria-label="Help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17.2v.3"/></svg></button>
+      <a class="btn ghost icon-only" href="https://github.com/abhieq31/OBChess" target="_blank" rel="noopener" title="Source code on GitHub" aria-label="GitHub"><svg viewBox="0 0 24 24" class="fill"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .8.1-.7.4-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .6 1.4.2 2.4.1 2.7a3.9 3.9 0 0 1 1 2.7c0 3.9-2.3 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg></a>
+      <button class="btn primary" id="btn-new"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>New game</span></button>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <aside class="side">
+      <section class="card status-card">
+        <div class="status-head">
+          <span class="tc-badge" id="tc-badge">Unlimited</span>
+          <span class="muted" id="game-date"></span>
+        </div>
+        <h2 id="status-text">White to move</h2>
+        <p class="muted" id="status-sub">Pass the device after each move — the board turns to face the next player.</p>
+      </section>
+
+      <section class="card">
+        <h3>Board</h3>
+        <label class="switch"><input type="checkbox" id="set-autoflip" /><span class="track"></span><span>Auto-flip after each move</span></label>
+        <label class="switch"><input type="checkbox" id="set-dests" /><span class="track"></span><span>Show legal moves</span></label>
+        <label class="switch"><input type="checkbox" id="set-coords" /><span class="track"></span><span>Coordinates</span></label>
+        <label class="switch"><input type="checkbox" id="set-sound" /><span class="track"></span><span>Sound</span></label>
+        <div class="themes" role="radiogroup" aria-label="Board theme">
+          <button class="swatch" data-theme="brown" title="Brown" aria-label="Brown theme"></button>
+          <button class="swatch" data-theme="blue" title="Blue" aria-label="Blue theme"></button>
+          <button class="swatch" data-theme="green" title="Green" aria-label="Green theme"></button>
+          <button class="swatch" data-theme="purple" title="Purple" aria-label="Purple theme"></button>
+          <button class="swatch" data-theme="slate" title="Slate" aria-label="Slate theme"></button>
+        </div>
+      </section>
+
+      <section class="card tools">
+        <h3>Game</h3>
+        <button class="btn small" id="btn-pgn-copy">Copy PGN</button>
+        <button class="btn small" id="btn-pgn-download">Download PGN</button>
+        <button class="btn small" id="btn-fen">Copy FEN</button>
+        <button class="btn small" id="btn-import">Import PGN</button>
+      </section>
+
+      <p class="side-foot muted">Games are stored only in this browser. <a href="https://github.com/abhieq31/OBChess" target="_blank" rel="noopener">Open source</a> — contributions welcome.</p>
+    </aside>
+
+    <section class="board-area">
+      <div class="board-frame">
+        <div id="board" aria-label="Chess board"></div>
+      </div>
+    </section>
+
+    <section class="player top" id="player-top">
+      <div class="clock" data-clock></div>
+      <div class="pinfo"><span class="turn-dot"></span><span class="pname" data-name></span><span class="material" data-material></span></div>
+    </section>
+
+    <section class="moves-panel card">
+      <div class="nav-row">
+        <button class="btn icon-only" id="nav-first" title="First move (↑)" aria-label="First move"><svg viewBox="0 0 24 24"><path d="M6 5v14M18 6l-8 6 8 6z"/></svg></button>
+        <button class="btn icon-only" id="nav-prev" title="Previous move (←)" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <button class="btn icon-only" id="nav-next" title="Next move (→)" aria-label="Next move"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+        <button class="btn icon-only" id="nav-last" title="Last move (↓)" aria-label="Last move"><svg viewBox="0 0 24 24"><path d="M18 5v14M6 6l8 6-8 6z"/></svg></button>
+      </div>
+      <div class="review-banner hidden" id="review-banner">
+        <span id="review-text"></span>
+        <button class="btn small primary" id="review-exit">Back to live game</button>
+      </div>
+      <ol class="moves" id="moves" aria-label="Moves"></ol>
+      <div class="result-line hidden" id="result-line"></div>
+      <div class="action-row">
+        <button class="btn icon-only" id="btn-flip" title="Flip board (F)" aria-label="Flip board"><svg viewBox="0 0 24 24"><path d="M7 4v13M3.5 13.5 7 17l3.5-3.5M17 20V7M13.5 10.5 17 7l3.5 3.5"/></svg></button>
+        <button class="btn icon-only" id="btn-undo" title="Takeback (Ctrl+Z)" aria-label="Takeback"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+        <button class="btn icon-only" id="btn-pause" title="Pause clocks (Space)" aria-label="Pause clocks"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg></button>
+        <button class="btn icon-only" id="btn-draw" title="Agree to a draw" aria-label="Draw"><span class="half">½</span></button>
+        <button class="btn icon-only danger" id="btn-resign" title="Resign" aria-label="Resign"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></button>
+      </div>
+    </section>
+
+    <section class="player bottom" id="player-bottom">
+      <div class="pinfo"><span class="turn-dot"></span><span class="pname" data-name></span><span class="material" data-material></span></div>
+      <div class="clock" data-clock></div>
+    </section>
+  </main>
+
+  <!-- New game -->
+  <dialog id="dlg-new" class="modal">
+    <form method="dialog" id="form-new">
+      <h2>New game</h2>
+      <div class="names">
+        <label class="field"><span><i class="pc wK"></i>White</span><input id="new-white" maxlength="24" autocomplete="off" /></label>
+        <button type="button" class="btn icon-only" id="new-swap" title="Swap colours" aria-label="Swap colours"><svg viewBox="0 0 24 24"><path d="M7 7h13M16 3l4 4-4 4M17 17H4M8 13l-4 4 4 4"/></svg></button>
+        <label class="field"><span><i class="pc bK"></i>Black</span><input id="new-black" maxlength="24" autocomplete="off" /></label>
+      </div>
+      <h3>Time control</h3>
+      <div class="tc-grid" id="tc-grid"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn" value="cancel" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Start game</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Game over -->
+  <dialog id="dlg-over" class="modal over">
+    <div class="over-crown" aria-hidden="true">♔</div>
+    <h2 id="over-title"></h2>
+    <p class="muted" id="over-reason"></p>
+    <div class="modal-actions wrap">
+      <button class="btn" id="over-review">Review game</button>
+      <button class="btn" id="over-pgn">Download PGN</button>
+      <button class="btn" id="over-new">New game</button>
+      <button class="btn primary" id="over-rematch">Rematch</button>
+    </div>
+  </dialog>
+
+  <!-- Resign -->
+  <dialog id="dlg-resign" class="modal">
+    <h2>Who is resigning?</h2>
+    <div class="modal-actions wrap">
+      <button class="btn" id="resign-w"><i class="pc wK"></i><span></span></button>
+      <button class="btn" id="resign-b"><i class="pc bK"></i><span></span></button>
+      <button class="btn ghost" data-close>Cancel</button>
+    </div>
+  </dialog>
+
+  <!-- Draw -->
+  <dialog id="dlg-draw" class="modal">
+    <h2>Agree to a draw?</h2>
+    <p class="muted">Both players should agree before confirming.</p>
+    <div class="modal-actions">
+      <button class="btn" data-close>Keep playing</button>
+      <button class="btn primary" id="draw-confirm">Draw</button>
+    </div>
+  </dialog>
+
+  <!-- Saved games -->
+  <dialog id="dlg-archive" class="modal wide">
+    <div class="modal-head">
+      <h2>Saved games</h2>
+      <button class="btn icon-only ghost" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <p class="muted">Finished and abandoned games are kept in this browser (up to 300).</p>
+    <ul class="archive" id="archive-list"></ul>
+    <div class="modal-actions">
+      <button class="btn danger ghost" id="archive-clear">Delete all</button>
+      <button class="btn" id="archive-export">Export all as PGN</button>
+    </div>
+  </dialog>
+
+  <!-- Import -->
+  <dialog id="dlg-import" class="modal wide">
+    <form method="dialog" id="form-import">
+      <h2>Import PGN</h2>
+      <textarea id="import-text" rows="9" placeholder="Paste a PGN here…" spellcheck="false"></textarea>
+      <label class="btn small file-btn">Choose .pgn file<input type="file" id="import-file" accept=".pgn,text/plain" hidden /></label>
+      <p class="error hidden" id="import-error"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Import &amp; review</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Help -->
+  <dialog id="dlg-help" class="modal">
+    <div class="modal-head">
+      <h2>How to play</h2>
+      <button class="btn icon-only ghost" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <ul class="help">
+      <li>Click or drag a piece. Dots show where it can go; rings show captures.</li>
+      <li>After each move the board turns to face the player whose turn it is (toggle <em>Auto-flip</em>).</li>
+      <li>Right-click and drag to draw arrows; right-click a square to circle it.</li>
+      <li>Your current game survives a page reload. Finished games go to <em>Saved games</em>.</li>
+    </ul>
+    <table class="keys">
+      <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous / next move</td></tr>
+      <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>First / last move</td></tr>
+      <tr><td><kbd>F</kbd></td><td>Flip board</td></tr>
+      <tr><td><kbd>Space</kbd></td><td>Pause / resume clocks</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>Takeback</td></tr>
+      <tr><td><kbd>N</kbd></td><td>New game</td></tr>
+      <tr><td><kbd>H</kbd></td><td>Saved games</td></tr>
+    </table>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
