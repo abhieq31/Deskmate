@@ -1,7 +1,7 @@
-name: Tests
+name: Tests & Pages
 
-# GitHub Pages serves the main branch as-is (Settings → Pages → Deploy from a branch → main / root),
-# so CI only has to keep main correct: run the tests and make sure the committed offline build is fresh.
+# Runs the tests and checks the committed offline build (deskmate.html) is fresh. The site needs
+# no build step, so Pages can serve the repository as-is, in either Pages mode (see the deploy job).
 
 on:
   push:
@@ -27,3 +27,40 @@ jobs:
             echo "::error::deskmate.html is stale. Run 'npm run build' and commit the result."
             exit 1
           }
+
+  # Publishes to GitHub Pages when Pages is set to "GitHub Actions". In "Deploy from a branch"
+  # mode GitHub builds the site itself and this job does nothing. It runs on the default branch,
+  # which is the branch the github-pages environment allows to deploy.
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Check how Pages is configured
+        id: mode
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          type=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages" | jq -r '.build_type // "none"') || type=none
+          echo "Pages build type: $type"
+          echo "type=$type" >> "$GITHUB_OUTPUT"
+      - if: steps.mode.outputs.type == 'workflow'
+        uses: actions/checkout@v4
+      - if: steps.mode.outputs.type == 'workflow'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - if: steps.mode.outputs.type == 'workflow'
+        id: deployment
+        uses: actions/deploy-pages@v4
