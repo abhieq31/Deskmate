@@ -4,6 +4,7 @@ import { Board } from './board.js';
 import { storage } from './storage.js';
 import { sound } from './sound.js';
 import { confetti } from './confetti.js';
+import { encodeCode, decodeCode, compareToLocal } from './remote.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -31,6 +32,9 @@ function restoreGame() {
 const active = () => review || game;
 const isLive = () => !review && viewPly === game.length;
 const clockRunning = () => !review && game.hasClock && !game.over && game.length > 0 && !paused;
+// in a remote game this browser only moves its own colour
+const myTurn = () => !game.remote || game.turn === game.remote.me;
+const homeOrientation = () => (game.remote ? game.remote.me : settings.autoFlip ? game.turn : 'w');
 
 /* ---------------- rendering ---------------- */
 
@@ -42,8 +46,8 @@ function render() {
     fen,
     lastMove: g.lastMoveAt(viewPly),
     check: checkSquare(fen),
-    dests: live && !g.over ? g.dests() : new Map(),
-    movable: live && !g.over ? g.turn : null,
+    dests: live && !g.over && myTurn() ? g.dests() : new Map(),
+    movable: live && !g.over && myTurn() ? g.turn : null,
   });
   renderPlayers();
   renderMoves();
@@ -60,7 +64,7 @@ function renderPlayers() {
   for (const [id, color] of [['#player-top', top], ['#player-bottom', bottom]]) {
     const card = $(id);
     card.dataset.color = color;
-    card.querySelector('[data-name]').textContent = g.nameOf(color);
+    card.querySelector('[data-name]').textContent = g.nameOf(color) + (g.remote?.me === color ? ' (you)' : '');
     const m = mat[color];
     card.querySelector('[data-material]').innerHTML =
       m.pieces.map((r) => `<i class="pc ${other(color)}${r.toUpperCase()}"></i>`).join('') +
@@ -132,6 +136,17 @@ function renderStatus() {
   } else if (review) {
     title = 'Reviewing game';
     sub = `${g.white} vs ${g.black}`;
+  } else if (game.remote) {
+    const me = game.remote.me, opp = game.nameOf(other(me));
+    if (game.turn === me) {
+      title = game.chess.inCheck() ? 'Check! Your move' : 'Your move';
+      sub = game.remote.offer === other(me)
+        ? `${opp} offers a draw: accept with ½, or decline by making a move.`
+        : `You play ${colorName(me).toLowerCase()}. Make your move, then send the code to ${opp}.`;
+    } else {
+      title = `Waiting for ${opp}`;
+      sub = `When ${opp} sends a code, paste it anywhere on this page (Ctrl+V).`;
+    }
   } else {
     const turn = game.turn;
     title = `${game.nameOf(turn)} to move`;
@@ -157,8 +172,12 @@ function renderControls() {
   $('#nav-first').disabled = $('#nav-prev').disabled = viewPly === 0;
   $('#nav-next').disabled = $('#nav-last').disabled = viewPly === g.length;
   const liveGame = !review;
-  $('#btn-undo').disabled = !liveGame || game.length === 0;
+  $('#btn-undo').disabled = !liveGame || game.length === 0 || !!game.remote;
   $('#btn-draw').disabled = $('#btn-resign').disabled = !liveGame || game.over || game.length === 0;
+  const theyOffer = game.remote && !game.over && game.remote.offer === other(game.remote.me);
+  $('#btn-draw').classList.toggle('offer', !!theyOffer);
+  $('#btn-draw').title = game.remote ? (theyOffer ? 'Accept the draw offer' : 'Offer a draw') : 'Agree to a draw';
+  renderRemoteCard();
   const pauseBtn = $('#btn-pause');
   pauseBtn.classList.toggle('hidden', !game.hasClock || !liveGame);
   pauseBtn.disabled = game.over || game.length === 0;
@@ -182,6 +201,7 @@ async function onMove(from, to) {
   const ply = game.move(from, to, promotion);
   if (!ply) { render(); return; }
 
+  if (game.remote) game.remote.offer = null; // moving declines a pending offer
   if (game.hasClock) {
     if (game.length > 1 && !paused) game.clocks[mover] -= now - lastTick;
     if (game.length > 1) game.clocks[mover] += game.tcInfo.inc * 1000;
@@ -197,26 +217,35 @@ async function onMove(from, to) {
 
   persist();
   render();
-  if (game.over) onGameOver();
+  if (game.over) onGameOver(true);
+  else if (game.remote) openSend();
   else scheduleFlip();
 }
 
 function scheduleFlip(delay = 380) {
   clearTimeout(flipTimer);
-  if (!settings.autoFlip || review) return;
+  if (!settings.autoFlip || review || game.remote) return;
   flipTimer = setTimeout(async () => {
-    if (review || !settings.autoFlip || board.orientation === game.turn) return;
+    if (review || game.remote || !settings.autoFlip || board.orientation === game.turn) return;
     if (board.busy) return scheduleFlip(200);
     await board.flip();
     renderPlayers();
   }, delay);
 }
 
-function onGameOver() {
+/** @param {boolean} [byMe] the game ended by an action in this browser (matters for remote games) */
+function onGameOver(byMe = false) {
   persist();
   storage.archive(game.toJSON());
   render();
   const g = game;
+  $('#over-code').classList.toggle('hidden', !g.remote);
+  if (g.remote && byMe) {
+    // the opponent only learns the result from our code, so lead with that
+    openSend();
+    if (g.result !== '1/2-1/2') confetti();
+    return;
+  }
   $('#over-title').textContent = g.winnerText();
   $('#over-reason').textContent = g.termination;
   $('#dlg-over').classList.toggle('drawn', g.result === '1/2-1/2');
@@ -267,25 +296,26 @@ function togglePause() {
 
 /* ---------------- game lifecycle ---------------- */
 
-function startGame({ white, black, tc }) {
+function startGame({ white, black, tc, remote = null, id }) {
   if (game.length && !game.over) storage.archive(game.toJSON()); // keep unfinished games too
   clearTimeout(flipTimer);
-  game = new Game({ white, black, tc });
+  game = new Game({ white, black, tc, remote, id });
   review = null;
   viewPly = 0;
   paused = false;
   lowWarned = { w: false, b: false };
   lastTick = Date.now();
-  Object.assign(settings, { white, black, tc });
+  if (!remote) Object.assign(settings, { white, black, tc });
   storage.saveSettings(settings);
   persist();
-  board.setOrientation('w');
+  board.setOrientation(homeOrientation());
   render();
   requestWakeLock();
 }
 
 function takeback() {
   if (review || !game.length) return;
+  if (game.remote) return toast('Takebacks are not available in remote games');
   clearTimeout(flipTimer);
   game.undo();
   viewPly = game.length;
@@ -308,7 +338,7 @@ function openReview(data) {
 function exitReview() {
   review = null;
   viewPly = game.length;
-  board.setOrientation(settings.autoFlip ? game.turn : board.orientation);
+  board.setOrientation(game.remote || settings.autoFlip ? homeOrientation() : board.orientation);
   render();
 }
 
@@ -405,7 +435,7 @@ $('#archive-list').addEventListener('click', (e) => {
     paused = game.hasClock && game.length > 0;
     persist();
     closeDialogs();
-    board.setOrientation(settings.autoFlip ? game.turn : 'w');
+    board.setOrientation(homeOrientation());
     render();
   }
 });
@@ -458,12 +488,12 @@ function download(g) {
   saveFile(`${slug(g.white)}_vs_${slug(g.black)}_${new Date(g.startedAt).toISOString().slice(0, 10)}.pgn`, g.pgn());
 }
 
-async function copy(text, what) {
+async function copy(text, what, quiet = false) {
   try {
     await navigator.clipboard.writeText(text);
     toast(`${what} copied`);
   } catch {
-    prompt(`Copy the ${what}:`, text);
+    if (!quiet) prompt(`Copy the ${what}:`, text); // clipboard blocked: let the user copy by hand
   }
 }
 
@@ -498,16 +528,38 @@ $('#btn-flip').addEventListener('click', async () => { clearTimeout(flipTimer); 
 $('#btn-undo').addEventListener('click', takeback);
 $('#btn-pause').addEventListener('click', togglePause);
 $('#btn-draw').addEventListener('click', () => openDialog('#dlg-draw'));
+$('#btn-draw').addEventListener('click', () => {
+  const r = game.remote;
+  const opp = r && game.nameOf(other(r.me));
+  const theyOffer = r && r.offer === other(r.me);
+  $('#draw-title').textContent = !r ? 'Agree to a draw?' : theyOffer ? `Accept ${opp}'s draw offer?` : `Offer ${opp} a draw?`;
+  $('#draw-sub').textContent = !r ? 'Both players should agree before confirming.'
+    : theyOffer ? 'The game ends as a draw. Send the code so they see it.'
+    : 'The offer goes into the code you send. They can accept it, or decline by moving.';
+  $('#draw-confirm').textContent = r && !theyOffer ? 'Offer draw' : 'Draw';
+  openDialog('#dlg-draw');
+});
 $('#draw-confirm').addEventListener('click', () => {
   $('#dlg-draw').close();
   if (game.over) return;
+  const r = game.remote;
+  if (r && r.offer !== other(r.me)) {
+    r.offer = r.me;
+    persist();
+    render();
+    openSend();
+    return;
+  }
   game.agreeDraw();
   sound.end();
-  onGameOver();
+  onGameOver(true);
 });
 $('#btn-resign').addEventListener('click', () => {
   $('#resign-w span').textContent = `${game.white} resigns`;
   $('#resign-b span').textContent = `${game.black} resigns`;
+  // in a remote game you can only resign for yourself
+  $('#resign-w').classList.toggle('hidden', game.remote?.me === 'b');
+  $('#resign-b').classList.toggle('hidden', game.remote?.me === 'w');
   openDialog('#dlg-resign');
 });
 for (const c of ['w', 'b']) {
@@ -516,15 +568,22 @@ for (const c of ['w', 'b']) {
     if (game.over) return;
     game.resign(c);
     sound.end();
-    onGameOver();
+    onGameOver(true);
   });
 }
 
 $('#over-rematch').addEventListener('click', () => {
   $('#dlg-over').close();
+  if (game.remote) {
+    startGame({ white: game.black, black: game.white, tc: 'none', remote: { me: other(game.remote.me) } });
+    if (game.remote.me === 'b') openSend();
+    else toast('You have white now. Make your first move, then send the code.');
+    return;
+  }
   startGame({ white: game.black, black: game.white, tc: game.tc });
   toast('Colours swapped. Good luck!');
 });
+$('#over-code').addEventListener('click', () => { $('#dlg-over').close(); openSend(); });
 $('#over-new').addEventListener('click', () => { $('#dlg-over').close(); openNewGame(); });
 $('#over-review').addEventListener('click', () => { $('#dlg-over').close(); goto(0); toast('Use ← → to step through the game'); });
 $('#over-pgn').addEventListener('click', () => download(game));
@@ -590,11 +649,170 @@ function applyPrefs() {
   $$('.swatch').forEach((s) => s.setAttribute('aria-checked', String(s.dataset.theme === settings.theme)));
 }
 
+/* ---------------- remote play (game codes) ---------------- */
+
+const shareLink = (code) =>
+  /^https?:$/.test(location.protocol) ? `${location.origin}${location.pathname}#${code}` : null;
+
+function currentCode() {
+  return encodeCode({
+    id: game.id, white: game.white, black: game.black, sender: game.remote.me,
+    moves: game.plies.map((p) => p.san), result: game.result, termination: game.termination,
+    offer: game.remote.offer,
+  });
+}
+
+function renderRemoteCard() {
+  const card = $('#remote-card');
+  card.classList.toggle('hidden', !game.remote);
+  if (!game.remote) return;
+  const opp = game.nameOf(other(game.remote.me));
+  $('#remote-who').textContent = `You play ${colorName(game.remote.me).toLowerCase()} against ${opp}`;
+  $('#remote-paste').placeholder = `Paste ${opp}'s code here…`;
+}
+
+/** Show the code for the opponent and try to put it on the clipboard right away. */
+function openSend() {
+  const r = game.remote;
+  const opp = game.nameOf(other(r.me));
+  const code = currentCode();
+  const link = shareLink(code);
+  let title;
+  if (game.over) title = `${game.winnerText()}. Send ${opp} the final code`;
+  else if (!game.length) title = `Invite ${opp}`;
+  else if (r.offer === r.me) title = `Draw offer ready for ${opp}`;
+  else title = `Your move is ready. Send it to ${opp}`;
+  $('#send-title').textContent = title;
+  $('#send-code').value = code;
+  $('#send-link').classList.toggle('hidden', !link);
+  $('#send-hint').textContent = game.over
+    ? 'Once they paste it, the game is over on their screen too.'
+    : `Send this in Teams, Slack, email or any chat. When ${opp} replies with a code, paste it anywhere on this page.`;
+  openDialog('#dlg-send');
+  copy(code, 'Code', true);
+}
+
+function joinOrUpdate(text) {
+  let d;
+  try { d = decodeCode(text); } catch (e) { toast(e.message); return false; }
+
+  // the code may belong to a game that is in saved games, not on the board
+  let base = game.id === d.id ? game : null;
+  if (!base) {
+    const saved = storage.loadArchive().find((g) => g.id === d.id);
+    if (saved) base = new Game(saved);
+  }
+  const local = base && { id: base.id, moves: base.plies.map((p) => p.san), result: base.result, offer: base.remote?.offer };
+  const kind = compareToLocal(local, d);
+  if (kind === 'same') { toast('You already have this move'); return true; }
+  if (kind === 'conflict') { toast('This code is from a different line of this game. Ask for their latest code.'); return false; }
+  if (base?.remote && d.sender === base.remote.me) { toast('That is your own code. Send it to your opponent.'); return false; }
+
+  closeDialogs();
+  const before = base ? base.length : 0;
+  if (kind === 'new') {
+    startGame({ id: d.id, white: d.white, black: d.black, tc: 'none', remote: { me: other(d.sender) } });
+  } else if (base !== game) {
+    if (game.length && !game.over) storage.archive(game.toJSON());
+    storage.removeFromArchive(base.id);
+    game = base;
+    review = null;
+    board.setOrientation(homeOrientation());
+  }
+  if (!game.remote) game.remote = { me: other(d.sender), offer: null };
+  // show the position before their move first, so their move animates in
+  for (const san of d.moves.slice(game.length, Math.max(before, d.moves.length - 1))) game.moveSan(san);
+  viewPly = game.length;
+  render();
+  setTimeout(() => {
+    const fresh = d.moves.slice(game.length);
+    let last = null;
+    for (const san of fresh) last = game.moveSan(san) || last;
+    game.remote.offer = d.offer;
+    if (d.result && !game.result) game.finish(d.result, d.termination || 'Game over');
+    viewPly = game.length;
+    persist();
+    render();
+    if (last) {
+      if (game.over) sound.end();
+      else if (last.san.includes('+')) sound.check();
+      else if (last.captured) sound.capture();
+      else sound.move();
+    }
+    if (game.over) onGameOver(false);
+    else if (kind === 'new' && !game.length) toast(`Joined: you play white against ${game.black}. Your move!`);
+    else if (kind === 'new') toast(`Joined: you play ${colorName(game.remote.me).toLowerCase()} against ${game.nameOf(other(game.remote.me))}`);
+    else if (d.offer && d.offer !== game.remote.me) toast(`${game.nameOf(d.offer)} offers a draw`);
+    else if (last) toast(`${game.nameOf(other(game.remote.me))} played ${last.san}`);
+  }, 350);
+  return true;
+}
+
+function applyFromHash() {
+  const text = decodeURIComponent(location.hash);
+  history.replaceState(null, '', location.pathname + location.search);
+  joinOrUpdate(text);
+}
+addEventListener('hashchange', () => { if (location.hash.includes('OBC1-')) applyFromHash(); });
+
+// paste a code anywhere on the page
+document.addEventListener('paste', (e) => {
+  if (e.target.closest('input, textarea')) return;
+  const text = e.clipboardData?.getData('text') || '';
+  if (!text.includes('OBC1-')) return;
+  e.preventDefault();
+  joinOrUpdate(text);
+});
+
+function openRemote(tab = 'create') {
+  $('#remote-my-name').value = settings.myName || '';
+  $('#remote-opp-name').value = settings.oppName || '';
+  $('#remote-join-text').value = '';
+  setRemoteTab(tab);
+  openDialog('#dlg-remote');
+}
+
+function setRemoteTab(tab) {
+  $$('#dlg-remote [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  $$('#dlg-remote [data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== tab));
+}
+$$('#dlg-remote [data-tab]').forEach((b) => b.addEventListener('click', () => setRemoteTab(b.dataset.tab)));
+
+$('#form-remote-create').addEventListener('submit', () => {
+  const me = $('#remote-my-name').value.trim() || 'Me';
+  const opp = $('#remote-opp-name').value.trim() || 'Opponent';
+  let color = (document.querySelector('input[name="remote-color"]:checked') || {}).value || 'w';
+  if (color === 'random') color = Math.random() < 0.5 ? 'w' : 'b';
+  Object.assign(settings, { myName: me, oppName: opp });
+  startGame({
+    white: color === 'w' ? me : opp, black: color === 'w' ? opp : me,
+    tc: 'none', remote: { me: color },
+  });
+  if (color === 'b') openSend();
+  else toast(`You play white. Make your first move, then send the code to ${opp}.`);
+});
+
+$('#form-remote-join').addEventListener('submit', (e) => {
+  if (!joinOrUpdate($('#remote-join-text').value)) e.preventDefault();
+});
+
+$('#remote-apply').addEventListener('click', () => {
+  if (joinOrUpdate($('#remote-paste').value)) $('#remote-paste').value = '';
+});
+$('#remote-copy').addEventListener('click', openSend);
+$('#send-copy').addEventListener('click', () => copy($('#send-code').value, 'Code'));
+$('#send-link').addEventListener('click', () => copy(shareLink($('#send-code').value), 'Link'));
+$('#send-code').addEventListener('focus', (e) => e.target.select());
+$('#btn-remote').addEventListener('click', () => openRemote());
+
 /* ---------------- boot ---------------- */
 
 applyPrefs();
-board.setOrientation(settings.autoFlip ? game.turn : 'w');
+// the offline download link only makes sense on the hosted site
+if (!/^https?:$/.test(location.protocol)) $('.offline-dl')?.remove();
+board.setOrientation(homeOrientation());
 render();
+if (location.hash.includes('OBC1-')) applyFromHash();
 if (paused) toast('Game restored — clocks paused');
 else if (game.length) toast('Game restored');
 

@@ -86,6 +86,8 @@ export class Game {
     this.termination = data.termination || null; // human readable reason
     const tc = timeControl(this.tc);
     this.clocks = data.clocks || { w: tc.base * 60000, b: tc.base * 60000 };
+    // remote (code-exchange) games: which colour this browser plays, and a pending draw offer
+    this.remote = data.remote ? { me: data.remote.me, offer: data.remote.offer || null } : null;
     this.chess = new Chess();
     this.plies = [];
     for (const san of data.moves || []) this._push(this.chess.move(san));
@@ -120,6 +122,16 @@ export class Game {
 
   isPromotion(from, to) {
     return this.chess.moves({ square: from, verbose: true }).some((m) => m.to === to && m.promotion);
+  }
+
+  /** Play a move given in SAN (used when applying an opponent's code). */
+  moveSan(san) {
+    if (this.over) return null;
+    let m;
+    try { m = this.chess.move(san); } catch { return null; }
+    this._push(m);
+    this._detectEnd();
+    return this.plies[this.plies.length - 1];
   }
 
   /** Play a move; returns the ply record or null if illegal. */
@@ -177,6 +189,7 @@ export class Game {
       id: this.id, white: this.white, black: this.black, tc: this.tc,
       startedAt: this.startedAt, endedAt: this.endedAt, result: this.result,
       termination: this.termination, clocks: this.clocks, moves: this.plies.map((p) => p.san),
+      remote: this.remote,
     };
   }
 
@@ -187,7 +200,7 @@ export class Game {
     // chess.js's PGN parser does not accept escaped quotes, so swap them for apostrophes
     const esc = (s) => String(s).replace(/[\\"]/g, "'");
     const headers = [
-      ['Event', 'Casual over-the-board game'], ['Site', 'OBChess'], ['Date', date],
+      ['Event', this.remote ? 'Casual remote game' : 'Casual over-the-board game'], ['Site', 'OBChess'], ['Date', date],
       ['White', this.white], ['Black', this.black], ['Result', this.result || '*'],
       ['TimeControl', tc.base ? `${tc.base * 60}+${tc.inc}` : '-'],
     ];

@@ -26,7 +26,13 @@ npm test                      # unit tests (Node 18+, no install needed)
 - **Accessibility:** buttons need labels, keyboard shortcuts must not fire
   while typing, and animations must respect `prefers-reduced-motion`.
 - If you add a file to the app, add it to the `ASSETS` list in `sw.js` and
-  bump `CACHE` so returning visitors get the update.
+  bump `CACHE` so returning visitors get the update. If it's a JS module,
+  also add it to `MODULES` in `scripts/build-single.mjs` (in dependency order).
+- Run `npm run build` and open `dist/obchess.html` by double-click to check
+  that the single-file offline version still works.
+- **Game codes (`js/remote.js`) are a wire format.** Keep old codes
+  decodable. If the format has to change, use a new prefix (`OBC2-`) and
+  keep decoding `OBC1-`.
 
 ## Pull requests
 

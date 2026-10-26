@@ -4,10 +4,10 @@
 
 # OBChess
 
-**Over-the-board chess for two people and one screen.**
-Open it in a browser, put the laptop between you and a colleague, and play.
+**Chess with your colleagues: on one laptop, or across two.**
+Put the laptop between you and play, or send game codes through the chat tool you already use.
 
-[**▶ Play now**](https://abhieq31.github.io/OBChess/) · [Report a bug](https://github.com/abhieq31/OBChess/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/OBChess/issues/new?template=feature_request.md)
+[**▶ Play now**](https://abhieq31.github.io/OBChess/) · [**⬇ Offline version**](https://abhieq31.github.io/OBChess/obchess.html) · [Report a bug](https://github.com/abhieq31/OBChess/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/OBChess/issues/new?template=feature_request.md)
 
 <img src="docs/screenshot.png" alt="OBChess game screen: board in the centre, players, clocks and move list on the right" width="860" />
 
@@ -15,12 +15,21 @@ Open it in a browser, put the laptop between you and a colleague, and play.
 
 ## Why
 
-Chess sites get blocked on work networks. OBChess is one static page with no
-server, no account and no tracking. It runs from GitHub Pages, from a file
-share or from `localhost`. Once it has loaded, it also works offline.
+Chess sites get blocked on work networks. OBChess is a static page with no
+server, no account, no tracking and no third-party requests. It runs from
+GitHub Pages or `localhost`, or as **one HTML file you open by
+double-click**. It also works with no network at all.
+
+Please use it in line with your employer's policies. OBChess keeps
+everything local; it is not designed to get around IT controls.
 
 ## Features
 
+- **Play a colleague on another laptop with game codes.** After your move
+  you get a short code like `OBC1-eyJp…`. Paste it into Teams, Slack, email
+  or any chat. Your colleague pastes it and moves, then sends a code back.
+  There's no server and no account, and nothing to block apart from the chat
+  you already use. ([how it works](#play-a-colleague-remotely))
 - **The board turns to face whoever is to move.** After every move it spins
   180° and the pieces stay upright. You can turn this off.
 - **Move hints like lichess and chess.com.** Click or drag a piece: dots show
@@ -45,6 +54,35 @@ share or from `localhost`. Once it has loaded, it also works offline.
   installed as an app (PWA).
 
 <img src="docs/flip.png" alt="The board halfway through its flip animation" width="560" />
+
+## Play a colleague remotely
+
+1. Click **Play remotely → Start a game**, enter both names and pick your colour.
+2. You get a **game code** (and a link). Send it to your colleague in any chat.
+3. They click the link, or press **Play remotely → I have a code** and paste
+   it. They can also press **Ctrl+V** anywhere on the page.
+4. After each move OBChess copies the new code to your clipboard. Send it,
+   and paste the reply when it comes back. Repeat until mate. 🙂
+
+Draw offers, resignations and the final result travel inside the codes too.
+Each code contains the whole game (one byte per move: a full 30-move game
+is about 180 characters). If a code gets lost, the newest one always works.
+Codes are checked against the rules, and a code that rewrites earlier
+moves is rejected.
+
+How this compares to real-time play: a live "room code" needs a relay
+server, or WebRTC with STUN/TURN servers. On a corporate network that's an
+outside domain or a UDP path that may be blocked, plus a server someone has
+to run and pay for. Text codes need neither: if your chat works, the game
+works. The trade-off is that each move takes a paste (a few seconds),
+which is fine for a game at your desk.
+
+## Offline version (one file)
+
+[`obchess.html`](https://abhieq31.github.io/OBChess/obchess.html) is the
+whole app (about 225 KB) in a single file. Save it anywhere and open it by
+double-click. It makes no network requests. Build it yourself with
+`npm run build` (writes `dist/obchess.html`).
 
 ## Run it locally
 
@@ -80,12 +118,14 @@ css/style.css         all styling (themes, board, animations, responsive layout)
 js/app.js             controller: UI wiring, clocks, persistence, dialogs
 js/board.js           interactive board: render, click/drag, hints, arrows, flip
 js/game.js            game model on top of chess.js: plies, results, PGN (pure, tested)
+js/remote.js          game codes for remote play: encode/decode/compare (pure, tested)
 js/storage.js         localStorage wrapper
 js/sound.js           Web Audio synthesized sounds
 js/confetti.js        celebration effect
 sw.js                 offline cache (service worker)
+scripts/build-single.mjs  bundles everything into dist/obchess.html (no deps)
 vendor/chess.js       chess rules engine (chess.js 1.4.0, BSD-2-Clause)
-tests/                node:test unit tests for js/game.js
+tests/                node:test unit tests for js/game.js and js/remote.js
 ```
 
 ## Contributing
@@ -98,7 +138,8 @@ Contributions are welcome, from typo fixes to new features. See
 - More piece sets and board themes
 - Play from a custom FEN position or Chess960
 - Translations
-- An optional peer-to-peer mode (WebRTC) so two laptops can play each other
+- An optional real-time mode for networks that allow it (WebRTC/WebSocket), with codes as the fallback
+- Clocks for remote games (store the time used per move in the code)
 
 ## Credits & licenses
 

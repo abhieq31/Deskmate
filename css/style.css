@@ -114,6 +114,8 @@ h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; colo
   padding: 4px clamp(12px, 2vw, 24px) 24px;
 }
 .side { grid-area: side; display: flex; flex-direction: column; gap: 14px; align-self: start; }
+/* desktop: the side column must not stretch the board rows; it may simply run longer */
+@media (min-width: 1181px) { .side { height: 0; min-height: 100%; } }
 .board-area { grid-area: board; position: relative; align-self: start; }
 .player.top { grid-area: top; }
 .moves-panel { grid-area: moves; }
@@ -437,6 +439,40 @@ kbd {
   background: #1c1b18; border: 1px solid #4a4742; border-bottom-width: 3px; font: 600 0.8rem var(--mono); color: var(--text-strong);
 }
 
+/* remote play */
+.tiny { font-size: 0.8rem; margin: 8px 0 0; }
+.center { text-align: center; }
+.remote-card { border-color: rgba(54, 146, 231, 0.35); }
+.remote-who { margin: 0 0 10px; color: var(--text-strong); font-weight: 500; }
+.remote-card textarea { margin-bottom: 8px; font-size: 0.78rem; }
+.remote-btns { display: flex; gap: 8px; }
+.remote-btns .btn { flex: 1; }
+.steps { margin: 6px 0 4px; padding-left: 20px; }
+.steps li { margin-bottom: 4px; }
+.tabs { display: flex; gap: 4px; margin: 16px 0 14px; padding: 4px; border-radius: 10px; background: #1c1b18; }
+.tabs button {
+  flex: 1; padding: 8px; border: 0; border-radius: 7px; background: transparent; color: var(--muted);
+  font: inherit; font-weight: 600; cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--text-strong); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); }
+.names.two { grid-template-columns: 1fr 1fr; }
+.color-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.color-pick input { position: absolute; opacity: 0; pointer-events: none; }
+.color-pick span {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px; border-radius: 10px;
+  background: #1c1b18; border: 1px solid rgba(255, 255, 255, 0.08); cursor: pointer; font-weight: 600; color: var(--text-strong);
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.color-pick span:hover { transform: translateY(-2px); }
+.color-pick .pc { width: 34px; height: 34px; }
+.color-pick .duo { display: flex; height: 34px; align-items: center; }
+.color-pick .duo .pc { width: 26px; height: 26px; }
+.color-pick input:checked + span { border-color: var(--accent); background: rgba(127, 166, 80, 0.18); box-shadow: 0 0 0 3px rgba(127, 166, 80, 0.18); }
+.color-pick input:focus-visible + span { outline: 2px solid var(--blue); }
+.code-box { font-size: 0.82rem; word-break: break-all; background: #12110f; color: #d8f0a8; margin: 6px 0 0; }
+.btn.offer { color: var(--gold); animation: offerPulse 1.4s ease-in-out infinite; }
+@keyframes offerPulse { 50% { background: rgba(232, 182, 76, 0.2); } }
+
 /* toast & confetti */
 .toast {
   position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 30px); z-index: 50;
@@ -484,7 +520,7 @@ kbd {
   .moves { flex: none; max-height: 200px; min-height: 0; }
   .side { margin-top: 14px; grid-template-columns: 1fr; }
   .tc-grid { grid-template-columns: repeat(3, 1fr); }
-  .names { grid-template-columns: 1fr; }
+  .names, .names.two { grid-template-columns: 1fr; }
   .names #new-swap { justify-self: center; transform: rotate(90deg); }
   .archive li { grid-template-columns: 60px 1fr; }
   .archive .acts { grid-column: 1 / -1; justify-content: flex-end; }

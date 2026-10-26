@@ -1,8 +1,8 @@
 // Offline support: cache the app shell, serve cache-first, refresh in the background.
-const CACHE = 'obchess-v1';
+const CACHE = 'obchess-v2';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'assets/icon.svg',
-  'js/app.js', 'js/board.js', 'js/game.js', 'js/storage.js', 'js/sound.js', 'js/confetti.js',
+  'js/app.js', 'js/board.js', 'js/game.js', 'js/storage.js', 'js/sound.js', 'js/confetti.js', 'js/remote.js',
   'vendor/chess.js',
   ...['K', 'Q', 'R', 'B', 'N', 'P'].flatMap((r) => [`assets/pieces/cburnett/w${r}.svg`, `assets/pieces/cburnett/b${r}.svg`]),
 ];

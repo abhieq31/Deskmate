@@ -29,6 +29,8 @@ export const DEFAULT_SETTINGS = {
   white: 'White',
   black: 'Black',
   tc: 'none',
+  myName: '',
+  oppName: '',
 };
 
 export const storage = {
