@@ -16,7 +16,9 @@ npm test                      # unit tests (Node 18+, no install needed)
 ## Guidelines
 
 - **Keep it dependency-free at runtime.** If you need a library, vendor a
-  pinned copy into `vendor/` with its license file next to it.
+  pinned copy into `vendor/` with its license file next to it. Stockfish
+  (`vendor/stockfish`) is loaded only when someone opens an analysis. Keep it
+  that way so the page stays light.
 - **Game logic goes in `js/game.js`** and should have a test in `tests/`.
   DOM code goes in `js/board.js` (the board) or `js/app.js` (everything else).
 - **Match the surrounding style:** 2-space indentation, single quotes,

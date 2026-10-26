@@ -14,7 +14,7 @@ const read = (p) => readFileSync(join(root, p), 'utf8');
 
 // dependency order: a module must come after everything it imports
 const MODULES = ['vendor/chess.js', 'vendor/secp256k1.js', 'js/game.js', 'js/remote.js', 'js/live.js',
-  'js/board.js', 'js/storage.js', 'js/sound.js', 'js/confetti.js', 'js/app.js'];
+  'js/engine.js', 'js/analysis.js', 'js/board.js', 'js/storage.js', 'js/sound.js', 'js/confetti.js', 'js/app.js'];
 
 function wrapModule(path) {
   let src = read(path);
@@ -63,7 +63,7 @@ swap('<link rel="manifest" href="manifest.webmanifest" />\n', '');
 swap('href="assets/icon.svg"', `href="${icon}"`);
 swap('src="assets/icon.svg"', `src="${icon}"`);
 // the brand link would point at a folder when opened from disk
-swap('<a class="brand" href="./"', '<a class="brand" href="#"');
+swap('<a class="sb-brand" href="./"', '<a class="sb-brand" href="#"');
 // works from any URL (e.g. abhieq31.com/deskmate): "download" saves this very page
 swap('<a href="deskmate.html" download>', '<a href="" download="deskmate.html">');
 swap('<html lang="en">', '<html lang="en" data-single-file>');

@@ -28,10 +28,20 @@ Please use it in line with your employer's policies.
   gets a 6-character code like `K7Q-M2X`. The other types it in once, and
   moves appear on both screens within moments. Clocks, draw offers,
   resignations and rematches sync too. ([How it works](#play-a-colleague))
-- **chess.com-style view.** Each player row has the avatar and name on the
-  left and the clock on the right, above and below the board. Beside the
-  board there is only the move list, **Draw** and **Resign**. Everything else
-  is under ☰. On phones, Draw · Resign · Menu sit under the board.
+- **chess.com-style view.** A slim icon sidebar on the left expands to
+  show New game, Play a colleague, Saved games, Analysis and Import. Each
+  player row has the avatar and name on the left and the clock on the right,
+  above and below the board. On the right there is one line of moves with
+  **Draw** and **Resign**. Board settings sit behind ⚙ next to the clock.
+- **Fluid pieces.** Pressing a piece lifts it under the cursor, and it
+  follows the pointer once per screen frame. The target square is outlined
+  while you drag, and click-to-move works too.
+- **Post-game analysis with Stockfish.** Once a game ends (or for any saved
+  or imported game), Stockfish 11 analyses every move in your browser. You
+  get an evaluation bar, the engine's best line and an arrow for its best
+  move, an evaluation graph, accuracy for both players, and ?? / ? / ?!
+  marks on blunders, mistakes and inaccuracies, the way lichess calculates
+  them. There is no engine during play.
 - **Same-laptop games.** After each move the board switches to the side of
   whoever moves next. The view just changes; nothing spins. (Auto-flip can be
   turned off in the menu.)
@@ -45,6 +55,8 @@ Please use it in line with your employer's policies.
 - **Games stay in your browser.** A game in progress survives a reload.
   Finished games go to **Saved games** (review, resume, PGN download).
 - **PGN import/export**, FEN copy, takeback (same-laptop games), five board themes.
+
+<img src="docs/analysis.png" alt="Post-game analysis: evaluation bar, best-move arrow, evaluation graph and accuracy for both players" width="760" />
 
 ## Play a colleague
 
@@ -82,15 +94,17 @@ If you host Deskmate behind a Content-Security-Policy, allow the relays in
 ## Offline version (one file)
 
 [`deskmate.html`](https://github.com/abhieq31/Deskmate/raw/main/deskmate.html)
-is the whole app (about 300 KB) in a single file. Save it anywhere and open
+is the whole app (about 310 KB) in a single file. Save it anywhere and open
 it by double-click. Same-laptop games need no network at all. Live games with
-a colleague need to reach the relays. Build it yourself with `npm run build`
+a colleague need to reach the relays. Analysis needs the hosted page, because
+browsers don't run the engine's worker from a local file. Build it yourself with `npm run build`
 (writes `deskmate.html`).
 
 ## Hosting it on your own site
 
 `deskmate.html` is self-contained (inline CSS, JS and images), so any web
-server can host it at any path. Drop it in as `deskmate/index.html`. That's
+server can host it at any path. Drop it in as `deskmate/index.html`, with
+`vendor/stockfish/` next to it (`deskmate/vendor/stockfish/`) for analysis. That's
 how [abhieq31.com/deskmate](https://abhieq31.com/deskmate) runs: the file sits
 in the site's `public/` folder. If your site sends a Content-Security-Policy,
 it needs `script-src 'unsafe-inline'`, `img-src data:` and the relays in
@@ -134,6 +148,8 @@ js/board.js           interactive board: render, click/drag, hints, arrows, flip
 js/game.js            game model on top of chess.js: plies, results, PGN (pure, tested)
 js/live.js            live rooms: room codes, signed snapshots over Nostr relays (tested)
 js/remote.js          compact move encoding for snapshots, one byte per move (tested)
+js/engine.js          Stockfish in a Web Worker over UCI (contempt off for analysis)
+js/analysis.js        win chances, ??/?/?! classification, accuracy (tested)
 js/storage.js         localStorage wrapper
 js/sound.js           Web Audio synthesized sounds
 js/confetti.js        celebration effect
@@ -142,6 +158,7 @@ scripts/build-single.mjs  bundles everything into deskmate.html (no deps)
 deskmate.html         generated offline build (commit it after changes: `npm run build`)
 vendor/chess.js       chess rules engine (chess.js 1.4.0, BSD-2-Clause)
 vendor/secp256k1.js   Schnorr signatures for room snapshots (noble-secp256k1 3.2.0, MIT)
+vendor/stockfish/     Stockfish 11 WebAssembly build, loaded only for analysis (GPLv3)
 tests/                node:test unit tests for the game model, move encoding and live rooms
 ```
 
@@ -151,7 +168,6 @@ Contributions are welcome, from typo fixes to new features. See
 [CONTRIBUTING.md](CONTRIBUTING.md). Some ideas:
 
 - Opening name display (ECO lookup)
-- Post-game analysis with a WebAssembly Stockfish build
 - More piece sets and board themes
 - Play from a custom FEN position or Chess960
 - Translations
@@ -162,6 +178,7 @@ Contributions are welcome, from typo fixes to new features. See
 - Deskmate source code: [MIT](LICENSE)
 - Rules engine: [chess.js](https://github.com/jhlywa/chess.js) by Jeff Hlywa, BSD-2-Clause
 - Signatures: [noble-secp256k1](https://github.com/paulmillr/noble-secp256k1) by Paul Miller, MIT
+- Analysis: [Stockfish](https://stockfishchess.org) 11, compiled to WebAssembly by [stockfish.js](https://github.com/nmrugg/stockfish.js), GPLv3. It is a separate program that Deskmate runs in a Web Worker. See [vendor/stockfish/README.md](vendor/stockfish/README.md)
 - Pieces: *cburnett* set by Colin M.L. Burnett, GPLv2+, via [lichess](https://github.com/lichess-org/lila). See [assets/pieces/cburnett/LICENSE.md](assets/pieces/cburnett/LICENSE.md)
 - Visual language inspired by [lichess.org](https://lichess.org). Please support them.
 

@@ -28,7 +28,8 @@ export class Board {
     this.pieces = new Map(); // square -> { el, code }
     this.selected = null;
     this.drag = null;
-    this.shapes = []; // { from, to } arrows, from === to is a circle
+    this.shapes = []; // { from, to } arrows drawn by the player, from === to is a circle
+    this.autoShapes = []; // arrows the app draws (engine's best move)
     this.drawing = null;
 
     root.classList.add('board');
@@ -41,7 +42,9 @@ export class Board {
     this.svg.setAttribute('class', 'arrows');
     this.svg.setAttribute('viewBox', '0 0 8 8');
     this.svg.innerHTML = `<defs><marker id="ah" orient="auto" markerWidth="4" markerHeight="8" refX="2.05" refY="2.01">
-      <path d="M0,0 V4 L3,2 Z" fill="currentColor"/></marker></defs><g></g>`;
+      <path d="M0,0 V4 L3,2 Z" fill="currentColor"/></marker>
+      <marker id="ah-auto" orient="auto" markerWidth="4" markerHeight="8" refX="2.05" refY="2.01">
+      <path d="M0,0 V4 L3,2 Z" fill="#3692e7"/></marker></defs><g></g>`;
     this.inner.appendChild(this.svg);
     this.promoEl = el('div', 'promo hidden', root);
 
@@ -216,9 +219,11 @@ export class Board {
       const isDest = this.prefs.showDests && targets.includes(sq);
       s.classList.toggle('move-dest', isDest && !occupied.has(sq));
       s.classList.toggle('capture-dest', isDest && occupied.has(sq));
-      s.classList.toggle('hover', !!this.drag?.started && this.drag.over === sq && targets.includes(sq));
+      s.classList.toggle('hover', !!this.drag?.moved && this.drag.over === sq);
+      s.classList.toggle('can-move', !!movable && dests.has(sq));
     }
     this.root.classList.toggle('movable', !!movable);
+    this.root.classList.toggle('dragging-piece', !!this.drag);
   }
 
   /* ---------- input ---------- */
@@ -249,10 +254,15 @@ export class Board {
     }
     if (this._canMoveFrom(sq)) {
       e.preventDefault();
+      // keep getting pointer events even if the pointer leaves the board mid-drag
+      try { this.root.setPointerCapture(e.pointerId); } catch { /* not supported: window listeners still work */ }
       const wasSelected = this.selected === sq;
       this.selected = sq;
-      const rect = this.inner.getBoundingClientRect();
-      this.drag = { from: sq, el: this.pieces.get(sq).el, x: e.clientX, y: e.clientY, rect, started: false, wasSelected, over: sq };
+      const el = this.pieces.get(sq).el;
+      // lift the piece at once and centre it under the pointer, like chess.com and lichess
+      this.drag = { from: sq, el, x: e.clientX, y: e.clientY, rect: this.inner.getBoundingClientRect(), moved: false, wasSelected, over: sq };
+      el.classList.add('dragging');
+      this._follow(e.clientX, e.clientY);
       this._highlight();
     } else if (this.selected) {
       this.selected = null;
@@ -260,17 +270,25 @@ export class Board {
     }
   }
 
+  /** Put the dragged piece's centre at the pointer; batched to one update per frame. */
+  _follow(x, y) {
+    const d = this.drag;
+    d.px = x;
+    d.py = y;
+    if (d.raf) return;
+    d.raf = requestAnimationFrame(() => {
+      d.raf = 0;
+      if (this.drag !== d) return;
+      const size = d.rect.width / 8;
+      d.el.style.transform = `translate3d(${d.px - d.rect.left - size / 2}px, ${d.py - d.rect.top - size / 2}px, 0)`;
+    });
+  }
+
   _move(e) {
     const d = this.drag;
     if (!d) return;
-    if (!d.started && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 4) return;
-    if (!d.started) {
-      d.started = true;
-      d.el.classList.add('dragging');
-    }
-    const size = d.rect.width / 8;
-    const x = e.clientX - d.rect.left - size / 2, y = e.clientY - d.rect.top - size / 2;
-    d.el.style.transform = `translate(${x}px, ${y}px) scale(1.12)`;
+    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 3) d.moved = true;
+    this._follow(e.clientX, e.clientY);
     const over = this._eventSquare(e);
     if (over !== d.over) { d.over = over; this._highlight(); }
   }
@@ -285,35 +303,37 @@ export class Board {
     const d = this.drag;
     if (!d) return;
     this.drag = null;
+    if (d.raf) cancelAnimationFrame(d.raf);
     const to = this._eventSquare(e);
     const targets = this.state.dests.get(d.from) || [];
-    if (d.started) {
-      d.el.classList.remove('dragging');
-      if (to && to !== d.from && targets.includes(to)) {
-        // drop the piece instantly on its target, then let the app play the move
-        this.root.classList.add('no-anim');
-        const { code } = this.pieces.get(d.from);
-        const captured = this.pieces.get(to);
-        if (captured) captured.el.remove();
-        this.pieces.delete(d.from);
-        this.pieces.set(to, { el: d.el, code });
-        this._place(d.el, to);
-        reflow(d.el);
-        this.root.classList.remove('no-anim');
-        this.selected = null;
-        this._highlight();
-        this.onMove(d.from, to);
-        return;
-      }
-      this._place(d.el, d.from);
-    } else if (d.wasSelected) {
+    // drop: no slide, the piece is already where the player let go of it
+    this.root.classList.add('no-anim');
+    d.el.classList.remove('dragging');
+    if (to && to !== d.from && targets.includes(to)) {
+      const { code } = this.pieces.get(d.from);
+      const captured = this.pieces.get(to);
+      if (captured) captured.el.remove();
+      this.pieces.delete(d.from);
+      this.pieces.set(to, { el: d.el, code });
+      this._place(d.el, to);
+      reflow(d.el);
+      this.root.classList.remove('no-anim');
       this.selected = null;
+      this._highlight();
+      this.onMove(d.from, to);
+      return;
     }
+    this._place(d.el, d.from);
+    reflow(d.el);
+    this.root.classList.remove('no-anim');
+    // a plain click on an already selected piece deselects it; otherwise it stays selected
+    if (!d.moved && d.wasSelected) this.selected = null;
     this._highlight();
   }
 
   _cancelDrag() {
     if (!this.drag) return;
+    if (this.drag.raf) cancelAnimationFrame(this.drag.raf);
     this.drag.el.classList.remove('dragging');
     this._place(this.drag.el, this.drag.from);
     this.drag = null;
@@ -322,6 +342,11 @@ export class Board {
   }
 
   /* ---------- arrows & circles ---------- */
+
+  setAutoShapes(shapes) {
+    this.autoShapes = shapes;
+    this._renderShapes();
+  }
 
   _toggleShape(from, to) {
     const i = this.shapes.findIndex((s) => s.from === from && s.to === to);
@@ -334,7 +359,7 @@ export class Board {
     const g = this.svg.querySelector('g');
     g.innerHTML = '';
     const ns = 'http://www.w3.org/2000/svg';
-    for (const { from, to } of this.shapes) {
+    for (const { from, to, auto } of [...this.autoShapes.map((x) => ({ ...x, auto: true })), ...this.shapes]) {
       const [c1, r1] = this._pos(from), [c2, r2] = this._pos(to);
       if (from === to) {
         const c = document.createElementNS(ns, 'circle');
@@ -350,8 +375,8 @@ export class Board {
       line.setAttribute('x1', x1); line.setAttribute('y1', y1);
       line.setAttribute('x2', x2 - ((x2 - x1) / len) * shorten);
       line.setAttribute('y2', y2 - ((y2 - y1) / len) * shorten);
-      line.setAttribute('class', 'shape-arrow');
-      line.setAttribute('marker-end', 'url(#ah)');
+      line.setAttribute('class', auto ? 'shape-arrow auto' : 'shape-arrow');
+      line.setAttribute('marker-end', auto ? 'url(#ah-auto)' : 'url(#ah)');
       g.appendChild(line);
     }
   }

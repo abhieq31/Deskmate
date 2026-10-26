@@ -6,6 +6,9 @@ import { sound } from './sound.js';
 import { confetti } from './confetti.js';
 import { packMoves, unpackMoves } from './remote.js';
 import { Room, newRoomCode, parseRoomCode, formatRoomCode } from './live.js';
+import { Engine } from './engine.js';
+import { summarize, winPct, formatEval, MARKS } from './analysis.js';
+import { Chess } from '../vendor/chess.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -28,6 +31,8 @@ let flipTimer = null;
 let room = null; // live connection for game.remote.room
 let relaysUp = 0; // relays the room is connected to right now
 let joining = null; // { code, name, timer } while waiting for a room's first snapshot
+let an = null; // post-game analysis: { game, evals[], summary, done }
+let engine = null;
 
 const board = new Board($('#board'), { onMove });
 
@@ -65,6 +70,7 @@ function render() {
   renderMoves();
   renderStatus();
   renderControls();
+  renderAnalysis();
 }
 
 function renderPlayers() {
@@ -140,21 +146,27 @@ function renderClocks() {
   }
 }
 
+/** One line of moves (top right), like chess.com's analysis strip; marks come from the analysis. */
 function renderMoves() {
   const g = active();
-  const list = $('#moves');
+  const marks = an && an.game === g ? an.summary?.moves || [] : [];
   const parts = [];
-  for (let i = 0; i < g.plies.length; i += 2) {
-    const w = g.plies[i], b = g.plies[i + 1];
-    parts.push(`<li><span class="idx">${i / 2 + 1}</span>` +
-      `<button class="mv${viewPly === i + 1 ? ' active' : ''}" data-ply="${i + 1}">${san(w.san)}</button>` +
-      (b ? `<button class="mv${viewPly === i + 2 ? ' active' : ''}" data-ply="${i + 2}">${san(b.san)}</button>` : '<span></span>') +
-      '</li>');
-  }
+  g.plies.forEach((p, i) => {
+    if (i % 2 === 0) parts.push(`<span class="ml-num">${i / 2 + 1}.</span>`);
+    const m = marks[i]?.kind;
+    parts.push(`<button class="mv${viewPly === i + 1 ? ' active' : ''}${m ? ` ${m}` : ''}" data-ply="${i + 1}">${san(p.san)}${m ? `<span class="mark">${MARKS[m]}</span>` : ''}</button>`);
+  });
+  if (!g.plies.length) parts.push('<span class="empty">No moves yet</span>');
+  const list = $('#moves');
   list.innerHTML = parts.join('');
+  // keep the current move in view by scrolling the strip itself (never the page)
   const act = list.querySelector('.active');
-  if (act) act.scrollIntoView({ block: 'nearest' });
-  else if (viewPly === 0) list.scrollTop = 0;
+  if (act) {
+    const l = act.offsetLeft - list.offsetLeft, r = l + act.offsetWidth;
+    if (l < list.scrollLeft + 20) list.scrollLeft = l - 40;
+    else if (r > list.scrollLeft + list.clientWidth - 20) list.scrollLeft = r - list.clientWidth + 40;
+  } else if (viewPly === 0) list.scrollLeft = 0;
+  else list.scrollLeft = list.scrollWidth;
 
   const rl = $('#result-line');
   rl.classList.toggle('hidden', !g.result);
@@ -169,29 +181,11 @@ const tcText = (tc) => (tc.base ? `${tc.label} · ${tc.kind}` : 'Unlimited');
 
 function renderStatus() {
   const g = active();
-  $('#tc-badge').textContent = $('#panel-tc').textContent = tcText(g.tcInfo);
-  $('#game-date').textContent = new Date(g.startedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-  let title, sub;
-  if (g.result) {
-    title = g.winnerText();
-    sub = g.termination;
-  } else if (review) {
-    title = 'Reviewing game';
-    sub = `${g.white} vs ${g.black}`;
-  } else if (game.remote) {
-    const r = game.remote;
-    title = bothSeated() ? `${game.white} vs ${game.black}` : 'Waiting for your colleague';
-    sub = `Live game · code ${formatRoomCode(r.room)}${relaysUp ? '' : ' · reconnecting…'}`;
-  } else {
-    title = `${game.nameOf(game.turn)} to move`;
-    sub = paused && game.length > 0 && game.hasClock ? 'Clocks paused.' : 'Same-laptop game.';
-  }
-  $('#status-text').textContent = title;
-  $('#status-sub').textContent = sub;
+  $('#tc-badge').textContent = tcText(g.tcInfo);
   document.title = g.result ? `${g.winnerText()} · Deskmate` : review ? 'Review · Deskmate' : `${colorName(game.turn)} to move · Deskmate`;
 
   const banner = $('#review-banner');
-  const showBanner = !!review || viewPly !== game.length;
+  const showBanner = !an && (!!review || viewPly !== game.length);
   banner.classList.toggle('hidden', !showBanner);
   if (review) $('#review-text').textContent = `Reviewing ${review.white} vs ${review.black}${review.result ? ` · ${review.result}` : ''}`;
   else if (showBanner) $('#review-text').textContent = `Viewing move ${Math.ceil(viewPly / 2) || 0}${viewPly % 2 ? '' : viewPly ? '…' : ''}`;
@@ -203,8 +197,8 @@ const ICON_RESUME = '<svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg><
 
 function renderControls() {
   const g = active();
-  $('#nav-first').disabled = $('#nav-prev').disabled = viewPly === 0;
-  $('#nav-next').disabled = $('#nav-last').disabled = viewPly === g.length;
+  for (const b of [$('#nav-first'), $('#nav-prev'), $('[data-nav="prev"]')]) b.disabled = viewPly === 0;
+  for (const b of [$('#nav-last'), $('#nav-next'), $('[data-nav="next"]')]) b.disabled = viewPly === g.length;
   const liveGame = !review;
   $('#btn-undo').disabled = !liveGame || game.length === 0 || !!game.remote;
   const noActions = !liveGame || game.over || (game.remote ? !bothSeated() : game.length === 0);
@@ -215,6 +209,11 @@ function renderControls() {
     b.title = game.remote ? (theyOffer ? 'Accept the draw offer' : 'Offer a draw') : 'Agree to a draw';
   }
   for (const b of $$('.act-resign')) b.disabled = noActions;
+  // while a game is on: Draw / Resign. Once it is over: Analyse.
+  const finished = !!g.result || (!!review && g.length > 0);
+  for (const b of $$('.act-draw, .act-resign')) b.classList.toggle('hidden', finished);
+  for (const b of $$('.act-analyse')) b.classList.toggle('hidden', !finished || !!an);
+  $('.game').classList.toggle('analysing', !!an);
   for (const b of $$('.act-pause')) {
     b.classList.toggle('hidden', !game.hasClock || !liveGame || !!game.remote);
     b.disabled = game.over || game.length === 0;
@@ -262,6 +261,7 @@ function scheduleFlip(delay = 300) {
     if (review || game.remote || !settings.autoFlip || !isLive() || board.orientation === game.turn) return;
     board.flip();
     renderPlayers();
+    renderAnalysis();
   }, delay);
 }
 
@@ -322,6 +322,7 @@ function startGame({ white, black, tc, remote = null, id, startedAt }) {
   if (game.length && !game.over) storage.archive(game.toJSON()); // keep unfinished games too
   clearTimeout(flipTimer);
   if (!remote || remote.room !== room?.code) leaveRoom();
+  stopAnalysis();
   game = new Game({ white, black, tc, remote, id, startedAt });
   if (remote) { game.white = white; game.black = black; } // an empty seat keeps an empty name
   review = null;
@@ -349,6 +350,7 @@ function takeback() {
 }
 
 function openReview(data) {
+  stopAnalysis();
   review = data instanceof Game ? data : new Game(data);
   viewPly = review.length;
   clearTimeout(flipTimer);
@@ -358,6 +360,7 @@ function openReview(data) {
 }
 
 function exitReview() {
+  stopAnalysis();
   review = null;
   viewPly = game.length;
   board.setOrientation(homeOrientation());
@@ -595,12 +598,135 @@ $('#room-copy').addEventListener('click', () => copy(formatRoomCode(game.remote.
 $('#room-copy-link').addEventListener('click', () => copy(shareLink(game.remote.room), 'Link'));
 $('#btn-remote').addEventListener('click', () => (game.remote && !game.over && !bothSeated() ? showInvite() : openRemote()));
 
+/* ---------------- post-game analysis (Stockfish) ---------------- */
+
+const AN_DEPTH = 16;
+
+/** A finished position needs no engine: mate or draw on the board. */
+function terminalEval(fen) {
+  const c = new Chess(fen);
+  if (c.isCheckmate()) return { mate: 0, winner: c.turn() === 'w' ? 'b' : 'w', pv: [] };
+  if (c.isStalemate() || c.isInsufficientMaterial()) return { cp: 0, pv: [], draw: true };
+  return null;
+}
+
+/** Engine line in readable notation: "14. Nf3 Nc6 15. Bb5 …". */
+function pvSan(fen, pv, max = 8) {
+  const c = new Chess(fen);
+  let n = +fen.split(' ')[5];
+  let white = fen.split(' ')[1] === 'w';
+  const out = [];
+  for (const u of pv.slice(0, max)) {
+    let m;
+    try { m = c.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); } catch { break; }
+    out.push(white ? `${n}. ${m.san}` : out.length ? m.san : `${n}… ${m.san}`);
+    if (!white) n++;
+    white = !white;
+  }
+  return out.join(' ');
+}
+
+async function startAnalysis() {
+  const g = active();
+  if (!g.length) return toast('Play some moves first');
+  // no engine help while a game is still being played
+  if (!g.result && !review) return toast('Analysis opens once the game is over');
+  if (an?.game === g) return;
+  stopAnalysis();
+  const run = { game: g, evals: [], summary: null, done: false };
+  an = run;
+  render();
+  try {
+    engine = engine || new Engine();
+    await engine.start();
+  } catch {
+    if (an === run) { an = null; render(); }
+    return toast('Analysis needs the hosted page (e.g. abhieq31.com/deskmate), not a downloaded file.');
+  }
+  // the position on screen first, then the whole game from the start
+  const order = [viewPly, ...Array.from({ length: g.length + 1 }, (_, i) => i).filter((i) => i !== viewPly)];
+  for (const i of order) {
+    if (an !== run) return;
+    const fen = g.fenAt(i);
+    run.evals[i] = terminalEval(fen) || await engine.analyse(fen, AN_DEPTH);
+    if (an !== run) return;
+    run.summary = summarize(run.evals, g.length);
+    renderMoves();
+    renderAnalysis();
+  }
+  run.done = true;
+  renderAnalysis();
+}
+
+function stopAnalysis() {
+  if (!an) return;
+  an = null;
+  engine?.terminate(); // quickest way to drop a search in progress
+  engine = null;
+  board.setAutoShapes([]);
+}
+
+function renderAnalysis() {
+  const g = active();
+  const on = !!an && an.game === g;
+  $('#analysis').classList.toggle('hidden', !on);
+  $('#evalbar').classList.toggle('hidden', !on);
+  if (!on) { board.setAutoShapes([]); return; }
+  const ev = an.evals[viewPly];
+  const white = winPct(ev);
+
+  // eval bar: White's share, White's end at White's side of the board
+  const bar = $('#evalbar');
+  bar.style.setProperty('--w', `${ev ? white : 50}%`);
+  bar.classList.toggle('flip', board.orientation === 'b');
+  bar.classList.toggle('black-better', white < 50);
+  $('#evalbar-num').textContent = ev ? formatEval(ev).replace(/^\+/, '') : '';
+
+  const evEl = $('#an-eval');
+  evEl.textContent = formatEval(ev);
+  evEl.classList.toggle('black', !!ev && white < 50);
+  const fen = g.fenAt(viewPly);
+  $('#an-line').textContent = !ev ? 'Stockfish is thinking…' : ev.pv?.length ? pvSan(fen, ev.pv) : g.result && viewPly === g.length ? g.termination : '';
+  const best = ev?.pv?.[0];
+  board.setAutoShapes(best ? [{ from: best.slice(0, 2), to: best.slice(2, 4) }] : []);
+
+  // graph: White's winning chances over the game
+  const n = g.length;
+  const pts = [];
+  for (let i = 0; i <= n; i++) if (an.evals[i]) pts.push([(i / n) * 100, 40 - (winPct(an.evals[i]) / 100) * 40, i]);
+  const marks = an.summary?.moves || [];
+  const color = { blunder: '#ca3431', mistake: '#e58f2a', inaccuracy: '#f7c045' };
+  $('#an-graph').innerHTML =
+    (pts.length > 1 ? `<path class="area" d="M0,40 ${pts.map(([x, y]) => `L${x.toFixed(2)},${y.toFixed(2)}`).join(' ')} L100,40 Z"/>` : '') +
+    '<line class="mid" x1="0" y1="20" x2="100" y2="20"/>' +
+    `<line class="cur" x1="${(viewPly / n) * 100}" y1="0" x2="${(viewPly / n) * 100}" y2="40"/>` +
+    pts.filter(([, , i]) => marks[i - 1]?.kind).map(([x, y, i]) =>
+      `<ellipse class="dot" cx="${x}" cy="${y}" rx="0.9" ry="2" fill="${color[marks[i - 1].kind]}"/>`).join('');
+
+  const done = an.evals.filter(Boolean).length;
+  $('#an-progress').classList.toggle('done', an.done);
+  $('#an-progress span').style.width = `${(done / (n + 1)) * 100}%`;
+
+  const sum = an.summary;
+  const card = (c) => {
+    const s = sum?.[c];
+    const acc = s?.accuracy == null ? '…' : `${s.accuracy.toFixed(1)}%`;
+    const tally = s ? [['blunder', '??'], ['mistake', '?'], ['inaccuracy', '?!']].map(([k, m]) => `${s[k]}${m}`).join(' · ') : '';
+    return `<div><small>${esc(g.nameOf(c) || colorName(c))}</small><b>${acc}</b><span class="tally">${tally}</span></div>`;
+  };
+  $('#an-acc').innerHTML = card('w') + card('b');
+}
+
+$('#an-graph').addEventListener('click', (e) => {
+  const r = e.currentTarget.getBoundingClientRect();
+  goto(Math.round(((e.clientX - r.left) / r.width) * active().length));
+});
+
 /* ---------------- dialogs ---------------- */
 
 function openDialog(sel) {
   const d = $(sel);
-  // anything opened from the menu replaces it, so the two never stack
-  if (sel !== '#dlg-options' && $('#dlg-options').open) $('#dlg-options').close();
+  setSidebar(false);
   if (!d.open) d.showModal();
 }
 function closeDialogs() { $$('dialog[open]').forEach((d) => d.close()); }
@@ -773,10 +899,14 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) requ
 $('#btn-new').addEventListener('click', () => openNewGame());
 $('#btn-archive').addEventListener('click', () => { renderArchive(); openDialog('#dlg-archive'); });
 $('#btn-help').addEventListener('click', () => openDialog('#dlg-help'));
-const openMenu = () => { openDialog('#dlg-options'); $('#moves .active')?.scrollIntoView({ block: 'nearest' }); };
-$$('.act-menu').forEach((b) => b.addEventListener('click', openMenu));
+$('#btn-settings').addEventListener('click', () => openDialog('#dlg-settings'));
+$('#btn-analyse').addEventListener('click', () => startAnalysis());
+$$('.act-analyse').forEach((b) => b.addEventListener('click', () => startAnalysis()));
+$('#over-analyse').addEventListener('click', () => { $('#dlg-over').close(); startAnalysis(); });
+$('[data-nav="prev"]').addEventListener('click', () => goto(viewPly - 1));
+$('[data-nav="next"]').addEventListener('click', () => goto(viewPly + 1));
 $$('.act-pause').forEach((b) => b.addEventListener('click', togglePause));
-$('#btn-flip').addEventListener('click', () => { clearTimeout(flipTimer); board.flip(); renderPlayers(); });
+$('#btn-flip').addEventListener('click', () => { clearTimeout(flipTimer); board.flip(); renderPlayers(); renderAnalysis(); });
 $('#btn-undo').addEventListener('click', takeback);
 
 $$('.act-draw').forEach((b) => b.addEventListener('click', () => {
@@ -857,6 +987,7 @@ $('#btn-import').addEventListener('click', () => { $('#import-error').classList.
 
 document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, textarea') || $$('dialog[open]').length) return;
+  if (e.key === 'Escape') return setSidebar(false);
   const k = e.key;
   if (k === 'ArrowLeft') goto(viewPly - 1);
   else if (k === 'ArrowRight') goto(viewPly + 1);
@@ -867,7 +998,7 @@ document.addEventListener('keydown', (e) => {
   else if ((e.ctrlKey || e.metaKey) && k === 'z') takeback();
   else if (k === 'n' || k === 'N') openNewGame();
   else if (k === 'h' || k === 'H') $('#btn-archive').click();
-  else if (k === 'o' || k === 'O') openMenu();
+  else if (k === 'm' || k === 'M') setSidebar(!$('#sidebar').classList.contains('open'));
   else if (k === '?') openDialog('#dlg-help');
   else return;
   e.preventDefault();
@@ -902,10 +1033,25 @@ function applyPrefs() {
   $$('.swatch').forEach((s) => s.setAttribute('aria-checked', String(s.dataset.theme === settings.theme)));
 }
 
-// The move list sits in the side panel on wide screens and inside the menu on phones.
+// The one-line move strip sits at the top of the side panel on wide screens and above the board on phones.
 const phoneLayout = matchMedia('(max-width: 760px)');
-const placeMoves = () => $(phoneLayout.matches ? '#moves-slot-menu' : '#moves-slot-panel').appendChild($('#moves-block'));
+const placeMoves = () => $(phoneLayout.matches ? '#moveline-slot-mobile' : '#moveline-slot-panel').appendChild($('#moveline'));
 phoneLayout.addEventListener('change', placeMoves);
+
+/* ---------------- sidebar ---------------- */
+
+function setSidebar(open) {
+  $('#sidebar').classList.toggle('open', open);
+  $('#sb-backdrop').classList.toggle('open', open);
+  $('#sb-toggle').setAttribute('aria-expanded', String(open));
+  $('#sb-toggle').title = open ? 'Collapse menu' : 'Expand menu';
+  $('#sb-toggle span').textContent = open ? 'Collapse' : 'Expand';
+}
+$('#sb-toggle').addEventListener('click', () => setSidebar(!$('#sidebar').classList.contains('open')));
+$('#btn-sidebar').addEventListener('click', () => setSidebar(true));
+$('#sb-backdrop').addEventListener('click', () => setSidebar(false));
+// after picking something from the menu, fold it away again
+$$('#sidebar .sb-item:not(.sb-toggle)').forEach((b) => b.addEventListener('click', () => setSidebar(false)));
 
 /* ---------------- boot ---------------- */
 
