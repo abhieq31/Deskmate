@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, fenPieces, checkSquare, material } from '../js/game.js';
+import { Game, fenPieces, checkSquare, material, captures } from '../js/game.js';
 
 test('plays legal moves and rejects illegal ones', () => {
   const g = new Game();
@@ -74,4 +74,28 @@ test('material imbalance', () => {
   assert.deepEqual(m.w.pieces, ['q']);
   assert.deepEqual(m.b.pieces, ['p']);
   assert.equal(fenPieces('8/8/8/8/8/8/8/4K3 w - - 0 1').get('e1'), 'wK');
+});
+
+test('captured pieces and points, chess.com style', () => {
+  const g = new Game({ moves: ['e4', 'd5', 'exd5', 'Qxd5', 'Nc3', 'Qxg2'] });
+  const c = captures(g.chess.fen());
+  assert.deepEqual(c.w.pieces, ['p']);
+  assert.deepEqual(c.b.pieces, ['p', 'p']);
+  assert.equal(c.b.score, 1);
+  assert.equal(c.w.score, 0);
+});
+
+test('clock times per move: replay, JSON and PGN [%clk]', () => {
+  const g = new Game({ tc: '3+2' });
+  g.move('e2', 'e4').clock = 180000;
+  g.move('e7', 'e5').clock = 176500;
+  g.move('g1', 'f3').clock = 170200;
+  assert.deepEqual(g.clocksAt(0), { w: 180000, b: 180000 });
+  assert.deepEqual(g.clocksAt(2), { w: 180000, b: 176500 });
+  assert.deepEqual(g.clocksAt(3), { w: 170200, b: 176500 });
+  const back = new Game(JSON.parse(JSON.stringify(g)));
+  assert.deepEqual(back.clocksAt(3), { w: 170200, b: 176500 });
+  assert.match(g.pgn(), /1\. e4 \{\[%clk 0:03:00\]\} e5 \{\[%clk 0:02:57\]\}/);
+  const imported = Game.fromPGN(g.pgn());
+  assert.equal(imported.clocksAt(3).w, 170000);
 });

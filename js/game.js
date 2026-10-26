@@ -68,6 +68,33 @@ export function material(fen) {
   return out;
 }
 
+const START = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+
+/**
+ * Pieces each side has captured (the opponent's missing pieces, pawns first) and the points
+ * lead, as chess.com shows them next to the player names.
+ */
+export function captures(fen) {
+  const count = { w: {}, b: {} };
+  for (const code of fenPieces(fen).values()) {
+    const c = code[0], role = code[1].toLowerCase();
+    count[c][role] = (count[c][role] || 0) + 1;
+  }
+  const out = { w: { pieces: [], score: 0 }, b: { pieces: [], score: 0 } };
+  const points = { w: 0, b: 0 };
+  for (const c of ['w', 'b']) {
+    const o = c === 'w' ? 'b' : 'w';
+    for (const role of ['p', 'b', 'n', 'r', 'q']) {
+      for (let i = (count[o][role] || 0); i < START[role]; i++) out[c].pieces.push(role);
+      points[c] += (count[c][role] || 0) * VALUES[role];
+    }
+  }
+  const diff = points.w - points.b;
+  if (diff > 0) out.w.score = diff;
+  if (diff < 0) out.b.score = -diff;
+  return out;
+}
+
 /** True if `color` has only a bare king (cannot ever deliver mate). */
 function bareKing(fen, color) {
   for (const code of fenPieces(fen).values()) if (code[0] === color && code[1] !== 'K') return false;
@@ -92,6 +119,8 @@ export class Game {
     this.chess = new Chess();
     this.plies = [];
     for (const san of data.moves || []) this._push(this.chess.move(san));
+    // time left on the mover's clock after each move (ms), when the game had a clock
+    (data.clk || []).forEach((ms, i) => { if (this.plies[i] && ms != null) this.plies[i].clock = ms; });
   }
 
   get tcInfo() { return timeControl(this.tc); }
@@ -168,6 +197,19 @@ export class Game {
     else this.finish(color === 'w' ? '0-1' : '1-0', `${this.nameOf(color)} ran out of time`);
   }
 
+  /**
+   * What each clock showed with `ply` moves played: the time its player had left after their
+   * last move up to that point, or the starting time before their first move.
+   */
+  clocksAt(ply) {
+    const out = { w: this.tcInfo.base * 60000, b: this.tcInfo.base * 60000 };
+    for (let i = 0; i < ply && i < this.plies.length; i++) {
+      const p = this.plies[i];
+      if (p.clock != null) out[p.color] = p.clock;
+    }
+    return out;
+  }
+
   undo() {
     if (!this.plies.length) return false;
     this.chess.undo();
@@ -190,6 +232,7 @@ export class Game {
       id: this.id, white: this.white, black: this.black, tc: this.tc,
       startedAt: this.startedAt, endedAt: this.endedAt, result: this.result,
       termination: this.termination, clocks: this.clocks, moves: this.plies.map((p) => p.san),
+      clk: this.plies.some((p) => p.clock != null) ? this.plies.map((p) => (p.clock == null ? null : Math.round(p.clock))) : undefined,
       remote: this.remote,
     };
   }
@@ -208,9 +251,14 @@ export class Game {
     if (this.termination) headers.push(['Termination', this.termination]);
     let text = headers.map(([k, v]) => `[${k} "${esc(v)}"]`).join('\n') + '\n\n';
     const parts = [];
+    const clk = (ms) => {
+      const t = Math.max(0, Math.round(ms / 1000));
+      return `{[%clk ${Math.floor(t / 3600)}:${String(Math.floor(t / 60) % 60).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}]}`;
+    };
     this.plies.forEach((p, i) => {
       if (i % 2 === 0) parts.push(`${i / 2 + 1}.`);
       parts.push(p.san);
+      if (p.clock != null) parts.push(clk(p.clock));
     });
     parts.push(this.result || '*');
     // wrap movetext at ~80 chars as PGN export format recommends
@@ -235,6 +283,12 @@ export class Game {
       tc: timeControl(tcId).id,
       moves: c.history(),
     });
+    // clock times from [%clk h:mm:ss] comments (lichess and chess.com both write them)
+    const clocks = new Map(c.getComments().map(({ fen, comment }) => {
+      const m = /\[%clk (\d+):(\d+):(\d+(?:\.\d+)?)\]/.exec(comment || '');
+      return [fen, m ? ((+m[1] * 60 + +m[2]) * 60 + +m[3]) * 1000 : null];
+    }));
+    g.plies.forEach((p) => { if (clocks.get(p.fen) != null) p.clock = clocks.get(p.fen); });
     const date = h.Date && /^(\d{4})\.(\d{2})\.(\d{2})$/.exec(h.Date);
     if (date) g.startedAt = new Date(+date[1], +date[2] - 1, +date[3]).getTime();
     if (['1-0', '0-1', '1/2-1/2'].includes(h.Result)) {

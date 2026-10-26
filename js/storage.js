@@ -36,6 +36,7 @@ export const DEFAULT_SETTINGS = {
   showDests: true,
   coords: true,
   theme: 'green',
+  focus: true, // during a game: only the board, the players and the clocks
   white: 'White',
   black: 'Black',
   tc: 'none',

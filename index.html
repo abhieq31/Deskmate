@@ -13,18 +13,59 @@
 <body>
   <!-- left sidebar (chess.com-style): icons only, labels when expanded -->
   <aside class="sidebar" id="sidebar" aria-label="Main menu">
-    <a class="sb-brand" href="./" aria-label="Deskmate home"><img src="assets/icon.svg" alt="" width="30" height="30" /><span>Desk<b>mate</b></span></a>
+    <a class="sb-brand" href="./" id="sb-home" title="Home" aria-label="Deskmate home"><img src="assets/icon.svg" alt="" width="30" height="30" /><span>Desk<b>mate</b></span></a>
       <button class="sb-item" id="btn-new" title="New game"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>New game</span></button>
       <button class="sb-item" id="btn-remote" title="Play a colleague"><svg viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg><span>Play a colleague</span></button>
       <button class="sb-item" id="btn-archive" title="Saved games"><svg viewBox="0 0 24 24"><path d="M3 5h18v4H3zM5 9h14v10H5zM9 13h6"/></svg><span>Saved games</span></button>
       <button class="sb-item" id="btn-analyse" title="Analysis"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8M7.5 12l2-2.5 2 1.5 2-3"/></svg><span>Analysis</span></button>
       <button class="sb-item" id="btn-import" title="Import PGN"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M5 14v6h14v-6"/></svg><span>Import PGN</span></button>
     <span class="sb-gap"></span>
-      <button class="sb-item" id="btn-help" title="How to play"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17.2v.3"/></svg><span>How to play</span></button>
-      <a class="sb-item" href="https://github.com/abhieq31/Deskmate" target="_blank" rel="noopener" title="Source code"><svg viewBox="0 0 24 24" class="fill"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .8.1-.7.4-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .6 1.4.2 2.4.1 2.7a3.9 3.9 0 0 1 1 2.7c0 3.9-2.3 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg><span>Source code</span></a>
       <button class="sb-item sb-toggle" id="sb-toggle" title="Expand menu" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="m13 6 6 6-6 6M5 6l6 6-6 6"/></svg><span>Collapse</span></button>
   </aside>
   <div class="sb-backdrop" id="sb-backdrop"></div>
+
+  <!-- home page -->
+  <section class="home" id="home" aria-label="Deskmate home">
+    <div class="home-inner">
+      <header class="home-hero">
+        <img src="assets/icon.svg" alt="" width="64" height="64" />
+        <div>
+          <h1>Desk<b>mate</b></h1>
+          <p>Chess with your colleagues: on one laptop, or on two with one short code.</p>
+        </div>
+      </header>
+      <div class="home-play">
+        <button class="home-tile primary" id="home-colleague">
+          <svg viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
+          <span><strong>Play a colleague</strong><small>Each on your own laptop, one 6-letter code</small></span>
+        </button>
+        <button class="home-tile" id="home-join">
+          <svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+          <span><strong>Join with a code</strong><small>Your colleague sent you a code</small></span>
+        </button>
+        <button class="home-tile" id="home-local">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+          <span><strong>Play on this laptop</strong><small>Pass and play; the board turns for each player</small></span>
+        </button>
+        <button class="home-tile hidden" id="home-resume">
+          <svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>
+          <span><strong>Resume game</strong><small id="home-resume-sub"></small></span>
+        </button>
+      </div>
+      <section class="home-recent">
+        <div class="home-recent-head">
+          <h2>Recent games</h2>
+          <button class="link-btn" id="home-all">All saved games</button>
+        </div>
+        <ul class="home-games" id="home-games"></ul>
+      </section>
+      <footer class="home-foot">
+        <button class="link-btn" id="btn-help">How to play</button>
+        <button class="link-btn" id="home-import">Import a PGN</button>
+        <a class="link-btn" href="https://github.com/abhieq31/Deskmate" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" class="fill"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .8.1-.7.4-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .6 1.4.2 2.4.1 2.7a3.9 3.9 0 0 1 1 2.7c0 3.9-2.3 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg> Source code</a>
+      </footer>
+    </div>
+  </section>
 
   <main class="game">
     <!-- phones: menu button + the one-line move strip -->
@@ -42,6 +83,7 @@
     </section>
     <div class="clock-wrap clock-top">
       <div class="clock" id="clock-top" role="timer"><svg class="clock-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span data-time></span></div>
+      <button class="icon-btn" id="btn-focus" title="Hide menu and moves (Z)" aria-label="Focus on the board"><svg viewBox="0 0 24 24" class="ico-expand"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><svg viewBox="0 0 24 24" class="ico-compress"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
       <button class="icon-btn gear" id="btn-settings" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
     </div>
 
@@ -64,6 +106,10 @@
       </div>
     </section>
     <div class="clock-wrap clock-bottom">
+      <span class="focus-acts">
+        <button class="icon-btn act-draw" aria-label="Draw"><span class="half">½</span></button>
+        <button class="icon-btn danger act-resign" aria-label="Resign"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></button>
+      </span>
       <div class="clock" id="clock-bottom" role="timer"><svg class="clock-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span data-time></span></div>
     </div>
 
@@ -77,6 +123,7 @@
         </div>
       </div>
       <div class="analysis hidden" id="analysis">
+        <p class="an-verdict" id="an-verdict"></p>
         <div class="an-head"><span class="an-eval" id="an-eval">0.0</span><span class="an-line" id="an-line"></span></div>
         <svg class="an-graph" id="an-graph" viewBox="0 0 100 40" preserveAspectRatio="none" aria-label="Evaluation graph"></svg>
         <div class="an-progress" id="an-progress"><span></span></div>
@@ -120,11 +167,8 @@
     </div>
     <h3>Board</h3>
     <div class="themes" role="radiogroup" aria-label="Board theme">
-      <button class="swatch" data-theme="green" title="Green" aria-label="Green theme"></button>
-      <button class="swatch" data-theme="brown" title="Brown" aria-label="Brown theme"></button>
-      <button class="swatch" data-theme="blue" title="Blue" aria-label="Blue theme"></button>
-      <button class="swatch" data-theme="purple" title="Purple" aria-label="Purple theme"></button>
-      <button class="swatch" data-theme="slate" title="Slate" aria-label="Slate theme"></button>
+      <button class="swatch" data-theme="green" title="Green" aria-label="Green board"></button>
+      <button class="swatch" data-theme="stone" title="Stone" aria-label="Stone board"></button>
     </div>
     <h3>Game</h3>
     <div class="tools">
@@ -283,6 +327,7 @@
       <tr><td><kbd>N</kbd></td><td>New game</td></tr>
       <tr><td><kbd>H</kbd></td><td>Saved games</td></tr>
       <tr><td><kbd>M</kbd></td><td>Expand or collapse the menu</td></tr>
+      <tr><td><kbd>Z</kbd></td><td>Focus: show only the board, players and clocks</td></tr>
     </table>
   </dialog>
 

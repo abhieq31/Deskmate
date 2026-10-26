@@ -9,7 +9,8 @@ Share one short code and play live, each on your own work laptop. Or put one lap
 
 [**▶ Play now**](https://abhieq31.com/deskmate) · [**⬇ Offline version**](https://github.com/abhieq31/Deskmate/raw/main/deskmate.html) · [Report a bug](https://github.com/abhieq31/Deskmate/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/Deskmate/issues/new?template=feature_request.md)
 
-<img src="docs/screenshot.png" alt="A live game on a laptop: each player and their clock above and below the board, and the move list with Draw and Resign beside it" width="760" />
+<img src="docs/home.png" alt="Deskmate home page: Play a colleague, Join with a code, Play on this laptop, recent games" width="760" />
+<img src="docs/screenshot.png" alt="Focus mode: a large board with each player, their captured pieces and clock above and below it" width="760" />
 <img src="docs/phone.png" alt="The same game on a phone: players with clocks above and below the board, Draw, Resign and Menu underneath" width="190" />
 
 </div>
@@ -28,11 +29,19 @@ Please use it in line with your employer's policies.
   gets a 6-character code like `K7Q-M2X`. The other types it in once, and
   moves appear on both screens within moments. Clocks, draw offers,
   resignations and rematches sync too. ([How it works](#play-a-colleague))
-- **chess.com-style view.** A slim icon sidebar on the left expands to
-  show New game, Play a colleague, Saved games, Analysis and Import. Each
-  player row has the avatar and name on the left and the clock on the right,
-  above and below the board. On the right there is one line of moves with
-  **Draw** and **Resign**. Board settings sit behind ⚙ next to the clock.
+- **A home page** with Play a colleague, Join with a code, Play on this
+  laptop, Resume, and your recent games with Review and Analyse. The logo
+  always brings you back to it.
+- **Focus mode while you play** (on by default). The board is as large as
+  the window allows, with only the players (name, captured pieces, points
+  lead) and their clocks, and small ½ / ⚑ buttons for draw and resign. The
+  expand button at the board's top-right corner (or **Z**) brings back the
+  chess.com-style view: an icon sidebar, one line of moves top right, and
+  chess.com's quiet "½ Draw ⚑ Resign" buttons.
+- **Replay with clocks.** Stepping back through a game shows each clock as
+  it stood at that move, and exported PGNs carry `[%clk]` times like
+  lichess and chess.com.
+- **Two boards:** chess.com green and grey stone (settings ⚙).
 - **Fluid pieces.** Pressing a piece lifts it under the cursor, and it
   follows the pointer once per screen frame. The target square is outlined
   while you drag, and click-to-move works too.
@@ -41,7 +50,8 @@ Please use it in line with your employer's policies.
   get an evaluation bar, the engine's best line and an arrow for its best
   move, an evaluation graph, accuracy for both players, and ?? / ? / ?!
   marks on blunders, mistakes and inaccuracies, the way lichess calculates
-  them. There is no engine during play.
+  them. A chess.com-style line names the move ("Nf6?? is a blunder. Best
+  was Qe7."). There is no engine during play.
 - **Same-laptop games.** After each move the board switches to the side of
   whoever moves next. The view just changes; nothing spins. (Auto-flip can be
   turned off in the menu.)
@@ -54,7 +64,7 @@ Please use it in line with your employer's policies.
 - **Quiet.** The only sound is a soft water drop when a piece is captured.
 - **Games stay in your browser.** A game in progress survives a reload.
   Finished games go to **Saved games** (review, resume, PGN download).
-- **PGN import/export**, FEN copy, takeback (same-laptop games), five board themes.
+- **PGN import/export**, FEN copy and takeback (same-laptop games).
 
 <img src="docs/analysis.png" alt="Post-game analysis: evaluation bar, best-move arrow, evaluation graph and accuracy for both players" width="760" />
 

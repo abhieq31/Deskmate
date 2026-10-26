@@ -1,5 +1,5 @@
 // Deskmate application controller: wires the game model, board, clocks, live rooms, storage and UI.
-import { Game, TIME_CONTROLS, timeControl, checkSquare, material } from './game.js';
+import { Game, TIME_CONTROLS, timeControl, checkSquare, captures } from './game.js';
 import { Board } from './board.js';
 import { storage } from './storage.js';
 import { sound } from './sound.js';
@@ -16,6 +16,7 @@ const other = (c) => (c === 'w' ? 'b' : 'w');
 const colorName = (c) => (c === 'w' ? 'White' : 'Black');
 
 const settings = storage.loadSettings();
+if (!['green', 'stone'].includes(settings.theme)) settings.theme = 'green'; // the only two boards now
 if (!settings.pid) {
   settings.pid = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(36).padStart(2, '0')).join('');
   storage.saveSettings(settings);
@@ -32,6 +33,7 @@ let room = null; // live connection for game.remote.room
 let relaysUp = 0; // relays the room is connected to right now
 let joining = null; // { code, name, timer } while waiting for a room's first snapshot
 let an = null; // post-game analysis: { game, evals[], summary, done }
+let view = 'game'; // 'home' | 'game'
 let engine = null;
 
 const board = new Board($('#board'), { onMove });
@@ -71,12 +73,13 @@ function render() {
   renderStatus();
   renderControls();
   renderAnalysis();
+  applyFocus();
 }
 
 function renderPlayers() {
   const g = active();
   const fen = g.fenAt(viewPly);
-  const mat = material(fen);
+  const mat = captures(fen);
   const bottom = board.orientation, top = other(bottom);
   const turn = fen.split(' ')[1];
   const atEnd = viewPly === g.length;
@@ -87,9 +90,12 @@ function renderPlayers() {
     card.dataset.color = color;
     card.querySelector('[data-name]').textContent =
       (here ? g.nameOf(color) || colorName(color) : 'Opponent') + (!review && g.remote?.me === color ? ' (you)' : '');
+    // pieces this player has taken, grouped by kind like chess.com, then the points lead
     const m = mat[color];
+    const groups = [];
+    for (const r of m.pieces) (groups.at(-1)?.[0] === r ? groups.at(-1) : groups[groups.push([]) - 1]).push(r);
     card.querySelector('[data-material]').innerHTML =
-      m.pieces.map((r) => `<i class="pc ${other(color)}${r.toUpperCase()}"></i>`).join('') +
+      groups.map((grp) => `<span class="cap">${grp.map((r) => `<i class="pc ${other(color)}${r.toUpperCase()}"></i>`).join('')}</span>`).join('') +
       (m.score ? `<b>+${m.score}</b>` : '');
     const toMove = !g.over && turn === color && atEnd && here;
     const won = g.result === (color === 'w' ? '1-0' : '0-1');
@@ -130,7 +136,7 @@ function renderClocks() {
   for (const [sel, color] of [['#clock-top', other(bottom)], ['#clock-bottom', bottom]]) {
     const clock = $(sel);
     const time = clock.querySelector('[data-time]');
-    clock.classList.toggle('active', !g.over && g.turn === color && (review || bothSeated()));
+    clock.classList.toggle('active', !g.over && !review && viewPly === g.length && g.turn === color && bothSeated());
     clock.classList.toggle('unlimited', !g.hasClock);
     clock.setAttribute('aria-label', `${g.nameOf(color) || colorName(color)}'s clock`);
     if (!g.hasClock) {
@@ -138,10 +144,12 @@ function renderClocks() {
       clock.classList.remove('running', 'low', 'paused');
       continue;
     }
-    const ms = g.clocks[color];
+    // replaying: the clocks as they stood after the move on the board
+    const past = review || viewPly < g.length;
+    const ms = past ? g.clocksAt(viewPly)[color] : g.clocks[color];
     time.textContent = fmtClock(ms);
-    clock.classList.toggle('running', !review && clockRunning() && game.turn === color);
-    clock.classList.toggle('low', ms < 20000 && !review);
+    clock.classList.toggle('running', !past && clockRunning() && game.turn === color);
+    clock.classList.toggle('low', ms < 20000 && !past);
     clock.classList.toggle('paused', !review && paused && game.turn === color && game.length > 0 && !game.over);
   }
 }
@@ -240,6 +248,7 @@ async function onMove(from, to) {
   if (game.hasClock) {
     if (game.length > 1 && !paused) game.clocks[mover] -= now - lastTick;
     if (game.length > 1) game.clocks[mover] += game.tcInfo.inc * 1000;
+    ply.clock = game.clocks[mover];
     paused = false;
     lastTick = now;
   }
@@ -333,7 +342,7 @@ function startGame({ white, black, tc, remote = null, id, startedAt }) {
   storage.saveSettings(settings);
   persist();
   board.setOrientation(homeOrientation());
-  render();
+  setView('game');
   requestWakeLock();
 }
 
@@ -356,7 +365,7 @@ function openReview(data) {
   clearTimeout(flipTimer);
   board.setOrientation('w');
   closeDialogs();
-  render();
+  setView('game');
 }
 
 function exitReview() {
@@ -467,6 +476,19 @@ function applySnapshot(snap, moves) {
   if (snap.b && r.me !== 'b') game.black = snap.b;
 
   const local = game.plies.map((p) => p.san);
+  // The game ended on the other laptop (their clock saw ours run out, or they resigned or
+  // agreed a draw) while a move of ours was still on its way: the result stands, and the
+  // moves we made after it are taken back, so both laptops end on the same position.
+  if (snap.r && !game.result && moves.length < local.length && moves.every((s, i) => s === local[i])) {
+    while (game.length > moves.length) game.undo();
+    game.finish(snap.r, snap.t || 'Game over');
+    if (game.hasClock && snap.c) game.clocks = { w: snap.c[0], b: snap.c[1] };
+    viewPly = game.length;
+    persist();
+    publish();
+    onGameOver();
+    return;
+  }
   if (!local.every((s, i) => s === moves[i])) { render(); return; } // an older snapshot: ours is newer
   const wasAtEnd = viewPly === game.length;
   const wasOver = game.over;
@@ -476,6 +498,7 @@ function applySnapshot(snap, moves) {
   r.offer = snap.o || null;
   if (game.hasClock && snap.c && (last || snap.r)) {
     game.clocks = { w: snap.c[0], b: snap.c[1] };
+    if (last) last.clock = game.clocks[last.color];
     lastTick = Date.now();
   }
   if (wasAtEnd) viewPly = game.length;
@@ -627,6 +650,7 @@ function pvSan(fen, pv, max = 8) {
 }
 
 async function startAnalysis() {
+  setView('game');
   const g = active();
   if (!g.length) return toast('Play some moves first');
   // no engine help while a game is still being played
@@ -689,6 +713,23 @@ function renderAnalysis() {
   $('#an-line').textContent = !ev ? 'Stockfish is thinking…' : ev.pv?.length ? pvSan(fen, ev.pv) : g.result && viewPly === g.length ? g.termination : '';
   const best = ev?.pv?.[0];
   board.setAutoShapes(best ? [{ from: best.slice(0, 2), to: best.slice(2, 4) }] : []);
+
+  // chess.com-style verdict on the move that led here: "Nf6 is a blunder. Best was Qe7."
+  const played = g.plies[viewPly - 1];
+  const before = an.evals[viewPly - 1];
+  const kind = an.summary?.moves[viewPly - 1]?.kind;
+  let verdict = '';
+  if (played && before && ev) {
+    const bestUci = before.pv?.[0];
+    const bestSan = bestUci ? pvSan(g.fenAt(viewPly - 1), [bestUci]).replace(/^\d+(\.|…) /, '') : '';
+    const isBest = bestUci && bestUci === played.from + played.to + (played.promotion || '');
+    const name = esc(played.san);
+    if (played.san.endsWith('#')) verdict = `<b class="k-best">${name}</b> is checkmate.`;
+    else if (kind) verdict = `<b class="k-${kind}">${name}${MARKS[kind]}</b> is ${kind === 'inaccuracy' ? 'an' : 'a'} ${kind}.${bestSan ? ` Best was <b>${esc(bestSan)}</b>.` : ''}`;
+    else if (isBest) verdict = `<b class="k-best">${name}</b> is the best move.`;
+    else verdict = `<b>${name}</b> is a good move.${bestSan ? ` The engine prefers <b>${esc(bestSan)}</b>.` : ''}`;
+  }
+  $('#an-verdict').innerHTML = verdict;
 
   // graph: White's winning chances over the game
   const n = g.length;
@@ -811,7 +852,7 @@ $('#archive-list').addEventListener('click', (e) => {
     persist();
     closeDialogs();
     board.setOrientation(homeOrientation());
-    render();
+    setView('game');
   }
 });
 
@@ -999,6 +1040,7 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'n' || k === 'N') openNewGame();
   else if (k === 'h' || k === 'H') $('#btn-archive').click();
   else if (k === 'm' || k === 'M') setSidebar(!$('#sidebar').classList.contains('open'));
+  else if (k === 'z' || k === 'Z') toggleFocus();
   else if (k === '?') openDialog('#dlg-help');
   else return;
   e.preventDefault();
@@ -1053,6 +1095,66 @@ $('#sb-backdrop').addEventListener('click', () => setSidebar(false));
 // after picking something from the menu, fold it away again
 $$('#sidebar .sb-item:not(.sb-toggle)').forEach((b) => b.addEventListener('click', () => setSidebar(false)));
 
+/* ---------------- home page & focus mode ---------------- */
+
+const inProgress = () => !game.over && (game.length > 0 || !!game.remote);
+
+function setView(v) {
+  view = v;
+  document.body.dataset.view = v;
+  if (v === 'home') renderHome();
+  else render();
+}
+
+/** Focus mode (on by default): only the board, the players and their clocks while you play. */
+function applyFocus() {
+  document.body.classList.toggle('focus', view === 'game' && settings.focus && !an);
+  const b = $('#btn-focus');
+  b.title = settings.focus ? 'Show menu and moves (Z)' : 'Hide menu and moves (Z)';
+  b.setAttribute('aria-pressed', String(!!settings.focus));
+}
+
+function toggleFocus() {
+  settings.focus = !settings.focus;
+  storage.saveSettings(settings);
+  applyFocus();
+}
+
+function renderHome() {
+  const resume = inProgress();
+  $('#home-resume').classList.toggle('hidden', !resume);
+  if (resume) {
+    $('#home-resume-sub').textContent = `${game.white || 'White'} vs ${game.black || 'Black'}` +
+      (game.remote ? ` · live, code ${formatRoomCode(game.remote.room)}` : ` · ${Math.ceil(game.length / 2)} moves`);
+  }
+  const list = storage.loadArchive().slice(0, 5);
+  $('#home-games').innerHTML = list.length ? list.map((g) => {
+    const res = g.result ? g.result.replace(/1\/2/g, '½') : 'unfinished';
+    const cls = g.result === '1-0' ? 'w' : g.result === '0-1' ? 'b' : g.result ? 'd' : 'u';
+    const d = new Date(g.endedAt || g.startedAt);
+    return `<li data-id="${g.id}"><span class="res ${cls}">${res}</span>
+      <span class="who">${esc(g.white || '?')} vs ${esc(g.black || '?')}<small>${esc(g.termination || 'In progress')} · ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</small></span>
+      <span class="acts"><button class="btn small" data-act="review">Review</button>${g.result ? '<button class="btn small primary" data-act="analyse">Analyse</button>' : ''}</span></li>`;
+  }).join('') : '<li class="empty">Your finished games will appear here.</li>';
+}
+
+$('#home-games').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const data = storage.loadArchive().find((g) => g.id === btn.closest('li').dataset.id);
+  if (!data) return;
+  openReview(data);
+  if (btn.dataset.act === 'analyse') startAnalysis();
+});
+$('#home-colleague').addEventListener('click', () => openRemote('create'));
+$('#home-join').addEventListener('click', () => openRemote('join'));
+$('#home-local').addEventListener('click', () => openNewGame());
+$('#home-resume').addEventListener('click', () => setView('game'));
+$('#home-all').addEventListener('click', () => { renderArchive(); openDialog('#dlg-archive'); });
+$('#home-import').addEventListener('click', () => { $('#import-error').classList.add('hidden'); openDialog('#dlg-import'); });
+$('#sb-home').addEventListener('click', (e) => { e.preventDefault(); setSidebar(false); setView('home'); });
+$('#btn-focus').addEventListener('click', toggleFocus);
+
 /* ---------------- boot ---------------- */
 
 placeMoves();
@@ -1060,7 +1162,7 @@ applyPrefs();
 // the offline download link only makes sense on the hosted site
 if (!/^https?:$/.test(location.protocol)) $('.offline-dl')?.remove();
 board.setOrientation(homeOrientation());
-render();
+setView(inProgress() ? 'game' : 'home');
 if (game.remote) connectRoom(game.remote.room);
 
 // a shared link (…/deskmate#K7QM2X) opens "Join with a code" with the code filled in
