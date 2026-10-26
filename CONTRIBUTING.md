@@ -7,8 +7,8 @@ unless there's a strong reason not to.
 ## Getting started
 
 ```bash
-git clone https://github.com/<you>/OBChess.git
-cd OBChess
+git clone https://github.com/<you>/Deskmate.git
+cd Deskmate
 python3 -m http.server 8080   # then open http://localhost:8080
 npm test                      # unit tests (Node 18+, no install needed)
 ```
@@ -28,8 +28,10 @@ npm test                      # unit tests (Node 18+, no install needed)
 - If you add a file to the app, add it to the `ASSETS` list in `sw.js` and
   bump `CACHE` so returning visitors get the update. If it's a JS module,
   also add it to `MODULES` in `scripts/build-single.mjs` (in dependency order).
-- Run `npm run build` and open `dist/deskmate.html` by double-click to check
-  that the single-file offline version still works.
+- Run `npm run build`, open `deskmate.html` by double-click to check that
+  the single-file offline version still works, and **commit the rebuilt
+  `deskmate.html`**. CI fails if it is stale, because GitHub Pages serves
+  the committed file.
 - **Game codes (`js/remote.js`) are a wire format.** Keep old codes
   decodable. If the format has to change, use a new prefix (`DM2-`) and
   keep decoding `DM1-` (and the legacy `OBC1-`).

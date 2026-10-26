@@ -1,0 +1,29 @@
+name: Tests
+
+# GitHub Pages serves the main branch as-is (Settings → Pages → Deploy from a branch → main / root),
+# so CI only has to keep main correct: run the tests and make sure the committed offline build is fresh.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+      - name: Offline build is up to date
+        run: |
+          npm run build
+          git diff --exit-code deskmate.html || {
+            echo "::error::deskmate.html is stale. Run 'npm run build' and commit the result."
+            exit 1
+          }

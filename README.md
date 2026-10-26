@@ -7,9 +7,10 @@
 **Chess with your colleagues: on one laptop, or across two.**
 Put the laptop between you and play, or send game codes through the chat tool you already use.
 
-[**▶ Play now**](https://abhieq31.github.io/OBChess/) · [**⬇ Offline version**](https://abhieq31.github.io/OBChess/deskmate.html) · [Report a bug](https://github.com/abhieq31/OBChess/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/OBChess/issues/new?template=feature_request.md)
+[**▶ Play now**](https://abhieq31.github.io/Deskmate/) · [**⬇ Offline version**](https://abhieq31.github.io/Deskmate/deskmate.html) · [Report a bug](https://github.com/abhieq31/Deskmate/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/Deskmate/issues/new?template=feature_request.md)
 
-<img src="docs/screenshot.png" alt="Deskmate game screen: board in the centre, players, clocks and move list on the right" width="860" />
+<img src="docs/screenshot.png" alt="Deskmate on a laptop: players above and below the board, both clocks with Draw and Resign on the right" width="760" />
+<img src="docs/phone.png" alt="Deskmate on a phone: each player row has its clock, toolbar at the bottom" width="190" />
 
 </div>
 
@@ -45,7 +46,10 @@ everything local; it is not designed to get around IT controls.
   Finished games go to **Saved games**, where you can review, resume or
   download them as PGN.
 - **PGN import and export**, plus copying the FEN of any position.
-- **Move list with replay.** Click any move, or use ← → ↑ ↓.
+- **Minimal, chess.com-style layout.** Players sit above and below the
+  board; the right column holds only the two clocks plus Draw and Resign.
+  Everything else (move list, settings, PGN tools) lives in **Options**.
+- **Move list with replay.** Step with Back/Forward or ← →, or click any move under Options.
 - **Takeback, agreed draw, resign and rematch** (rematch swaps colours).
 - **Right-click arrows and circles** for explaining a line to your opponent.
 - **Five board themes**, synthesized move sounds, and the screen stays on
@@ -79,18 +83,18 @@ which is fine for a game at your desk.
 
 ## Offline version (one file)
 
-[`deskmate.html`](https://abhieq31.github.io/OBChess/deskmate.html) is the
+[`deskmate.html`](https://abhieq31.github.io/Deskmate/deskmate.html) is the
 whole app (about 225 KB) in a single file. Save it anywhere and open it by
 double-click. It makes no network requests. Build it yourself with
-`npm run build` (writes `dist/deskmate.html`).
+`npm run build` (writes `deskmate.html`).
 
 ## Run it locally
 
 No build step and no dependencies. Serve the folder over HTTP:
 
 ```bash
-git clone https://github.com/abhieq31/OBChess.git
-cd OBChess
+git clone https://github.com/abhieq31/Deskmate.git
+cd Deskmate
 python3 -m http.server 8080      # or: npx serve .
 # open http://localhost:8080
 ```
@@ -102,13 +106,15 @@ Run the tests with `npm test`. They need Node 18 or later and nothing else.
 ## Deploy your own copy
 
 1. Fork this repo.
-2. Go to **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**.
-3. Push to `main`. The workflow in `.github/workflows/deploy.yml` runs the
-   tests and publishes the site to `https://<you>.github.io/OBChess/`.
+2. Go to **Settings → Pages → Build and deployment**, choose **Deploy from a
+   branch**, then **main** and **/ (root)**.
+3. Your copy goes live at `https://<you>.github.io/Deskmate/`. The address is
+   case-sensitive and matches the repository name exactly. Every push to
+   `main` updates it. `.github/workflows/test.yml` runs the tests on each
+   push and pull request.
 
 Any static host works too (Netlify, Cloudflare Pages, an internal web
-server). Copy `index.html`, `manifest.webmanifest`, `sw.js`, `css/`, `js/`,
-`vendor/` and `assets/`.
+server): copy the repository as it is. No build step is needed to serve it.
 
 ## Project layout
 
@@ -123,7 +129,8 @@ js/storage.js         localStorage wrapper
 js/sound.js           Web Audio synthesized sounds
 js/confetti.js        celebration effect
 sw.js                 offline cache (service worker)
-scripts/build-single.mjs  bundles everything into dist/deskmate.html (no deps)
+scripts/build-single.mjs  bundles everything into deskmate.html (no deps)
+deskmate.html         generated offline build (commit it after changes: `npm run build`)
 vendor/chess.js       chess rules engine (chess.js 1.4.0, BSD-2-Clause)
 tests/                node:test unit tests for js/game.js and js/remote.js
 ```

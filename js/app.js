@@ -61,6 +61,8 @@ function renderPlayers() {
   const mat = material(fen);
   const bottom = board.orientation, top = other(bottom);
   const turn = fen.split(' ')[1];
+  const atEnd = viewPly === g.length;
+  const inCheck = !!checkSquare(fen);
   for (const [id, color] of [['#player-top', top], ['#player-bottom', bottom]]) {
     const card = $(id);
     card.dataset.color = color;
@@ -69,10 +71,25 @@ function renderPlayers() {
     card.querySelector('[data-material]').innerHTML =
       m.pieces.map((r) => `<i class="pc ${other(color)}${r.toUpperCase()}"></i>`).join('') +
       (m.score ? `<b>+${m.score}</b>` : '');
-    card.classList.toggle('to-move', !g.over && turn === color && (review || viewPly === g.length));
-    card.classList.toggle('winner', g.result === (color === 'w' ? '1-0' : '0-1'));
+    const toMove = !g.over && turn === color && atEnd;
+    const won = g.result === (color === 'w' ? '1-0' : '0-1');
+    const offers = !g.over && g.remote?.offer === color;
+    card.classList.toggle('to-move', toMove);
+    card.classList.toggle('winner', won);
+    card.classList.toggle('offer', offers);
+    card.querySelector('[data-status]').textContent = playerStatus(g, color, { toMove, won, offers, inCheck: inCheck && turn === color });
   }
   renderClocks();
+}
+
+/** One short line under a player's name: whose turn it is, check, draw offers, the result. */
+function playerStatus(g, color, { toMove, won, offers, inCheck }) {
+  if (g.result) return won ? `♛ Won · ${g.termination}` : g.result === '1/2-1/2' ? `½ Draw · ${g.termination}` : '';
+  if (offers) return 'Offers a draw';
+  if (inCheck && toMove) return 'Check!';
+  if (!toMove) return '';
+  if (!g.remote || review) return 'To move';
+  return color === g.remote.me ? 'Your move' : 'Waiting for their code…';
 }
 
 function fmtClock(ms) {
@@ -85,13 +102,21 @@ function fmtClock(ms) {
 
 function renderClocks() {
   const g = active();
-  for (const card of [$('#player-top'), $('#player-bottom')]) {
-    const clock = card.querySelector('[data-clock]');
-    const color = card.dataset.color;
-    clock.classList.toggle('hidden', !g.hasClock);
-    if (!g.hasClock) continue;
+  const bottom = board.orientation;
+  for (const [sel, color] of [['#clock-top', other(bottom)], ['#clock-bottom', bottom]]) {
+    const clock = $(sel);
+    const time = clock.querySelector('[data-time]');
+    clock.dataset.color = color;
+    clock.classList.toggle('active', !g.over && g.turn === color);
+    clock.classList.toggle('unlimited', !g.hasClock);
+    clock.setAttribute('aria-label', `${g.nameOf(color)}'s clock`);
+    if (!g.hasClock) {
+      time.textContent = '∞';
+      clock.classList.remove('running', 'low', 'paused');
+      continue;
+    }
     const ms = g.clocks[color];
-    clock.textContent = fmtClock(ms);
+    time.textContent = fmtClock(ms);
     clock.classList.toggle('running', !review && clockRunning() && game.turn === color);
     clock.classList.toggle('low', ms < 20000 && !review);
     clock.classList.toggle('paused', !review && paused && game.turn === color && game.length > 0 && !game.over);
@@ -167,24 +192,34 @@ function renderStatus() {
   $('#review-exit').textContent = review ? 'Back to live game' : 'Back to current move';
 }
 
+const ICON_PAUSE = '<svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span>';
+const ICON_RESUME = '<svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg><span>Resume</span>';
+
 function renderControls() {
   const g = active();
   $('#nav-first').disabled = $('#nav-prev').disabled = viewPly === 0;
   $('#nav-next').disabled = $('#nav-last').disabled = viewPly === g.length;
   const liveGame = !review;
   $('#btn-undo').disabled = !liveGame || game.length === 0 || !!game.remote;
-  $('#btn-draw').disabled = $('#btn-resign').disabled = !liveGame || game.over || game.length === 0;
+  const noActions = !liveGame || game.over || game.length === 0;
   const theyOffer = game.remote && !game.over && game.remote.offer === other(game.remote.me);
-  $('#btn-draw').classList.toggle('offer', !!theyOffer);
-  $('#btn-draw').title = game.remote ? (theyOffer ? 'Accept the draw offer' : 'Offer a draw') : 'Agree to a draw';
+  const drawTitle = game.remote ? (theyOffer ? 'Accept the draw offer' : 'Offer a draw') : 'Agree to a draw';
+  // the right column has Draw/Resign; on phones the toolbar carries copies of them
+  for (const id of ['#btn-draw', '#tb-draw']) {
+    $(id).disabled = noActions;
+    $(id).classList.toggle('offer', !!theyOffer);
+    $(id).title = drawTitle;
+  }
+  $('#btn-resign').disabled = $('#tb-resign').disabled = noActions;
   renderRemoteCard();
   const pauseBtn = $('#btn-pause');
-  pauseBtn.classList.toggle('hidden', !game.hasClock || !liveGame);
+  pauseBtn.classList.toggle('hidden', !game.hasClock || !liveGame || !!game.remote);
   pauseBtn.disabled = game.over || game.length === 0;
-  pauseBtn.innerHTML = paused
-    ? '<svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>'
-    : '<svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg>';
+  pauseBtn.innerHTML = paused ? ICON_RESUME : ICON_PAUSE;
   pauseBtn.title = paused ? 'Resume clocks (Space)' : 'Pause clocks (Space)';
+  const codeBtn = $('#btn-code');
+  codeBtn.classList.toggle('hidden', !game.remote || !liveGame);
+  codeBtn.classList.toggle('attn', !!game.remote && !game.over && !myTurn());
 }
 
 /* ---------------- moves ---------------- */
@@ -524,6 +559,12 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) requ
 $('#btn-new').addEventListener('click', () => openNewGame());
 $('#btn-archive').addEventListener('click', () => { renderArchive(); openDialog('#dlg-archive'); });
 $('#btn-help').addEventListener('click', () => openDialog('#dlg-help'));
+$('#btn-options').addEventListener('click', () => {
+  openDialog('#dlg-options');
+  $('#moves .active')?.scrollIntoView({ block: 'nearest' });
+});
+$('#tb-draw').addEventListener('click', () => $('#btn-draw').click());
+$('#tb-resign').addEventListener('click', () => $('#btn-resign').click());
 $('#btn-flip').addEventListener('click', async () => { clearTimeout(flipTimer); await board.flip(); renderPlayers(); });
 $('#btn-undo').addEventListener('click', takeback);
 $('#btn-pause').addEventListener('click', togglePause);
@@ -615,6 +656,7 @@ document.addEventListener('keydown', (e) => {
   else if ((e.ctrlKey || e.metaKey) && k === 'z') takeback();
   else if (k === 'n' || k === 'N') openNewGame();
   else if (k === 'h' || k === 'H') $('#btn-archive').click();
+  else if (k === 'o' || k === 'O') $('#btn-options').click();
   else if (k === '?') openDialog('#dlg-help');
   else return;
   e.preventDefault();
@@ -663,8 +705,6 @@ function currentCode() {
 }
 
 function renderRemoteCard() {
-  const card = $('#remote-card');
-  card.classList.toggle('hidden', !game.remote);
   if (!game.remote) return;
   const opp = game.nameOf(other(game.remote.me));
   $('#remote-who').textContent = `You play ${colorName(game.remote.me).toLowerCase()} against ${opp}`;
@@ -799,7 +839,8 @@ $('#form-remote-join').addEventListener('submit', (e) => {
 $('#remote-apply').addEventListener('click', () => {
   if (joinOrUpdate($('#remote-paste').value)) $('#remote-paste').value = '';
 });
-$('#remote-copy').addEventListener('click', openSend);
+$('#remote-copy').addEventListener('click', () => { $('#dlg-code').close(); openSend(); });
+$('#btn-code').addEventListener('click', () => { $('#remote-paste').value = ''; openDialog('#dlg-code'); });
 $('#send-copy').addEventListener('click', () => copy($('#send-code').value, 'Code'));
 $('#send-link').addEventListener('click', () => copy(shareLink($('#send-code').value), 'Link'));
 $('#send-code').addEventListener('focus', (e) => e.target.select());

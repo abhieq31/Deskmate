@@ -1,11 +1,11 @@
-// Builds dist/deskmate.html: the whole app in ONE self-contained file that runs by
+// Builds deskmate.html: the whole app in ONE self-contained file that runs by
 // double-click (file://) with no server and no network. Zero dependencies.
 //
 //   node scripts/build-single.mjs
 //
 // Each ES module is wrapped in a function scope; imports become lookups in a
 // module table, so modules can't clash on top-level names.
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -65,6 +65,6 @@ swap('src="assets/icon.svg"', `src="${icon}"`);
 // the brand link would point at a folder when opened from disk
 swap('<a class="brand" href="./"', '<a class="brand" href="#"');
 
-mkdirSync(join(root, 'dist'), { recursive: true });
-writeFileSync(join(root, 'dist/deskmate.html'), html);
-console.log(`dist/deskmate.html  ${(html.length / 1024).toFixed(0)} KB`);
+// committed at the repo root so GitHub Pages (deploy from branch) serves it as-is
+writeFileSync(join(root, 'deskmate.html'), html);
+console.log(`deskmate.html  ${(html.length / 1024).toFixed(0)} KB`);
