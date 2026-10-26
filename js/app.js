@@ -152,7 +152,7 @@ const san = (s) => s.replace(/[KQRBN]/g, (c) => `<span class="fig">${FIG[c]}</sp
 function renderStatus() {
   const g = active();
   const tc = g.tcInfo;
-  $('#tc-badge').textContent = tc.base ? `${tc.label} · ${tc.kind}` : 'Unlimited';
+  $('#tc-badge').textContent = $('#panel-tc').textContent = tc.base ? `${tc.label} · ${tc.kind}` : 'Unlimited';
   $('#game-date').textContent = new Date(g.startedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   let title, sub;
   if (g.result) {
@@ -220,7 +220,31 @@ function renderControls() {
   const codeBtn = $('#btn-code');
   codeBtn.classList.toggle('hidden', !game.remote || !liveGame);
   codeBtn.classList.toggle('attn', !!game.remote && !game.over && !myTurn());
+  syncMirrors();
 }
+
+// Buttons in the desktop panel stand in for controls that live in the phone toolbar or
+// the Options drawer: they copy their state and forward clicks.
+function syncMirrors() {
+  for (const b of $$('[data-mirror]')) {
+    const src = $(b.dataset.mirror);
+    b.disabled = src.disabled;
+    b.title = src.title;
+    b.classList.toggle('hidden', src.classList.contains('hidden'));
+    b.classList.toggle('attn', src.classList.contains('attn'));
+    if (b.hasAttribute('data-mirror-icon')) b.innerHTML = src.querySelector('svg').outerHTML;
+  }
+}
+$$('[data-mirror]').forEach((b) => b.addEventListener('click', () => $(b.dataset.mirror).click()));
+
+// The move list sits in the right panel on wide screens and inside Options on phones.
+const phoneLayout = matchMedia('(max-width: 760px)');
+const placeMoves = () => {
+  $(phoneLayout.matches ? '#moves-slot-drawer' : '#moves-slot-panel').appendChild($('#moves-block'));
+  $('#moves .active')?.scrollIntoView({ block: 'nearest' });
+};
+phoneLayout.addEventListener('change', placeMoves);
+placeMoves();
 
 /* ---------------- moves ---------------- */
 

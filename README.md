@@ -9,7 +9,7 @@ Put the laptop between you and play, or send game codes through the chat tool yo
 
 [**▶ Play now**](https://abhieq31.com/deskmate) · [**⬇ Offline version**](https://abhieq31.github.io/Deskmate/deskmate.html) · [Report a bug](https://github.com/abhieq31/Deskmate/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/Deskmate/issues/new?template=feature_request.md)
 
-<img src="docs/screenshot.png" alt="Deskmate on a laptop: players above and below the board, both clocks with Draw and Resign on the right" width="760" />
+<img src="docs/screenshot.png" alt="Deskmate on a laptop: player rows with clocks above and below the board, move list with Draw, Resign and navigation on the right" width="760" />
 <img src="docs/phone.png" alt="Deskmate on a phone: each player row has its clock, toolbar at the bottom" width="190" />
 
 </div>
@@ -46,9 +46,10 @@ everything local; it is not designed to get around IT controls.
   Finished games go to **Saved games**, where you can review, resume or
   download them as PGN.
 - **PGN import and export**, plus copying the FEN of any position.
-- **Minimal, chess.com-style layout.** Players sit above and below the
-  board; the right column holds only the two clocks plus Draw and Resign.
-  Everything else (move list, settings, PGN tools) lives in **Options**.
+- **chess.com-style layout.** Each player row has the avatar and name on
+  the left and the clock on the right, above and below the board. The panel
+  on the right holds the move list, Draw/Resign and the navigation buttons.
+  Settings and PGN tools live under the ⚙ Options button.
 - **Move list with replay.** Step with Back/Forward or ← →, or click any move under Options.
 - **Takeback, agreed draw, resign and rematch** (rematch swaps colours).
 - **Right-click arrows and circles** for explaining a line to your opponent.
