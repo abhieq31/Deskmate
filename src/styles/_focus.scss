@@ -1,0 +1,91 @@
+/* ---------- focus mode (Z): the board, the players, both clocks and two buttons ----------
+   [avatar name ]  [          ]  [⚙ ⤢]
+   [            ]  [          ]
+   [   clock    ]  [  board   ]  [ ½ ]
+   [   clock    ]  [          ]  [ ⚑ ]
+   [avatar name ]  [          ]
+   Centred by padding, not min-height, so the 1fr rows never grow past the board. */
+#btn-focus .ico-compress, body.focus #btn-focus .ico-expand { display: none; }
+body.focus #btn-focus .ico-compress { display: block; }
+body.focus { --sb-w: 0px; }
+body.focus .sidebar, body.focus .mobile-bar, body.focus .panel { display: none; }
+body.focus .game {
+  --lw: 200px; --rw: 120px;
+  grid-template-columns: var(--lw) var(--board) var(--rw);
+  grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "ptop board tools"
+    ".    board ."
+    "ctop board acts"
+    "cbot board acts"
+    ".    board ."
+    "pbot board .";
+  gap: 8px 24px;
+  min-height: 0;
+  padding: max(24px, calc((100vh - var(--board)) / 2)) 24px 0 52px;
+}
+body.focus .player.top { grid-area: ptop; align-self: start; max-width: 100%; }
+body.focus .player.bottom { grid-area: pbot; align-self: end; max-width: 100%; }
+body.focus .clock-top { grid-area: ctop; justify-self: stretch; }
+body.focus .clock-bottom { grid-area: cbot; justify-self: stretch; }
+body.focus .clock { width: 100%; }
+body.focus .board-area { grid-area: 1 / 2 / 7 / 3; }
+body.focus .board-tools { grid-area: tools; flex-direction: row; justify-self: start; }
+body.focus .focus-acts { grid-area: acts; display: flex; flex-direction: column; gap: 10px; align-self: center; justify-self: start; }
+.sq-btn {
+  display: grid; place-items: center; width: 56px; height: 56px; border-radius: 8px; border: 1px solid var(--line);
+  background: #1d1d1f; color: #d6d4d1; cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.sq-btn:hover:not(:disabled) { background: #29292c; color: #fff; }
+.sq-btn:disabled { opacity: 0.35; cursor: default; }
+.sq-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.sq-btn.act-resign:hover:not(:disabled) { color: #f08c8c; }
+
+
+.set-grid { display: grid; gap: 2px; }
+.tc-badge {
+  padding: 3px 10px; border-radius: 99px; background: rgba(229, 56, 59, 0.16);
+  color: var(--accent-2); font-weight: 600; font-size: 0.78rem; white-space: nowrap; align-self: center; justify-self: start;
+}
+.tc-badge:empty { display: none; }
+.switch { display: flex; align-items: center; gap: 12px; padding: 7px 0; cursor: pointer; user-select: none; font-size: 0.93rem; }
+.switch input { position: absolute; opacity: 0; pointer-events: none; }
+.switch .track {
+  position: relative; width: 38px; height: 22px; flex: none; border-radius: 99px;
+  background: #45423d; transition: background 0.2s;
+}
+.switch .track::after {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
+  background: #ddd; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: transform 0.25s cubic-bezier(.3, 1.4, .5, 1);
+}
+.switch input:checked + .track { background: var(--accent); }
+.switch input:checked + .track::after { transform: translateX(16px); background: #fff; }
+.switch input:focus-visible + .track { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+.themes { display: flex; gap: 8px; margin-top: 10px; }
+.swatch {
+  width: 34px; height: 34px; border-radius: 8px; cursor: pointer; padding: 0;
+  border: 2px solid transparent; transition: transform 0.15s, border-color 0.15s;
+  background: conic-gradient(var(--l) 0 25%, var(--d) 0 50%, var(--l) 0 75%, var(--d) 0) 0 0 / 50% 50%;
+}
+.swatch:hover { transform: translateY(-2px); }
+.swatch[aria-checked="true"] { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(229, 56, 59, 0.2); }
+.swatch[data-theme="brown"], [data-theme="brown"] { --l: #f0d9b5; --d: #b58863; }
+.swatch[data-theme="blue"], [data-theme="blue"] { --l: #dee3e6; --d: #8ca2ad; }
+/* ember: ivory and crimson, dark marks; the default */
+.swatch[data-theme="ember"], [data-theme="ember"] { --l: #f2ede6; --d: #9c3440; --hl: rgba(12, 12, 12, 0.24); --sel: rgba(12, 12, 12, 0.4); --dot: rgba(12, 12, 12, 0.34); }
+.swatch[data-theme="green"], [data-theme="green"] { --l: #ebecd0; --d: #739552; --hl: rgba(255, 255, 51, 0.42); --sel: rgba(20, 85, 30, 0.5); --dot: rgba(20, 85, 30, 0.5); }
+.swatch[data-theme="stone"], [data-theme="stone"] { --l: #c8c6c2; --d: #8b8985; --hl: rgba(229, 56, 59, 0.36); --sel: rgba(229, 56, 59, 0.52); --dot: rgba(20, 20, 20, 0.36); }
+/* stone: a fine grain over the squares, drawn with SVG noise (no image files) */
+.board[data-theme="stone"] .squares::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: multiply; opacity: 0.32;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9 .35' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1.4 -.25'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.board[data-theme="stone"] .squares { position: absolute; }
+.swatch[data-theme="purple"], [data-theme="purple"] { --l: #e8e0f0; --d: #9479b6; }
+.swatch[data-theme="slate"], [data-theme="slate"] { --l: #c9cfd6; --d: #5f6e7d; }
+
+.tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tools .btn svg { width: 17px; height: 17px; }
+.side-foot { font-size: 0.8rem; padding: 14px 0 0; margin: 0; }

@@ -17,25 +17,38 @@ export const engineUrl = () => engineFile('stockfish.js');
  * laptops run Chrome with the JIT switched off by policy, which removes WebAssembly entirely;
  * the asm.js build is plain JavaScript and runs anywhere.
  */
-export function engineCandidates() {
+export function engineCandidates(): Candidate[] {
   let wasm = false;
   try { wasm = typeof WebAssembly === 'object' && WebAssembly.validate(Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0)); } catch { /* no wasm */ }
-  return [...(wasm ? [{ url: engineFile('stockfish.js'), flavor: 'wasm' }] : []), { url: engineFile('stockfish.asm.js'), flavor: 'asm' }];
+  return [...(wasm ? [{ url: engineFile('stockfish.js'), flavor: 'wasm' as const }] : []), { url: engineFile('stockfish.asm.js'), flavor: 'asm' as const }];
 }
 
 // a build that has not said "uciok" by then is treated as broken (blocked download, no wasm…)
 const LOAD_TIMEOUT = 25000;
 
+/** One evaluation, from White's side: centipawns or moves to mate, and the engine's line in UCI. */
+export interface Eval { cp?: number; mate?: number; pv: string[]; depth?: number; winner?: 'w' | 'b'; draw?: boolean }
+export interface Limits { depth: number; movetime: number }
+interface Candidate { url: string; flavor: 'wasm' | 'asm' }
+type Listener = (line: string) => void;
+
 export class Engine {
-  constructor(candidates = engineCandidates()) {
+  candidates: Candidate[];
+  listeners: Set<Listener>;
+  busy: Promise<unknown>;
+  worker: Worker | null = null;
+  flavor: Candidate['flavor'] | null = null;
+  ready: Promise<Candidate['flavor']> | null = null;
+
+  constructor(candidates: Candidate[] = engineCandidates()) {
     this.candidates = candidates;
     this.listeners = new Set();
     this.busy = Promise.resolve();
   }
 
-  _send(cmd) { this.worker.postMessage(cmd); }
+  _send(cmd: string) { this.worker.postMessage(cmd); }
 
-  _waitFor(prefix) {
+  _waitFor(prefix: string): Promise<string> {
     return new Promise((resolve) => {
       const l = (line) => { if (line.startsWith(prefix)) { this.listeners.delete(l); resolve(line); } };
       this.listeners.add(l);
@@ -43,7 +56,7 @@ export class Engine {
   }
 
   /** Boots one build; rejects on a worker error or if it never answers. */
-  _boot({ url, flavor }) {
+  _boot({ url, flavor }: Candidate): Promise<void> {
     return new Promise((resolve, reject) => {
       let worker;
       try { worker = new Worker(url); } catch (e) { reject(e); return; }
@@ -62,7 +75,7 @@ export class Engine {
         this._send('setoption name Analysis Contempt value Off');
         this._send('isready');
         return this._waitFor('readyok');
-      }).then(resolve);
+      }).then(() => resolve());
       this._send('uci');
     });
   }
@@ -88,19 +101,19 @@ export class Engine {
    * side. Calls are queued, one search at a time. The search ends at `depth` or after `movetime`
    * ms, whichever comes first, so a slow laptop still finishes a whole game in reasonable time.
    */
-  analyse(fen, { depth, movetime }, onInfo) {
+  analyse(fen: string, { depth, movetime }: Limits, onInfo?: (e: Eval) => void): Promise<Eval | null> {
     const run = async () => {
       await this.start();
       const whiteToMove = fen.split(' ')[1] === 'w';
-      let best = null;
-      const done = new Promise((resolve) => {
-        const l = (line) => {
+      let best: Eval | null = null;
+      const done = new Promise<Eval | null>((resolve) => {
+        const l = (line: string) => {
           if (line.startsWith('info') && line.includes(' pv ') && !/ (upper|lower)bound /.test(line)) {
             const m = / depth (\d+) .*score (cp|mate) (-?\d+) .* pv (.+)$/.exec(line);
             if (m && !/ multipv [2-9]/.test(line)) {
               const v = +m[3] * (whiteToMove ? 1 : -1);
               // the line is UCI moves; this build appends extra tokens ("bmc 0.0003") after it
-              const pv = [];
+              const pv: string[] = [];
               for (const t of m[4].trim().split(/\s+/)) { if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(t)) break; pv.push(t); }
               best = { depth: +m[1], pv, ...(m[2] === 'cp' ? { cp: v } : { mate: v }) };
               onInfo?.(best);
@@ -132,11 +145,11 @@ export class Engine {
    * (0–20): below 20 it deliberately picks weaker moves now and then, which is what makes the
    * easy levels beatable. Resolves to a UCI move ("e2e4", "e7e8q") or null.
    */
-  play(fen, { skill, depth, movetime }) {
+  play(fen: string, { skill, depth, movetime }: Limits & { skill: number }): Promise<string | null> {
     const run = async () => {
       await this.start();
-      const done = new Promise((resolve) => {
-        const l = (line) => {
+      const done = new Promise<string | null>((resolve) => {
+        const l = (line: string) => {
           if (!line.startsWith('bestmove')) return;
           this.listeners.delete(l);
           clearTimeout(watchdog);

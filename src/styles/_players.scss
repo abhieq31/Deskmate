@@ -1,0 +1,23 @@
+/* ---------- player cards ---------- */
+.player { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.avatar {
+  width: 40px; height: 40px; flex: none; border-radius: 5px;
+  background: #cfcac2 center / 78% no-repeat; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+  transition: box-shadow 0.25s;
+}
+.player[data-color="w"] .avatar { background-image: url(../assets/pieces/cburnett/wP.svg); background-color: #b9b4ab; }
+.player[data-color="b"] .avatar { background-image: url(../assets/pieces/cburnett/bP.svg); background-color: #d8d4cc; }
+.player.to-move .avatar { box-shadow: 0 0 0 2px var(--accent-2), 0 0 18px rgba(229, 56, 59, 0.45); }
+.pmeta { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.pline { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.pname { color: var(--text-strong); font-weight: 700; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pstatus { font-size: 0.8rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player.to-move .pstatus { color: var(--accent-2); }
+.player.winner .pstatus { color: var(--gold); font-weight: 600; }
+.player.offer .pstatus { color: var(--gold); }
+.material { display: flex; align-items: center; color: var(--muted); font-size: 0.82rem; height: 1.35em; white-space: nowrap; overflow: hidden; }
+.material .cap { display: inline-flex; margin-right: 4px; }
+.material .pc { width: 1.35em; height: 1.35em; margin-right: -0.55em; }
+.material .cap .pc:last-child { margin-right: 0; }
+.material .pc[class*=" b"] { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.6)); }
+.material b { margin-left: 0.6em; font-weight: 600; }

@@ -1,0 +1,13 @@
+// Deskmate's stylesheet: ink and ember, black, white and one red. Compiled to css/style.css
+// by `npm run build:css`; each partial is one part of the page, in cascade order.
+@use 'tokens';
+@use 'buttons';
+@use 'game';
+@use 'sidebar';
+@use 'home';
+@use 'focus';
+@use 'board';
+@use 'players';
+@use 'clocks';
+@use 'dialogs';
+@use 'responsive';

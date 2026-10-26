@@ -1,11 +1,37 @@
 // Game model: wraps chess.js with ply history, results, clocks state and PGN I/O.
 // Pure logic, no DOM — this file is covered by tests/game.test.mjs.
-import { Chess, DEFAULT_POSITION } from '../vendor/chess.js';
+import { Chess, DEFAULT_POSITION, type Move } from '../vendor/chess.js';
+
+export type Color = 'w' | 'b';
+export type Result = '1-0' | '0-1' | '1/2-1/2';
+export type Role = 'p' | 'n' | 'b' | 'r' | 'q' | 'k';
+export type Clocks = Record<Color, number>;
+
+export interface TimeControl { id: string; label: string; base: number; inc: number; kind?: string; moment: string }
+
+/** One half-move as Deskmate keeps it. `clock`: ms left on the mover's clock after it. */
+export interface Ply {
+  san: string; from: string; to: string; color: Color; piece: string;
+  captured: string | null; promotion: string | null; fen: string; clock?: number;
+}
+
+/** A live game with a colleague: room code, this browser's colour, each seat's player id, a pending offer. */
+export interface RemoteSeat { room: string; me: Color | null; pw: string | null; pb: string | null; offer: Color | null }
+/** A game against the computer: the colour it plays and how strong. */
+export interface AiSeat { color: Color; level: 'easy' | 'medium' | 'hard' }
+
+/** A game as saved in the browser and passed between laptops. */
+export interface GameData {
+  id?: string; white?: string; black?: string; tc?: string;
+  startedAt?: number; endedAt?: number | null; result?: Result | null; termination?: string | null;
+  clocks?: Clocks; moves?: string[]; clk?: (number | null)[];
+  remote?: Partial<RemoteSeat> | null; ai?: AiSeat | null;
+}
 
 export const START_FEN = DEFAULT_POSITION;
 
 // `moment`: the desk-sized break each one fits in
-export const TIME_CONTROLS = [
+export const TIME_CONTROLS: TimeControl[] = [
   { id: 'none', label: 'Unlimited', base: 0, inc: 0, moment: 'No clock' },
   { id: '1+0', label: '1 + 0', base: 1, inc: 0, kind: 'Bullet', moment: 'Lift ride' },
   { id: '3+0', label: '3 + 0', base: 3, inc: 0, kind: 'Blitz', moment: 'Printer queue' },
@@ -18,15 +44,15 @@ export const TIME_CONTROLS = [
   { id: '30+0', label: '30 + 0', base: 30, inc: 0, kind: 'Classical', moment: 'Friday, 5 pm' },
 ];
 
-export const timeControl = (id) => TIME_CONTROLS.find((t) => t.id === id) || TIME_CONTROLS[0];
+export const timeControl = (id: string): TimeControl => TIME_CONTROLS.find((t) => t.id === id) || TIME_CONTROLS[0];
 
-const VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+const VALUES: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
 /** Parse the piece placement field of a FEN into Map<square, 'wP' | 'bK' | ...>. */
-export function fenPieces(fen) {
-  const map = new Map();
+export function fenPieces(fen: string): Map<string, string> {
+  const map = new Map<string, string>();
   const rows = fen.split(' ')[0].split('/');
   rows.forEach((row, r) => {
     let f = 0;
@@ -41,7 +67,7 @@ export function fenPieces(fen) {
 }
 
 /** Square of the king of the side to move if that side is in check, else null. */
-export function checkSquare(fen) {
+export function checkSquare(fen: string): string | null {
   const c = new Chess(fen);
   if (!c.inCheck()) return null;
   const turn = c.turn();
@@ -50,13 +76,13 @@ export function checkSquare(fen) {
 }
 
 /** Lichess-style material imbalance: surplus pieces per side and the point lead. */
-export function material(fen) {
-  const count = { w: {}, b: {} };
+export function material(fen: string) {
+  const count: Record<Color, Record<string, number>> = { w: {}, b: {} };
   for (const code of fenPieces(fen).values()) {
     const c = code[0], role = code[1].toLowerCase();
     count[c][role] = (count[c][role] || 0) + 1;
   }
-  const out = { w: { pieces: [], score: 0 }, b: { pieces: [], score: 0 } };
+  const out: Record<Color, { pieces: string[]; score: number }> = { w: { pieces: [], score: 0 }, b: { pieces: [], score: 0 } };
   let diff = 0;
   for (const role of ['q', 'r', 'b', 'n', 'p']) {
     const d = (count.w[role] || 0) - (count.b[role] || 0);
@@ -69,21 +95,21 @@ export function material(fen) {
   return out;
 }
 
-const START = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+const START: Record<string, number> = { p: 8, n: 2, b: 2, r: 2, q: 1 };
 
 /**
  * Pieces each side has captured (the opponent's missing pieces, pawns first) and the points
  * lead, as chess.com shows them next to the player names.
  */
-export function captures(fen) {
-  const count = { w: {}, b: {} };
+export function captures(fen: string) {
+  const count: Record<Color, Record<string, number>> = { w: {}, b: {} };
   for (const code of fenPieces(fen).values()) {
     const c = code[0], role = code[1].toLowerCase();
     count[c][role] = (count[c][role] || 0) + 1;
   }
-  const out = { w: { pieces: [], score: 0 }, b: { pieces: [], score: 0 } };
-  const points = { w: 0, b: 0 };
-  for (const c of ['w', 'b']) {
+  const out: Record<Color, { pieces: string[]; score: number }> = { w: { pieces: [], score: 0 }, b: { pieces: [], score: 0 } };
+  const points: Record<Color, number> = { w: 0, b: 0 };
+  for (const c of ['w', 'b'] as const) {
     const o = c === 'w' ? 'b' : 'w';
     for (const role of ['p', 'b', 'n', 'r', 'q']) {
       for (let i = (count[o][role] || 0); i < START[role]; i++) out[c].pieces.push(role);
@@ -97,13 +123,27 @@ export function captures(fen) {
 }
 
 /** True if `color` has only a bare king (cannot ever deliver mate). */
-function bareKing(fen, color) {
+function bareKing(fen: string, color: Color): boolean {
   for (const code of fenPieces(fen).values()) if (code[0] === color && code[1] !== 'K') return false;
   return true;
 }
 
 export class Game {
-  constructor(data = {}) {
+  id: string;
+  white: string;
+  black: string;
+  tc: string;
+  startedAt: number;
+  endedAt: number | null;
+  result: Result | null;
+  termination: string | null;
+  clocks: Clocks;
+  remote: RemoteSeat | null;
+  ai: AiSeat | null;
+  chess: Chess;
+  plies: Ply[];
+
+  constructor(data: GameData = {}) {
     this.id = data.id || uid();
     this.white = data.white || 'White';
     this.black = data.black || 'Black';
@@ -116,7 +156,7 @@ export class Game {
     this.clocks = data.clocks || { w: tc.base * 60000, b: tc.base * 60000 };
     // live remote games: room code, the colour this browser plays, the player id in each
     // colour's seat (empty until someone sits there) and a pending draw offer
-    this.remote = data.remote ? { offer: null, ...data.remote } : null;
+    this.remote = data.remote ? { room: '', me: null, pw: null, pb: null, offer: null, ...data.remote } : null;
     // games against the computer: the colour it plays and how strong ('easy' | 'medium' | 'hard')
     this.ai = data.ai ? { color: data.ai.color, level: data.ai.level } : null;
     this.chess = new Chess();
@@ -126,25 +166,25 @@ export class Game {
     (data.clk || []).forEach((ms, i) => { if (this.plies[i] && ms != null) this.plies[i].clock = ms; });
   }
 
-  get tcInfo() { return timeControl(this.tc); }
+  get tcInfo(): TimeControl { return timeControl(this.tc); }
   get hasClock() { return this.tcInfo.base > 0; }
-  get turn() { return this.chess.turn(); }
+  get turn(): Color { return this.chess.turn(); }
   get over() { return !!this.result; }
   get length() { return this.plies.length; }
 
-  _push(m) {
+  _push(m: Move) {
     this.plies.push({
-      san: m.san, from: m.from, to: m.to, color: m.color, piece: m.piece,
+      san: m.san, from: m.from, to: m.to, color: m.color as Color, piece: m.piece,
       captured: m.captured || null, promotion: m.promotion || null, fen: m.after,
     });
   }
 
-  fenAt(ply) { return ply === 0 ? START_FEN : this.plies[ply - 1].fen; }
-  lastMoveAt(ply) { return ply === 0 ? null : [this.plies[ply - 1].from, this.plies[ply - 1].to]; }
+  fenAt(ply: number): string { return ply === 0 ? START_FEN : this.plies[ply - 1].fen; }
+  lastMoveAt(ply: number): [string, string] | null { return ply === 0 ? null : [this.plies[ply - 1].from, this.plies[ply - 1].to]; }
 
   /** Map<from, to[]> of legal moves in the live position. */
-  dests() {
-    const d = new Map();
+  dests(): Map<string, string[]> {
+    const d = new Map<string, string[]>();
     if (this.over) return d;
     for (const m of this.chess.moves({ verbose: true })) {
       if (!d.has(m.from)) d.set(m.from, []);
@@ -153,12 +193,12 @@ export class Game {
     return d;
   }
 
-  isPromotion(from, to) {
+  isPromotion(from: string, to: string): boolean {
     return this.chess.moves({ square: from, verbose: true }).some((m) => m.to === to && m.promotion);
   }
 
   /** Play a move given in SAN (used when applying an opponent's code). */
-  moveSan(san) {
+  moveSan(san: string): Ply | null {
     if (this.over) return null;
     let m;
     try { m = this.chess.move(san); } catch { return null; }
@@ -168,7 +208,7 @@ export class Game {
   }
 
   /** Play a move; returns the ply record or null if illegal. */
-  move(from, to, promotion) {
+  move(from: string, to: string, promotion?: string): Ply | null {
     if (this.over) return null;
     let m;
     try { m = this.chess.move({ from, to, promotion: promotion || 'q' }); } catch { return null; }
@@ -186,16 +226,16 @@ export class Game {
     else if (c.isDrawByFiftyMoves()) this.finish('1/2-1/2', 'Fifty-move rule');
   }
 
-  finish(result, termination) {
+  finish(result: Result, termination: string) {
     this.result = result;
     this.termination = termination;
     this.endedAt = Date.now();
   }
 
-  resign(color) { this.finish(color === 'w' ? '0-1' : '1-0', `${this.nameOf(color)} resigned`); }
+  resign(color: Color) { this.finish(color === 'w' ? '0-1' : '1-0', `${this.nameOf(color)} resigned`); }
   agreeDraw() { this.finish('1/2-1/2', 'Draw by agreement'); }
-  flag(color) {
-    const other = color === 'w' ? 'b' : 'w';
+  flag(color: Color) {
+    const other: Color = color === 'w' ? 'b' : 'w';
     if (bareKing(this.chess.fen(), other)) this.finish('1/2-1/2', 'Time out vs insufficient material');
     else this.finish(color === 'w' ? '0-1' : '1-0', `${this.nameOf(color)} ran out of time`);
   }
@@ -204,8 +244,8 @@ export class Game {
    * What each clock showed with `ply` moves played: the time its player had left after their
    * last move up to that point, or the starting time before their first move.
    */
-  clocksAt(ply) {
-    const out = { w: this.tcInfo.base * 60000, b: this.tcInfo.base * 60000 };
+  clocksAt(ply: number): Clocks {
+    const out: Clocks = { w: this.tcInfo.base * 60000, b: this.tcInfo.base * 60000 };
     for (let i = 0; i < ply && i < this.plies.length; i++) {
       const p = this.plies[i];
       if (p.clock != null) out[p.color] = p.clock;
@@ -221,7 +261,7 @@ export class Game {
     return true;
   }
 
-  nameOf(color) { return color === 'w' ? this.white : this.black; }
+  nameOf(color: Color): string { return color === 'w' ? this.white : this.black; }
 
   winnerText() {
     if (this.result === '1-0') return `${this.white} wins`;
@@ -230,7 +270,7 @@ export class Game {
     return '';
   }
 
-  toJSON() {
+  toJSON(): GameData {
     return {
       id: this.id, white: this.white, black: this.black, tc: this.tc,
       startedAt: this.startedAt, endedAt: this.endedAt, result: this.result,
@@ -246,7 +286,7 @@ export class Game {
     const date = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
     const tc = this.tcInfo;
     // chess.js's PGN parser does not accept escaped quotes, so swap them for apostrophes
-    const esc = (s) => String(s).replace(/[\\"]/g, "'");
+    const esc = (s: string) => String(s).replace(/[\\"]/g, "'");
     const headers = [
       ['Event', this.remote ? 'Casual remote game' : this.ai ? 'Casual game against Stockfish' : 'Casual over-the-board game'], ['Site', 'Deskmate'], ['Date', date],
       ['White', this.white], ['Black', this.black], ['Result', this.result || '*'],
@@ -254,8 +294,8 @@ export class Game {
     ];
     if (this.termination) headers.push(['Termination', this.termination]);
     let text = headers.map(([k, v]) => `[${k} "${esc(v)}"]`).join('\n') + '\n\n';
-    const parts = [];
-    const clk = (ms) => {
+    const parts: string[] = [];
+    const clk = (ms: number) => {
       const t = Math.max(0, Math.round(ms / 1000));
       return `{[%clk ${Math.floor(t / 3600)}:${String(Math.floor(t / 60) % 60).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}]}`;
     };
@@ -275,7 +315,7 @@ export class Game {
   }
 
   /** Build a Game from PGN text; throws on invalid PGN. */
-  static fromPGN(text) {
+  static fromPGN(text: string): Game {
     const c = new Chess();
     c.loadPgn(text);
     const h = c.getHeaders();
@@ -296,7 +336,7 @@ export class Game {
     const date = h.Date && /^(\d{4})\.(\d{2})\.(\d{2})$/.exec(h.Date);
     if (date) g.startedAt = new Date(+date[1], +date[2] - 1, +date[3]).getTime();
     if (['1-0', '0-1', '1/2-1/2'].includes(h.Result)) {
-      g.result = h.Result;
+      g.result = h.Result as Result;
       g.termination = h.Termination || g.termination || 'Imported';
     } else if (!g.result) {
       g._detectEnd();

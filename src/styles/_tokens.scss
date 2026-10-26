@@ -1,0 +1,46 @@
+/* ==========================================================================
+   Deskmate — design tokens and base styles. Ink and ember: black, white and one red. No build step, no framework.
+   ========================================================================== */
+
+:root {
+  --bg: #0e0e0f;
+  --bg-2: #080808;
+  --panel: rgba(22, 22, 23, 0.86);
+  --panel-solid: #161617;
+  --panel-2: #1d1d1f;
+  --line: rgba(255, 255, 255, 0.07);
+  --text: #d6d4d1;
+  --text-strong: #fafafa;
+  --muted: #87868a;
+  --accent: #e5383b;
+  --accent-2: #ff4d4f;
+  --accent-ink: #1a0507;
+  --blue: #3692e7;
+  --danger: #dc4b4b;
+  --gold: #e8b64c;
+  --radius: 10px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --sb-w: 64px;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', Ubuntu, sans-serif;
+  --mono: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.45 var(--font);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+h2, h3 { color: var(--text-strong); margin: 0; font-weight: 600; letter-spacing: 0.01em; }
+h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 10px; }
+
+// below this width the game switches to the one-column phone layout
+$phone: 760px;

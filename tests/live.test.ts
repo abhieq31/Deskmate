@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Room, newRoomCode, parseRoomCode, formatRoomCode, CODE_LENGTH } from '../js/live.js';
+import { Room, newRoomCode, parseRoomCode, formatRoomCode, CODE_LENGTH } from '../src/live.ts';
 
 test('room codes are short, readable and forgiving to type', () => {
   for (let i = 0; i < 200; i++) {

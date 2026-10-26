@@ -1,0 +1,6 @@
+# Build outputs committed so the site can be served as plain files; written by `npm run build`.
+js/app.js linguist-generated=true
+css/style.css linguist-generated=true
+deskmate.html linguist-generated=true
+# Third-party code and data
+vendor/** linguist-vendored=true

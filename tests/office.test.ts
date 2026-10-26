@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { standings } from '../js/office.js';
+import { standings } from '../src/office.ts';
 
 test('office table counts wins, draws and losses per person', () => {
   const t = standings([

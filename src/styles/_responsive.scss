@@ -1,0 +1,83 @@
+@use 'tokens' as *;
+
+/* ---------- responsive ---------- */
+@media (max-width: $phone) {
+  /* rows: menu + move strip, top bar, board, bottom bar, actions (+ the review after a game) */
+  :root { --sb-w: 0px; }
+  body { font-size: 14px; }
+  .game, body.focus .game {
+    --board: min(100vw, calc(100vh - 230px)); --board: min(100vw, calc(100dvh - 230px));
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: none;
+    grid-template-areas: "mbar mbar" "ptop ptop" "board board" "pbot pbot" "panel panel";
+    gap: 6px; min-height: 0;
+    padding: 6px 0 calc(8px + env(safe-area-inset-bottom));
+    justify-content: stretch; align-content: start;
+  }
+  .player, body.focus .player.top, body.focus .player.bottom { margin-left: 10px; max-width: calc(100% - 140px); align-self: center; }
+  .player.top, body.focus .player.top { grid-area: ptop; }
+  .player.bottom, body.focus .player.bottom { grid-area: pbot; }
+  .clock-top, body.focus .clock-top { grid-area: ptop; justify-self: end; }
+  .clock-bottom, body.focus .clock-bottom { grid-area: pbot; justify-self: end; }
+  .clock-wrap { margin-right: 10px; }
+  .clock, body.focus .clock { width: 120px; height: 40px; font-size: 1.35rem; padding: 0 10px; }
+  .clock-ico { width: 18px; height: 18px; }
+  .board-area, body.focus .board-area { grid-area: board; justify-self: center; width: var(--board); }
+  .board-frame { border-radius: 0; }
+  .mobile-bar, body.focus .mobile-bar { grid-area: mbar; display: flex; align-items: center; gap: 4px; padding: 0 90px 0 6px; min-width: 0; }
+  body.focus .mobile-bar .moveline-slot { visibility: hidden; }
+  .mobile-bar .moveline-slot { flex: 1; min-width: 0; }
+  .moveline { border-radius: 8px; min-height: 40px; }
+  .board-tools, body.focus .board-tools { grid-area: mbar; justify-self: end; align-self: center; flex-direction: row; margin-right: 6px; }
+  .focus-acts, body.focus .focus-acts { display: none; }
+  .evalbar { right: auto; left: 0; top: auto; bottom: calc(100% + 2px); width: 100%; height: 6px; }
+  .evalbar-fill { top: 0; height: 100%; width: var(--w, 50%); }
+  .evalbar.flip .evalbar-fill { left: auto; right: 0; }
+  .evalbar-num, .wb-pct, .evalbar.quiet .wb-pct { display: none; }
+  .evalbar.quiet { right: auto; width: 100%; height: 4px; }
+  /* the panel shrinks to its action row; after a game it also holds the review */
+  .panel, body.focus .panel { display: flex; margin: 0 10px; border: 0; background: transparent; }
+  .panel-head, .panel-nav { display: none; }
+  .an-moves { display: none; }
+  .game.analysing .an-moves { display: grid; max-height: 40vh; }
+  .game.analysing .panel { background: #161617; }
+  .panel-actions { padding: 0; }
+  .panel-actions .txt-btn { flex: 1; justify-content: center; height: 44px; background: #1d1d1f; }
+  .sidebar { width: 0; padding: 10px 0; }
+  .sidebar.open { width: 240px; padding: 10px 8px; }
+  .sb-backdrop.open { display: block; position: fixed; inset: 0; z-index: 25; background: rgba(0, 0, 0, 0.5); }
+  .home { padding: 28px 16px; }
+  .home-hero h1 { font-size: 1.9rem; }
+  .home-games li { grid-template-columns: 54px 1fr; }
+  .home-games .acts { grid-column: 1 / -1; }
+  .tc-grid { grid-template-columns: repeat(3, 1fr); }
+  .names, .names.two { grid-template-columns: 1fr; }
+  .names #new-swap { justify-self: center; transform: rotate(90deg); }
+  .archive li { grid-template-columns: 60px 1fr; }
+  .archive .acts { grid-column: 1 / -1; justify-content: flex-end; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+/* the analysis mark on the square the move landed on, like an annotation in the margin */
+.sq-glyph {
+  position: absolute; top: 3%; right: 3%; z-index: 6; min-width: 30%; height: 30%; padding: 0 3%;
+  display: grid; place-items: center; border-radius: 99px; pointer-events: none;
+  font: 800 clamp(9px, calc(var(--board) / 48), 15px)/1 var(--font); color: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.sq-glyph.k-blunder { background: #ca3431; }
+.sq-glyph.k-mistake { background: #e58f2a; }
+.sq-glyph.k-inaccuracy { background: #d9a714; }
+
+/* play the computer: three levels */
+.levels { display: grid; gap: 6px; }
+.levels label { display: block; cursor: pointer; }
+.levels input { position: absolute; opacity: 0; pointer-events: none; }
+.levels span { display: flex; align-items: baseline; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); }
+.levels b { color: var(--text-strong); min-width: 4.5em; }
+.levels small { color: var(--muted); }
+.levels input:checked + span { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.levels input:focus-visible + span { outline: 2px solid var(--blue); }

@@ -1,6 +1,6 @@
 // Opening names from lichess's chess-openings data set (CC0), built into vendor/openings/openings.json
 // by scripts/build-openings.mjs. Fetched once, only when a game has moves to name.
-import { vendorUrl } from './engine.js';
+import { vendorUrl } from './engine.ts';
 
 let table = null;
 

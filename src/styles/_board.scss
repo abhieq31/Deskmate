@@ -1,0 +1,120 @@
+/* ---------- board ---------- */
+.board-frame {
+  width: var(--board); aspect-ratio: 1;
+  border-radius: 6px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 80px rgba(229, 56, 59, 0.05);
+  perspective: 1600px;
+}
+.board {
+  position: relative; width: 100%; height: 100%;
+  user-select: none; -webkit-user-select: none; touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.board-inner {
+  position: absolute; inset: 0; border-radius: 6px; overflow: hidden;
+}
+
+.squares { position: absolute; inset: 0; display: grid; grid-template: repeat(8, 1fr) / repeat(8, 1fr); }
+.sq { position: relative; }
+.sq.light { background: var(--l); }
+.sq.dark { background: var(--d); }
+.sq::before, .sq::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
+/* highlights — same visual language as lichess */
+.sq.last-move::before { background: var(--hl); }
+.sq.selected::before { background: var(--sel); }
+.sq.check::after {
+  background: radial-gradient(ellipse at center, rgba(255, 0, 0, 1) 0%, #e70000 25%, rgba(169, 0, 0, 0) 89%, rgba(158, 0, 0, 0) 100%);
+  animation: checkPulse 1.6s ease-in-out infinite;
+}
+@keyframes checkPulse { 50% { opacity: 0.7; } }
+.sq.move-dest::after {
+  background: radial-gradient(var(--dot) 19%, rgba(0, 0, 0, 0) 20%);
+  animation: pop 0.18s ease-out;
+}
+.sq.capture-dest::after {
+  background: radial-gradient(transparent 0%, transparent 79%, var(--dot) 80%);
+  animation: pop 0.18s ease-out;
+}
+.board.movable .sq.move-dest, .board.movable .sq.capture-dest { cursor: pointer; }
+.board.movable .sq.move-dest:hover::after { background: var(--hl); }
+.board.movable .sq.capture-dest:hover::after { background: var(--hl); }
+.sq.hover::after { box-shadow: inset 0 0 0 calc(var(--board) / 160 + 1px) rgba(255, 255, 255, 0.75); }
+.board.movable .sq.can-move { cursor: grab; }
+.board.dragging-piece, .board.dragging-piece .sq { cursor: grabbing !important; }
+@keyframes pop { from { transform: scale(0.4); opacity: 0; } }
+
+.coord {
+  position: absolute; font-size: clamp(9px, calc(var(--board) / 52), 14px); font-weight: 700;
+  line-height: 1; pointer-events: none; transition: opacity 0.2s;
+}
+.coord.rank { top: 4%; left: 5%; }
+.coord.file { bottom: 4%; right: 6%; }
+.sq.light .coord { color: var(--d); }
+.sq.dark .coord { color: var(--l); }
+.board.no-coords .coord { opacity: 0; }
+
+/* pieces */
+.pieces { position: absolute; inset: 0; pointer-events: none; }
+.piece {
+  position: absolute; top: 0; left: 0; width: 12.5%; height: 12.5%;
+  will-change: transform; z-index: 2;
+  transition: transform 0.15s cubic-bezier(.25, .8, .35, 1), opacity 0.15s;
+}
+.board.no-anim .piece, .board.no-anim .board-inner { transition: none !important; }
+.piece.moving { z-index: 4; }
+.piece.dragging {
+  transition: none; z-index: 10;
+  filter: drop-shadow(0 14px 14px rgba(0, 0, 0, 0.45)); /* lifted: a bit bigger, a deeper shadow */
+}
+.piece.fade { opacity: 0; z-index: 1; }
+.piece.appear { animation: appear 0.24s ease-out; }
+@keyframes appear { from { opacity: 0; } }
+.board.movable { cursor: default; }
+
+.piece-img { background-size: cover; background-repeat: no-repeat; }
+.pc { display: inline-block; width: 1.25em; height: 1.25em; background-size: cover; vertical-align: -0.25em; }
+.wK { background-image: url(../assets/pieces/cburnett/wK.svg); }
+.wQ { background-image: url(../assets/pieces/cburnett/wQ.svg); }
+.wR { background-image: url(../assets/pieces/cburnett/wR.svg); }
+.wB { background-image: url(../assets/pieces/cburnett/wB.svg); }
+.wN { background-image: url(../assets/pieces/cburnett/wN.svg); }
+.wP { background-image: url(../assets/pieces/cburnett/wP.svg); }
+.bK { background-image: url(../assets/pieces/cburnett/bK.svg); }
+.bQ { background-image: url(../assets/pieces/cburnett/bQ.svg); }
+.bR { background-image: url(../assets/pieces/cburnett/bR.svg); }
+.bB { background-image: url(../assets/pieces/cburnett/bB.svg); }
+.bN { background-image: url(../assets/pieces/cburnett/bN.svg); }
+.bP { background-image: url(../assets/pieces/cburnett/bP.svg); }
+
+/* arrows */
+.arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; color: #ff4d4f; }
+.shape-arrow { stroke: #ff4d4f; stroke-width: 0.16; stroke-linecap: round; opacity: 0.8; }
+.shape-arrow.auto { stroke: #121212; opacity: 0.62; } /* the engine's move: ink */
+.shape-circle { fill: none; stroke: #ff4d4f; stroke-width: 0.07; opacity: 0.8; }
+
+/* promotion picker */
+.promo { position: absolute; inset: 0; z-index: 20; background: rgba(250, 250, 250, 0.5); backdrop-filter: blur(2px); border-radius: 6px; }
+.promo-choice {
+  position: absolute; width: 12.5%; height: 12.5%; padding: 0; border: 0; cursor: pointer;
+  border-radius: 50%; background: radial-gradient(#fff 25%, #b0b0b0 100%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); transition: border-radius 0.15s, background 0.15s;
+  animation: pop 0.2s ease-out backwards;
+}
+.promo-choice:nth-child(2) { animation-delay: 0.04s; }
+.promo-choice:nth-child(3) { animation-delay: 0.08s; }
+.promo-choice:nth-child(4) { animation-delay: 0.12s; }
+.promo-choice:hover { border-radius: 0; background: radial-gradient(#fff 25%, #d68f00 100%); }
+.promo-choice .piece-img { display: block; width: 100%; height: 100%; transform: scale(0.8); transition: transform 0.15s; }
+.promo-choice:hover .piece-img { transform: scale(1); }
+
+/* review banner: a pill floating over the bottom of the board */
+.review-banner {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 8;
+  display: flex; align-items: center; gap: 10px; white-space: nowrap; max-width: calc(100% - 16px);
+  padding: 6px 6px 6px 14px; border-radius: 99px; font-size: 0.85rem;
+  background: rgba(17, 40, 62, 0.92); border: 1px solid rgba(54, 146, 231, 0.55); color: #cfe5fb;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); animation: fadeIn 0.25s ease-out;
+}
+.review-banner span { overflow: hidden; text-overflow: ellipsis; }
+.review-banner .btn { flex: none; }
+@keyframes fadeIn { from { opacity: 0; } }

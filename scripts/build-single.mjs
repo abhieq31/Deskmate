@@ -1,54 +1,20 @@
-// Builds deskmate.html: the whole app in ONE self-contained file that runs by
-// double-click (file://) with no server and no network. Zero dependencies.
+// Builds deskmate.html: the whole app in ONE self-contained file (inline CSS, JS and images),
+// which is what abhieq31.com/deskmate serves. Run after build:js and build:css:
 //
-//   node scripts/build-single.mjs
+//   npm run build
 //
-// Each ES module is wrapped in a function scope; imports become lookups in a
-// module table, so modules can't clash on top-level names.
+// js/app.js is already a single esbuild bundle of src/*.ts, so it is inlined as-is.
 import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, normalize } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
 
-// dependency order: a module must come after everything it imports
-const MODULES = ['vendor/chess.js', 'vendor/secp256k1.js', 'js/game.js', 'js/remote.js', 'js/live.js',
-  'js/engine.js', 'js/openings.js', 'js/analysis.js', 'js/office.js', 'js/board.js', 'js/storage.js', 'js/sound.js', 'js/confetti.js', 'js/app.js'];
-
-function wrapModule(path) {
-  let src = read(path);
-  const exportsList = [];
-  // import { a, b } from './x.js';
-  src = src.replace(/^import\s*\{([^}]*)\}\s*from\s*'([^']+)';?\s*$/gm, (_, names, from) => {
-    const target = normalize(join(dirname(path), from)).replace(/\\/g, '/');
-    if (!MODULES.includes(target)) throw new Error(`${path}: unknown import ${from}`);
-    const bindings = names.split(',').map((n) => n.trim()).filter(Boolean)
-      .map((n) => n.replace(/\s+as\s+/, ': '));
-    return `const { ${bindings.join(', ')} } = __mods[${JSON.stringify(target)}];`;
-  });
-  if (/^\s*import\s/m.test(src)) throw new Error(`${path}: unsupported import form`);
-  // export { a, b as c };
-  src = src.replace(/^export\s*\{([^}]*)\};?\s*$/gm, (_, names) => {
-    for (const n of names.split(',').map((x) => x.trim()).filter(Boolean)) {
-      const [local, exported = local] = n.split(/\s+as\s+/);
-      exportsList.push(`${exported}: ${local}`);
-    }
-    return '';
-  });
-  // export const|let|function|class name
-  src = src.replace(/^export\s+(const|let|var|function|class|async function)\s+([A-Za-z_$][\w$]*)/gm, (_, kind, name) => {
-    exportsList.push(name);
-    return `${kind} ${name}`;
-  });
-  if (/^export\s/m.test(src)) throw new Error(`${path}: unsupported export form`);
-  return `__mods[${JSON.stringify(path)}] = (() => {\n${src}\nreturn { ${exportsList.join(', ')} };\n})();\n`;
-}
-
 const dataUri = (path) => `data:image/svg+xml;base64,${Buffer.from(read(path)).toString('base64')}`;
 
 let css = read('css/style.css').replace(/url\(\.\.\/(assets\/[^)]+\.svg)\)/g, (_, p) => `url("${dataUri(p)}")`);
-const js = 'const __mods = {};\n' + MODULES.map(wrapModule).join('\n');
+const js = read('js/app.js');
 
 let html = read('index.html');
 const icon = dataUri('assets/icon.svg');

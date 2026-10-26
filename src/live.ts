@@ -10,7 +10,7 @@ const DEFAULT_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.pr
  * Relays to use. A company can run its own Nostr relay and point Deskmate at it with
  * localStorage['deskmate:relays'] = '["wss://relay.example.internal"]'.
  */
-export const RELAYS = (() => {
+export const RELAYS: string[] = (() => {
   try {
     const custom = JSON.parse(globalThis.localStorage?.getItem('deskmate:relays') || 'null');
     if (Array.isArray(custom) && custom.length && custom.every((u) => /^wss?:\/\//.test(u))) return custom;
@@ -29,20 +29,20 @@ export const newRoomCode = () =>
   [...crypto.getRandomValues(new Uint8Array(CODE_LENGTH))].map((b) => ALPHABET[b % ALPHABET.length]).join('');
 
 /** Clean up what someone typed or pasted ("k7q-m2x", a link…); returns the code or null. */
-export function parseRoomCode(text) {
+export function parseRoomCode(text: string): string | null {
   const s = String(text).toUpperCase().replace(/^.*#/, '').replace(/[^A-Z0-9]/g, '');
   return s.length === CODE_LENGTH && [...s].every((c) => ALPHABET.includes(c)) ? s : null;
 }
 
-export const formatRoomCode = (code) => `${code.slice(0, 3)}-${code.slice(3)}`;
+export const formatRoomCode = (code: string) => `${code.slice(0, 3)}-${code.slice(3)}`;
 
 const enc = new TextEncoder();
-const hex = (bytes) => [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-const unhex = (s) => Uint8Array.from(s.match(/../g), (h) => parseInt(h, 16));
-const sha256 = async (data) => new Uint8Array(await crypto.subtle.digest('SHA-256', data));
+const hex = (bytes: Uint8Array): string => [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+const unhex = (s: string) => Uint8Array.from(s.match(/../g), (h) => parseInt(h, 16));
+const sha256 = async (data: Uint8Array<ArrayBuffer>) => new Uint8Array(await crypto.subtle.digest('SHA-256', data));
 
 /** Key pair shared by both players, derived from the room code. */
-async function roomKeys(code) {
+async function roomKeys(code: string) {
   const secret = await sha256(enc.encode(`deskmate-room:${code}`));
   return { secret, pubkey: hex(schnorr.getPublicKey(secret)) };
 }
@@ -51,13 +51,30 @@ async function roomKeys(code) {
  * A connection to one room on several relays at once. Every snapshot goes to all of them and
  * duplicates are dropped on the way in, so the game keeps going while at least one relay works.
  */
+/** A Nostr event as relays store it (NIP-01). */
+interface NostrEvent { id: string; pubkey: string; created_at: number; kind: number; tags: string[][]; content: string; sig: string }
+
+export interface RoomOptions {
+  onSnapshot: (snap: Record<string, unknown>) => void;
+  onStatus?: (connectedRelays: number) => void;
+  relays?: string[];
+}
+
 export class Room {
-  /**
-   * @param {string} code
-   * @param {{ onSnapshot: (snap: object) => void, onStatus?: (connectedRelays: number) => void,
-   *           relays?: string[] }} opts
-   */
-  constructor(code, opts) {
+  code: string;
+  dTag: string;
+  onSnapshot: RoomOptions['onSnapshot'];
+  onStatus: NonNullable<RoomOptions['onStatus']>;
+  relays: string[];
+  sockets: Map<string, WebSocket>;
+  seen: Set<string>;
+  lastCreated: number;
+  lastEvent: NostrEvent | null;
+  closed: boolean;
+  keys: { secret: Uint8Array; pubkey: string };
+  ready: Promise<void>;
+
+  constructor(code: string, opts: RoomOptions) {
     this.code = code;
     this.dTag = `deskmate:${code}`;
     this.onSnapshot = opts.onSnapshot;

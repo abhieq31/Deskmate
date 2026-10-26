@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { winPct, classify, moveAccuracy, summarize, formatEval } from '../js/analysis.js';
+import { winPct, classify, moveAccuracy, summarize, formatEval } from '../src/analysis.ts';
 
 test('win chances follow the lichess curve', () => {
   assert.equal(Math.round(winPct({ cp: 0 })), 50);

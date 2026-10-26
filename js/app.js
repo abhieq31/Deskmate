@@ -1,66 +1,5350 @@
-// Deskmate application controller: wires the game model, board, clocks, live rooms, storage and UI.
-import { Game, TIME_CONTROLS, timeControl, checkSquare, captures } from './game.js';
-import { Board } from './board.js';
-import { storage } from './storage.js';
-import { sound } from './sound.js';
-import { confetti } from './confetti.js';
-import { packMoves, unpackMoves } from './remote.js';
-import { Room, newRoomCode, parseRoomCode, formatRoomCode } from './live.js';
-import { Engine } from './engine.js';
-import { standings } from './office.js';
-import { loadOpenings, openingName } from './openings.js';
-import { summarize, winPct, formatEval, MARKS } from './analysis.js';
-import { Chess } from '../vendor/chess.js';
+// vendor/chess.js
+function rootNode(comment) {
+  return comment !== null ? { comment, variations: [] } : { variations: [] };
+}
+function node(move, suffix, nag, comment, variations) {
+  const node2 = { move, variations };
+  if (suffix) {
+    node2.suffix = suffix;
+  }
+  if (nag) {
+    node2.nag = nag;
+  }
+  if (comment !== null) {
+    node2.comment = comment;
+  }
+  return node2;
+}
+function lineToTree(...nodes) {
+  const [root, ...rest] = nodes;
+  let parent = root;
+  for (const child of rest) {
+    if (child !== null) {
+      parent.variations = [child, ...child.variations];
+      child.variations = [];
+      parent = child;
+    }
+  }
+  return root;
+}
+function pgn(headers, game2) {
+  if (game2.marker && game2.marker.comment) {
+    let node2 = game2.root;
+    while (true) {
+      const next = node2.variations[0];
+      if (!next) {
+        node2.comment = game2.marker.comment;
+        break;
+      }
+      node2 = next;
+    }
+  }
+  return {
+    headers,
+    root: game2.root,
+    result: (game2.marker && game2.marker.result) ?? void 0
+  };
+}
+function peg$subclass(child, parent) {
+  function C() {
+    this.constructor = child;
+  }
+  C.prototype = parent.prototype;
+  child.prototype = new C();
+}
+function peg$SyntaxError(message, expected, found, location2) {
+  var self = Error.call(this, message);
+  if (Object.setPrototypeOf) {
+    Object.setPrototypeOf(self, peg$SyntaxError.prototype);
+  }
+  self.expected = expected;
+  self.found = found;
+  self.location = location2;
+  self.name = "SyntaxError";
+  return self;
+}
+peg$subclass(peg$SyntaxError, Error);
+function peg$padEnd(str, targetLength, padString) {
+  padString = padString || " ";
+  if (str.length > targetLength) {
+    return str;
+  }
+  targetLength -= str.length;
+  padString += padString.repeat(targetLength);
+  return str + padString.slice(0, targetLength);
+}
+peg$SyntaxError.prototype.format = function(sources) {
+  var str = "Error: " + this.message;
+  if (this.location) {
+    var src = null;
+    var k;
+    for (k = 0; k < sources.length; k++) {
+      if (sources[k].source === this.location.source) {
+        src = sources[k].text.split(/\r\n|\n|\r/g);
+        break;
+      }
+    }
+    var s = this.location.start;
+    var offset_s = this.location.source && typeof this.location.source.offset === "function" ? this.location.source.offset(s) : s;
+    var loc = this.location.source + ":" + offset_s.line + ":" + offset_s.column;
+    if (src) {
+      var e = this.location.end;
+      var filler = peg$padEnd("", offset_s.line.toString().length, " ");
+      var line = src[s.line - 1];
+      var last = s.line === e.line ? e.column : line.length + 1;
+      var hatLen = last - s.column || 1;
+      str += "\n --> " + loc + "\n" + filler + " |\n" + offset_s.line + " | " + line + "\n" + filler + " | " + peg$padEnd("", s.column - 1, " ") + peg$padEnd("", hatLen, "^");
+    } else {
+      str += "\n at " + loc;
+    }
+  }
+  return str;
+};
+peg$SyntaxError.buildMessage = function(expected, found) {
+  var DESCRIBE_EXPECTATION_FNS = {
+    literal: function(expectation) {
+      return '"' + literalEscape(expectation.text) + '"';
+    },
+    class: function(expectation) {
+      var escapedParts = expectation.parts.map(function(part) {
+        return Array.isArray(part) ? classEscape(part[0]) + "-" + classEscape(part[1]) : classEscape(part);
+      });
+      return "[" + (expectation.inverted ? "^" : "") + escapedParts.join("") + "]";
+    },
+    any: function() {
+      return "any character";
+    },
+    end: function() {
+      return "end of input";
+    },
+    other: function(expectation) {
+      return expectation.description;
+    }
+  };
+  function hex2(ch) {
+    return ch.charCodeAt(0).toString(16).toUpperCase();
+  }
+  function literalEscape(s) {
+    return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\0/g, "\\0").replace(/\t/g, "\\t").replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/[\x00-\x0F]/g, function(ch) {
+      return "\\x0" + hex2(ch);
+    }).replace(/[\x10-\x1F\x7F-\x9F]/g, function(ch) {
+      return "\\x" + hex2(ch);
+    });
+  }
+  function classEscape(s) {
+    return s.replace(/\\/g, "\\\\").replace(/\]/g, "\\]").replace(/\^/g, "\\^").replace(/-/g, "\\-").replace(/\0/g, "\\0").replace(/\t/g, "\\t").replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/[\x00-\x0F]/g, function(ch) {
+      return "\\x0" + hex2(ch);
+    }).replace(/[\x10-\x1F\x7F-\x9F]/g, function(ch) {
+      return "\\x" + hex2(ch);
+    });
+  }
+  function describeExpectation(expectation) {
+    return DESCRIBE_EXPECTATION_FNS[expectation.type](expectation);
+  }
+  function describeExpected(expected2) {
+    var descriptions = expected2.map(describeExpectation);
+    var i, j;
+    descriptions.sort();
+    if (descriptions.length > 0) {
+      for (i = 1, j = 1; i < descriptions.length; i++) {
+        if (descriptions[i - 1] !== descriptions[i]) {
+          descriptions[j] = descriptions[i];
+          j++;
+        }
+      }
+      descriptions.length = j;
+    }
+    switch (descriptions.length) {
+      case 1:
+        return descriptions[0];
+      case 2:
+        return descriptions[0] + " or " + descriptions[1];
+      default:
+        return descriptions.slice(0, -1).join(", ") + ", or " + descriptions[descriptions.length - 1];
+    }
+  }
+  function describeFound(found2) {
+    return found2 ? '"' + literalEscape(found2) + '"' : "end of input";
+  }
+  return "Expected " + describeExpected(expected) + " but " + describeFound(found) + " found.";
+};
+function peg$parse(input, options) {
+  options = options !== void 0 ? options : {};
+  var peg$FAILED = {};
+  var peg$source = options.grammarSource;
+  var peg$startRuleFunctions = { pgn: peg$parsepgn };
+  var peg$startRuleFunction = peg$parsepgn;
+  var peg$c0 = "[";
+  var peg$c1 = '"';
+  var peg$c2 = "]";
+  var peg$c3 = ".";
+  var peg$c4 = "O-O-O";
+  var peg$c5 = "O-O";
+  var peg$c6 = "0-0-0";
+  var peg$c7 = "0-0";
+  var peg$c8 = "$";
+  var peg$c9 = "{";
+  var peg$c10 = "}";
+  var peg$c11 = ";";
+  var peg$c12 = "(";
+  var peg$c13 = ")";
+  var peg$c14 = "1-0";
+  var peg$c15 = "0-1";
+  var peg$c16 = "1/2-1/2";
+  var peg$c17 = "*";
+  var peg$r0 = /^[a-zA-Z]/;
+  var peg$r1 = /^[^"]/;
+  var peg$r2 = /^[0-9]/;
+  var peg$r3 = /^[.]/;
+  var peg$r4 = /^[a-zA-Z1-8\-=]/;
+  var peg$r5 = /^[+#]/;
+  var peg$r6 = /^[!?]/;
+  var peg$r7 = /^[^}]/;
+  var peg$r8 = /^[^\r\n]/;
+  var peg$r9 = /^[ \t\r\n]/;
+  var peg$e0 = peg$otherExpectation("tag pair");
+  var peg$e1 = peg$literalExpectation("[", false);
+  var peg$e2 = peg$literalExpectation('"', false);
+  var peg$e3 = peg$literalExpectation("]", false);
+  var peg$e4 = peg$otherExpectation("tag name");
+  var peg$e5 = peg$classExpectation([["a", "z"], ["A", "Z"]], false, false);
+  var peg$e6 = peg$otherExpectation("tag value");
+  var peg$e7 = peg$classExpectation(['"'], true, false);
+  var peg$e8 = peg$otherExpectation("move number");
+  var peg$e9 = peg$classExpectation([["0", "9"]], false, false);
+  var peg$e10 = peg$literalExpectation(".", false);
+  var peg$e11 = peg$classExpectation(["."], false, false);
+  var peg$e12 = peg$otherExpectation("standard algebraic notation");
+  var peg$e13 = peg$literalExpectation("O-O-O", false);
+  var peg$e14 = peg$literalExpectation("O-O", false);
+  var peg$e15 = peg$literalExpectation("0-0-0", false);
+  var peg$e16 = peg$literalExpectation("0-0", false);
+  var peg$e17 = peg$classExpectation([["a", "z"], ["A", "Z"], ["1", "8"], "-", "="], false, false);
+  var peg$e18 = peg$classExpectation(["+", "#"], false, false);
+  var peg$e19 = peg$otherExpectation("suffix annotation");
+  var peg$e20 = peg$classExpectation(["!", "?"], false, false);
+  var peg$e21 = peg$otherExpectation("NAG");
+  var peg$e22 = peg$literalExpectation("$", false);
+  var peg$e23 = peg$otherExpectation("brace comment");
+  var peg$e24 = peg$literalExpectation("{", false);
+  var peg$e25 = peg$classExpectation(["}"], true, false);
+  var peg$e26 = peg$literalExpectation("}", false);
+  var peg$e27 = peg$otherExpectation("rest of line comment");
+  var peg$e28 = peg$literalExpectation(";", false);
+  var peg$e29 = peg$classExpectation(["\r", "\n"], true, false);
+  var peg$e30 = peg$otherExpectation("variation");
+  var peg$e31 = peg$literalExpectation("(", false);
+  var peg$e32 = peg$literalExpectation(")", false);
+  var peg$e33 = peg$otherExpectation("game termination marker");
+  var peg$e34 = peg$literalExpectation("1-0", false);
+  var peg$e35 = peg$literalExpectation("0-1", false);
+  var peg$e36 = peg$literalExpectation("1/2-1/2", false);
+  var peg$e37 = peg$literalExpectation("*", false);
+  var peg$e38 = peg$otherExpectation("whitespace");
+  var peg$e39 = peg$classExpectation([" ", "	", "\r", "\n"], false, false);
+  var peg$f0 = function(headers, game2) {
+    return pgn(headers, game2);
+  };
+  var peg$f1 = function(tagPairs) {
+    return Object.fromEntries(tagPairs);
+  };
+  var peg$f2 = function(tagName, tagValue) {
+    return [tagName, tagValue];
+  };
+  var peg$f3 = function(root, marker) {
+    return { root, marker };
+  };
+  var peg$f4 = function(comment, moves) {
+    return lineToTree(rootNode(comment), ...moves.flat());
+  };
+  var peg$f5 = function(san2, suffix, nag, comment, variations) {
+    return node(san2, suffix, nag, comment, variations);
+  };
+  var peg$f6 = function(nag) {
+    return nag;
+  };
+  var peg$f7 = function(comment) {
+    return comment.replace(/[\r\n]+/g, " ");
+  };
+  var peg$f8 = function(comment) {
+    return comment.trim();
+  };
+  var peg$f9 = function(line) {
+    return line;
+  };
+  var peg$f10 = function(result, comment) {
+    return { result, comment };
+  };
+  var peg$currPos = options.peg$currPos | 0;
+  var peg$posDetailsCache = [{ line: 1, column: 1 }];
+  var peg$maxFailPos = peg$currPos;
+  var peg$maxFailExpected = options.peg$maxFailExpected || [];
+  var peg$silentFails = options.peg$silentFails | 0;
+  var peg$result;
+  if (options.startRule) {
+    if (!(options.startRule in peg$startRuleFunctions)) {
+      throw new Error(`Can't start parsing from rule "` + options.startRule + '".');
+    }
+    peg$startRuleFunction = peg$startRuleFunctions[options.startRule];
+  }
+  function peg$literalExpectation(text, ignoreCase) {
+    return { type: "literal", text, ignoreCase };
+  }
+  function peg$classExpectation(parts, inverted, ignoreCase) {
+    return { type: "class", parts, inverted, ignoreCase };
+  }
+  function peg$endExpectation() {
+    return { type: "end" };
+  }
+  function peg$otherExpectation(description) {
+    return { type: "other", description };
+  }
+  function peg$computePosDetails(pos) {
+    var details = peg$posDetailsCache[pos];
+    var p;
+    if (details) {
+      return details;
+    } else {
+      if (pos >= peg$posDetailsCache.length) {
+        p = peg$posDetailsCache.length - 1;
+      } else {
+        p = pos;
+        while (!peg$posDetailsCache[--p]) {
+        }
+      }
+      details = peg$posDetailsCache[p];
+      details = {
+        line: details.line,
+        column: details.column
+      };
+      while (p < pos) {
+        if (input.charCodeAt(p) === 10) {
+          details.line++;
+          details.column = 1;
+        } else {
+          details.column++;
+        }
+        p++;
+      }
+      peg$posDetailsCache[pos] = details;
+      return details;
+    }
+  }
+  function peg$computeLocation(startPos, endPos, offset) {
+    var startPosDetails = peg$computePosDetails(startPos);
+    var endPosDetails = peg$computePosDetails(endPos);
+    var res = {
+      source: peg$source,
+      start: {
+        offset: startPos,
+        line: startPosDetails.line,
+        column: startPosDetails.column
+      },
+      end: {
+        offset: endPos,
+        line: endPosDetails.line,
+        column: endPosDetails.column
+      }
+    };
+    return res;
+  }
+  function peg$fail(expected) {
+    if (peg$currPos < peg$maxFailPos) {
+      return;
+    }
+    if (peg$currPos > peg$maxFailPos) {
+      peg$maxFailPos = peg$currPos;
+      peg$maxFailExpected = [];
+    }
+    peg$maxFailExpected.push(expected);
+  }
+  function peg$buildStructuredError(expected, found, location2) {
+    return new peg$SyntaxError(
+      peg$SyntaxError.buildMessage(expected, found),
+      expected,
+      found,
+      location2
+    );
+  }
+  function peg$parsepgn() {
+    var s0, s1, s2;
+    s0 = peg$currPos;
+    s1 = peg$parsetagPairSection();
+    s2 = peg$parsemoveTextSection();
+    s0 = peg$f0(s1, s2);
+    return s0;
+  }
+  function peg$parsetagPairSection() {
+    var s0, s1, s2;
+    s0 = peg$currPos;
+    s1 = [];
+    s2 = peg$parsetagPair();
+    while (s2 !== peg$FAILED) {
+      s1.push(s2);
+      s2 = peg$parsetagPair();
+    }
+    s2 = peg$parse_();
+    s0 = peg$f1(s1);
+    return s0;
+  }
+  function peg$parsetagPair() {
+    var s0, s2, s4, s6, s7, s8, s10;
+    peg$silentFails++;
+    s0 = peg$currPos;
+    peg$parse_();
+    if (input.charCodeAt(peg$currPos) === 91) {
+      s2 = peg$c0;
+      peg$currPos++;
+    } else {
+      s2 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e1);
+      }
+    }
+    if (s2 !== peg$FAILED) {
+      peg$parse_();
+      s4 = peg$parsetagName();
+      if (s4 !== peg$FAILED) {
+        peg$parse_();
+        if (input.charCodeAt(peg$currPos) === 34) {
+          s6 = peg$c1;
+          peg$currPos++;
+        } else {
+          s6 = peg$FAILED;
+          if (peg$silentFails === 0) {
+            peg$fail(peg$e2);
+          }
+        }
+        if (s6 !== peg$FAILED) {
+          s7 = peg$parsetagValue();
+          if (input.charCodeAt(peg$currPos) === 34) {
+            s8 = peg$c1;
+            peg$currPos++;
+          } else {
+            s8 = peg$FAILED;
+            if (peg$silentFails === 0) {
+              peg$fail(peg$e2);
+            }
+          }
+          if (s8 !== peg$FAILED) {
+            peg$parse_();
+            if (input.charCodeAt(peg$currPos) === 93) {
+              s10 = peg$c2;
+              peg$currPos++;
+            } else {
+              s10 = peg$FAILED;
+              if (peg$silentFails === 0) {
+                peg$fail(peg$e3);
+              }
+            }
+            if (s10 !== peg$FAILED) {
+              s0 = peg$f2(s4, s7);
+            } else {
+              peg$currPos = s0;
+              s0 = peg$FAILED;
+            }
+          } else {
+            peg$currPos = s0;
+            s0 = peg$FAILED;
+          }
+        } else {
+          peg$currPos = s0;
+          s0 = peg$FAILED;
+        }
+      } else {
+        peg$currPos = s0;
+        s0 = peg$FAILED;
+      }
+    } else {
+      peg$currPos = s0;
+      s0 = peg$FAILED;
+    }
+    peg$silentFails--;
+    if (s0 === peg$FAILED) {
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e0);
+      }
+    }
+    return s0;
+  }
+  function peg$parsetagName() {
+    var s0, s1, s2;
+    peg$silentFails++;
+    s0 = peg$currPos;
+    s1 = [];
+    s2 = input.charAt(peg$currPos);
+    if (peg$r0.test(s2)) {
+      peg$currPos++;
+    } else {
+      s2 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e5);
+      }
+    }
+    if (s2 !== peg$FAILED) {
+      while (s2 !== peg$FAILED) {
+        s1.push(s2);
+        s2 = input.charAt(peg$currPos);
+        if (peg$r0.test(s2)) {
+          peg$currPos++;
+        } else {
+          s2 = peg$FAILED;
+          if (peg$silentFails === 0) {
+            peg$fail(peg$e5);
+          }
+        }
+      }
+    } else {
+      s1 = peg$FAILED;
+    }
+    if (s1 !== peg$FAILED) {
+      s0 = input.substring(s0, peg$currPos);
+    } else {
+      s0 = s1;
+    }
+    peg$silentFails--;
+    if (s0 === peg$FAILED) {
+      s1 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e4);
+      }
+    }
+    return s0;
+  }
+  function peg$parsetagValue() {
+    var s0, s1, s2;
+    peg$silentFails++;
+    s0 = peg$currPos;
+    s1 = [];
+    s2 = input.charAt(peg$currPos);
+    if (peg$r1.test(s2)) {
+      peg$currPos++;
+    } else {
+      s2 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e7);
+      }
+    }
+    while (s2 !== peg$FAILED) {
+      s1.push(s2);
+      s2 = input.charAt(peg$currPos);
+      if (peg$r1.test(s2)) {
+        peg$currPos++;
+      } else {
+        s2 = peg$FAILED;
+        if (peg$silentFails === 0) {
+          peg$fail(peg$e7);
+        }
+      }
+    }
+    s0 = input.substring(s0, peg$currPos);
+    peg$silentFails--;
+    s1 = peg$FAILED;
+    if (peg$silentFails === 0) {
+      peg$fail(peg$e6);
+    }
+    return s0;
+  }
+  function peg$parsemoveTextSection() {
+    var s0, s1, s3;
+    s0 = peg$currPos;
+    s1 = peg$parseline();
+    peg$parse_();
+    s3 = peg$parsegameTerminationMarker();
+    if (s3 === peg$FAILED) {
+      s3 = null;
+    }
+    peg$parse_();
+    s0 = peg$f3(s1, s3);
+    return s0;
+  }
+  function peg$parseline() {
+    var s0, s1, s2, s3;
+    s0 = peg$currPos;
+    s1 = peg$parsecomment();
+    if (s1 === peg$FAILED) {
+      s1 = null;
+    }
+    s2 = [];
+    s3 = peg$parsemove();
+    while (s3 !== peg$FAILED) {
+      s2.push(s3);
+      s3 = peg$parsemove();
+    }
+    s0 = peg$f4(s1, s2);
+    return s0;
+  }
+  function peg$parsemove() {
+    var s0, s4, s5, s6, s7, s8, s9, s10;
+    s0 = peg$currPos;
+    peg$parse_();
+    peg$parsemoveNumber();
+    peg$parse_();
+    s4 = peg$parsesan();
+    if (s4 !== peg$FAILED) {
+      s5 = peg$parsesuffixAnnotation();
+      if (s5 === peg$FAILED) {
+        s5 = null;
+      }
+      s6 = [];
+      s7 = peg$parsenag();
+      while (s7 !== peg$FAILED) {
+        s6.push(s7);
+        s7 = peg$parsenag();
+      }
+      s7 = peg$parse_();
+      s8 = peg$parsecomment();
+      if (s8 === peg$FAILED) {
+        s8 = null;
+      }
+      s9 = [];
+      s10 = peg$parsevariation();
+      while (s10 !== peg$FAILED) {
+        s9.push(s10);
+        s10 = peg$parsevariation();
+      }
+      s0 = peg$f5(s4, s5, s6, s8, s9);
+    } else {
+      peg$currPos = s0;
+      s0 = peg$FAILED;
+    }
+    return s0;
+  }
+  function peg$parsemoveNumber() {
+    var s0, s1, s2, s3, s4, s5;
+    peg$silentFails++;
+    s0 = peg$currPos;
+    s1 = [];
+    s2 = input.charAt(peg$currPos);
+    if (peg$r2.test(s2)) {
+      peg$currPos++;
+    } else {
+      s2 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e9);
+      }
+    }
+    while (s2 !== peg$FAILED) {
+      s1.push(s2);
+      s2 = input.charAt(peg$currPos);
+      if (peg$r2.test(s2)) {
+        peg$currPos++;
+      } else {
+        s2 = peg$FAILED;
+        if (peg$silentFails === 0) {
+          peg$fail(peg$e9);
+        }
+      }
+    }
+    if (input.charCodeAt(peg$currPos) === 46) {
+      s2 = peg$c3;
+      peg$currPos++;
+    } else {
+      s2 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e10);
+      }
+    }
+    if (s2 !== peg$FAILED) {
+      s3 = peg$parse_();
+      s4 = [];
+      s5 = input.charAt(peg$currPos);
+      if (peg$r3.test(s5)) {
+        peg$currPos++;
+      } else {
+        s5 = peg$FAILED;
+        if (peg$silentFails === 0) {
+          peg$fail(peg$e11);
+        }
+      }
+      while (s5 !== peg$FAILED) {
+        s4.push(s5);
+        s5 = input.charAt(peg$currPos);
+        if (peg$r3.test(s5)) {
+          peg$currPos++;
+        } else {
+          s5 = peg$FAILED;
+          if (peg$silentFails === 0) {
+            peg$fail(peg$e11);
+          }
+        }
+      }
+      s1 = [s1, s2, s3, s4];
+      s0 = s1;
+    } else {
+      peg$currPos = s0;
+      s0 = peg$FAILED;
+    }
+    peg$silentFails--;
+    if (s0 === peg$FAILED) {
+      s1 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e8);
+      }
+    }
+    return s0;
+  }
+  function peg$parsesan() {
+    var s0, s1, s2, s3, s4, s5;
+    peg$silentFails++;
+    s0 = peg$currPos;
+    s1 = peg$currPos;
+    if (input.substr(peg$currPos, 5) === peg$c4) {
+      s2 = peg$c4;
+      peg$currPos += 5;
+    } else {
+      s2 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e13);
+      }
+    }
+    if (s2 === peg$FAILED) {
+      if (input.substr(peg$currPos, 3) === peg$c5) {
+        s2 = peg$c5;
+        peg$currPos += 3;
+      } else {
+        s2 = peg$FAILED;
+        if (peg$silentFails === 0) {
+          peg$fail(peg$e14);
+        }
+      }
+      if (s2 === peg$FAILED) {
+        if (input.substr(peg$currPos, 5) === peg$c6) {
+          s2 = peg$c6;
+          peg$currPos += 5;
+        } else {
+          s2 = peg$FAILED;
+          if (peg$silentFails === 0) {
+            peg$fail(peg$e15);
+          }
+        }
+        if (s2 === peg$FAILED) {
+          if (input.substr(peg$currPos, 3) === peg$c7) {
+            s2 = peg$c7;
+            peg$currPos += 3;
+          } else {
+            s2 = peg$FAILED;
+            if (peg$silentFails === 0) {
+              peg$fail(peg$e16);
+            }
+          }
+          if (s2 === peg$FAILED) {
+            s2 = peg$currPos;
+            s3 = input.charAt(peg$currPos);
+            if (peg$r0.test(s3)) {
+              peg$currPos++;
+            } else {
+              s3 = peg$FAILED;
+              if (peg$silentFails === 0) {
+                peg$fail(peg$e5);
+              }
+            }
+            if (s3 !== peg$FAILED) {
+              s4 = [];
+              s5 = input.charAt(peg$currPos);
+              if (peg$r4.test(s5)) {
+                peg$currPos++;
+              } else {
+                s5 = peg$FAILED;
+                if (peg$silentFails === 0) {
+                  peg$fail(peg$e17);
+                }
+              }
+              if (s5 !== peg$FAILED) {
+                while (s5 !== peg$FAILED) {
+                  s4.push(s5);
+                  s5 = input.charAt(peg$currPos);
+                  if (peg$r4.test(s5)) {
+                    peg$currPos++;
+                  } else {
+                    s5 = peg$FAILED;
+                    if (peg$silentFails === 0) {
+                      peg$fail(peg$e17);
+                    }
+                  }
+                }
+              } else {
+                s4 = peg$FAILED;
+              }
+              if (s4 !== peg$FAILED) {
+                s3 = [s3, s4];
+                s2 = s3;
+              } else {
+                peg$currPos = s2;
+                s2 = peg$FAILED;
+              }
+            } else {
+              peg$currPos = s2;
+              s2 = peg$FAILED;
+            }
+          }
+        }
+      }
+    }
+    if (s2 !== peg$FAILED) {
+      s3 = input.charAt(peg$currPos);
+      if (peg$r5.test(s3)) {
+        peg$currPos++;
+      } else {
+        s3 = peg$FAILED;
+        if (peg$silentFails === 0) {
+          peg$fail(peg$e18);
+        }
+      }
+      if (s3 === peg$FAILED) {
+        s3 = null;
+      }
+      s2 = [s2, s3];
+      s1 = s2;
+    } else {
+      peg$currPos = s1;
+      s1 = peg$FAILED;
+    }
+    if (s1 !== peg$FAILED) {
+      s0 = input.substring(s0, peg$currPos);
+    } else {
+      s0 = s1;
+    }
+    peg$silentFails--;
+    if (s0 === peg$FAILED) {
+      s1 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e12);
+      }
+    }
+    return s0;
+  }
+  function peg$parsesuffixAnnotation() {
+    var s0, s1, s2;
+    peg$silentFails++;
+    s0 = peg$currPos;
+    s1 = [];
+    s2 = input.charAt(peg$currPos);
+    if (peg$r6.test(s2)) {
+      peg$currPos++;
+    } else {
+      s2 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e20);
+      }
+    }
+    while (s2 !== peg$FAILED) {
+      s1.push(s2);
+      if (s1.length >= 2) {
+        s2 = peg$FAILED;
+      } else {
+        s2 = input.charAt(peg$currPos);
+        if (peg$r6.test(s2)) {
+          peg$currPos++;
+        } else {
+          s2 = peg$FAILED;
+          if (peg$silentFails === 0) {
+            peg$fail(peg$e20);
+          }
+        }
+      }
+    }
+    if (s1.length < 1) {
+      peg$currPos = s0;
+      s0 = peg$FAILED;
+    } else {
+      s0 = s1;
+    }
+    peg$silentFails--;
+    if (s0 === peg$FAILED) {
+      s1 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e19);
+      }
+    }
+    return s0;
+  }
+  function peg$parsenag() {
+    var s0, s2, s3, s4, s5;
+    peg$silentFails++;
+    s0 = peg$currPos;
+    peg$parse_();
+    if (input.charCodeAt(peg$currPos) === 36) {
+      s2 = peg$c8;
+      peg$currPos++;
+    } else {
+      s2 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e22);
+      }
+    }
+    if (s2 !== peg$FAILED) {
+      s3 = peg$currPos;
+      s4 = [];
+      s5 = input.charAt(peg$currPos);
+      if (peg$r2.test(s5)) {
+        peg$currPos++;
+      } else {
+        s5 = peg$FAILED;
+        if (peg$silentFails === 0) {
+          peg$fail(peg$e9);
+        }
+      }
+      if (s5 !== peg$FAILED) {
+        while (s5 !== peg$FAILED) {
+          s4.push(s5);
+          s5 = input.charAt(peg$currPos);
+          if (peg$r2.test(s5)) {
+            peg$currPos++;
+          } else {
+            s5 = peg$FAILED;
+            if (peg$silentFails === 0) {
+              peg$fail(peg$e9);
+            }
+          }
+        }
+      } else {
+        s4 = peg$FAILED;
+      }
+      if (s4 !== peg$FAILED) {
+        s3 = input.substring(s3, peg$currPos);
+      } else {
+        s3 = s4;
+      }
+      if (s3 !== peg$FAILED) {
+        s0 = peg$f6(s3);
+      } else {
+        peg$currPos = s0;
+        s0 = peg$FAILED;
+      }
+    } else {
+      peg$currPos = s0;
+      s0 = peg$FAILED;
+    }
+    peg$silentFails--;
+    if (s0 === peg$FAILED) {
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e21);
+      }
+    }
+    return s0;
+  }
+  function peg$parsecomment() {
+    var s0;
+    s0 = peg$parsebraceComment();
+    if (s0 === peg$FAILED) {
+      s0 = peg$parserestOfLineComment();
+    }
+    return s0;
+  }
+  function peg$parsebraceComment() {
+    var s0, s1, s2, s3, s4;
+    peg$silentFails++;
+    s0 = peg$currPos;
+    if (input.charCodeAt(peg$currPos) === 123) {
+      s1 = peg$c9;
+      peg$currPos++;
+    } else {
+      s1 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e24);
+      }
+    }
+    if (s1 !== peg$FAILED) {
+      s2 = peg$currPos;
+      s3 = [];
+      s4 = input.charAt(peg$currPos);
+      if (peg$r7.test(s4)) {
+        peg$currPos++;
+      } else {
+        s4 = peg$FAILED;
+        if (peg$silentFails === 0) {
+          peg$fail(peg$e25);
+        }
+      }
+      while (s4 !== peg$FAILED) {
+        s3.push(s4);
+        s4 = input.charAt(peg$currPos);
+        if (peg$r7.test(s4)) {
+          peg$currPos++;
+        } else {
+          s4 = peg$FAILED;
+          if (peg$silentFails === 0) {
+            peg$fail(peg$e25);
+          }
+        }
+      }
+      s2 = input.substring(s2, peg$currPos);
+      if (input.charCodeAt(peg$currPos) === 125) {
+        s3 = peg$c10;
+        peg$currPos++;
+      } else {
+        s3 = peg$FAILED;
+        if (peg$silentFails === 0) {
+          peg$fail(peg$e26);
+        }
+      }
+      if (s3 !== peg$FAILED) {
+        s0 = peg$f7(s2);
+      } else {
+        peg$currPos = s0;
+        s0 = peg$FAILED;
+      }
+    } else {
+      peg$currPos = s0;
+      s0 = peg$FAILED;
+    }
+    peg$silentFails--;
+    if (s0 === peg$FAILED) {
+      s1 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e23);
+      }
+    }
+    return s0;
+  }
+  function peg$parserestOfLineComment() {
+    var s0, s1, s2, s3, s4;
+    peg$silentFails++;
+    s0 = peg$currPos;
+    if (input.charCodeAt(peg$currPos) === 59) {
+      s1 = peg$c11;
+      peg$currPos++;
+    } else {
+      s1 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e28);
+      }
+    }
+    if (s1 !== peg$FAILED) {
+      s2 = peg$currPos;
+      s3 = [];
+      s4 = input.charAt(peg$currPos);
+      if (peg$r8.test(s4)) {
+        peg$currPos++;
+      } else {
+        s4 = peg$FAILED;
+        if (peg$silentFails === 0) {
+          peg$fail(peg$e29);
+        }
+      }
+      while (s4 !== peg$FAILED) {
+        s3.push(s4);
+        s4 = input.charAt(peg$currPos);
+        if (peg$r8.test(s4)) {
+          peg$currPos++;
+        } else {
+          s4 = peg$FAILED;
+          if (peg$silentFails === 0) {
+            peg$fail(peg$e29);
+          }
+        }
+      }
+      s2 = input.substring(s2, peg$currPos);
+      s0 = peg$f8(s2);
+    } else {
+      peg$currPos = s0;
+      s0 = peg$FAILED;
+    }
+    peg$silentFails--;
+    if (s0 === peg$FAILED) {
+      s1 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e27);
+      }
+    }
+    return s0;
+  }
+  function peg$parsevariation() {
+    var s0, s2, s3, s5;
+    peg$silentFails++;
+    s0 = peg$currPos;
+    peg$parse_();
+    if (input.charCodeAt(peg$currPos) === 40) {
+      s2 = peg$c12;
+      peg$currPos++;
+    } else {
+      s2 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e31);
+      }
+    }
+    if (s2 !== peg$FAILED) {
+      s3 = peg$parseline();
+      if (s3 !== peg$FAILED) {
+        peg$parse_();
+        if (input.charCodeAt(peg$currPos) === 41) {
+          s5 = peg$c13;
+          peg$currPos++;
+        } else {
+          s5 = peg$FAILED;
+          if (peg$silentFails === 0) {
+            peg$fail(peg$e32);
+          }
+        }
+        if (s5 !== peg$FAILED) {
+          s0 = peg$f9(s3);
+        } else {
+          peg$currPos = s0;
+          s0 = peg$FAILED;
+        }
+      } else {
+        peg$currPos = s0;
+        s0 = peg$FAILED;
+      }
+    } else {
+      peg$currPos = s0;
+      s0 = peg$FAILED;
+    }
+    peg$silentFails--;
+    if (s0 === peg$FAILED) {
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e30);
+      }
+    }
+    return s0;
+  }
+  function peg$parsegameTerminationMarker() {
+    var s0, s1, s3;
+    peg$silentFails++;
+    s0 = peg$currPos;
+    if (input.substr(peg$currPos, 3) === peg$c14) {
+      s1 = peg$c14;
+      peg$currPos += 3;
+    } else {
+      s1 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e34);
+      }
+    }
+    if (s1 === peg$FAILED) {
+      if (input.substr(peg$currPos, 3) === peg$c15) {
+        s1 = peg$c15;
+        peg$currPos += 3;
+      } else {
+        s1 = peg$FAILED;
+        if (peg$silentFails === 0) {
+          peg$fail(peg$e35);
+        }
+      }
+      if (s1 === peg$FAILED) {
+        if (input.substr(peg$currPos, 7) === peg$c16) {
+          s1 = peg$c16;
+          peg$currPos += 7;
+        } else {
+          s1 = peg$FAILED;
+          if (peg$silentFails === 0) {
+            peg$fail(peg$e36);
+          }
+        }
+        if (s1 === peg$FAILED) {
+          if (input.charCodeAt(peg$currPos) === 42) {
+            s1 = peg$c17;
+            peg$currPos++;
+          } else {
+            s1 = peg$FAILED;
+            if (peg$silentFails === 0) {
+              peg$fail(peg$e37);
+            }
+          }
+        }
+      }
+    }
+    if (s1 !== peg$FAILED) {
+      peg$parse_();
+      s3 = peg$parsecomment();
+      if (s3 === peg$FAILED) {
+        s3 = null;
+      }
+      s0 = peg$f10(s1, s3);
+    } else {
+      peg$currPos = s0;
+      s0 = peg$FAILED;
+    }
+    peg$silentFails--;
+    if (s0 === peg$FAILED) {
+      s1 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e33);
+      }
+    }
+    return s0;
+  }
+  function peg$parse_() {
+    var s0, s1;
+    peg$silentFails++;
+    s0 = [];
+    s1 = input.charAt(peg$currPos);
+    if (peg$r9.test(s1)) {
+      peg$currPos++;
+    } else {
+      s1 = peg$FAILED;
+      if (peg$silentFails === 0) {
+        peg$fail(peg$e39);
+      }
+    }
+    while (s1 !== peg$FAILED) {
+      s0.push(s1);
+      s1 = input.charAt(peg$currPos);
+      if (peg$r9.test(s1)) {
+        peg$currPos++;
+      } else {
+        s1 = peg$FAILED;
+        if (peg$silentFails === 0) {
+          peg$fail(peg$e39);
+        }
+      }
+    }
+    peg$silentFails--;
+    s1 = peg$FAILED;
+    if (peg$silentFails === 0) {
+      peg$fail(peg$e38);
+    }
+    return s0;
+  }
+  peg$result = peg$startRuleFunction();
+  if (options.peg$library) {
+    return (
+      /** @type {any} */
+      {
+        peg$result,
+        peg$currPos,
+        peg$FAILED,
+        peg$maxFailExpected,
+        peg$maxFailPos
+      }
+    );
+  }
+  if (peg$result !== peg$FAILED && peg$currPos === input.length) {
+    return peg$result;
+  } else {
+    if (peg$result !== peg$FAILED && peg$currPos < input.length) {
+      peg$fail(peg$endExpectation());
+    }
+    throw peg$buildStructuredError(
+      peg$maxFailExpected,
+      peg$maxFailPos < input.length ? input.charAt(peg$maxFailPos) : null,
+      peg$maxFailPos < input.length ? peg$computeLocation(peg$maxFailPos, peg$maxFailPos + 1) : peg$computeLocation(peg$maxFailPos, peg$maxFailPos)
+    );
+  }
+}
+/**
+ * @license
+ * Copyright (c) 2025, Jeff Hlywa (jhlywa@gmail.com)
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+var MASK64 = 0xffffffffffffffffn;
+function rotl(x, k) {
+  return (x << k | x >> 64n - k) & 0xffffffffffffffffn;
+}
+function wrappingMul(x, y) {
+  return x * y & MASK64;
+}
+function xoroshiro128(state) {
+  return function() {
+    let s0 = BigInt(state & MASK64);
+    let s1 = BigInt(state >> 64n & MASK64);
+    const result = wrappingMul(rotl(wrappingMul(s0, 5n), 7n), 9n);
+    s1 ^= s0;
+    s0 = (rotl(s0, 24n) ^ s1 ^ s1 << 16n) & MASK64;
+    s1 = rotl(s1, 37n);
+    state = s1 << 64n | s0;
+    return result;
+  };
+}
+var rand = xoroshiro128(0xa187eb39cdcaed8f31c4b365b102e01en);
+var PIECE_KEYS = Array.from({ length: 2 }, () => Array.from({ length: 6 }, () => Array.from({ length: 128 }, () => rand())));
+var EP_KEYS = Array.from({ length: 8 }, () => rand());
+var CASTLING_KEYS = Array.from({ length: 16 }, () => rand());
+var SIDE_KEY = rand();
+var WHITE = "w";
+var BLACK = "b";
+var PAWN = "p";
+var KNIGHT = "n";
+var BISHOP = "b";
+var ROOK = "r";
+var QUEEN = "q";
+var KING = "k";
+var DEFAULT_POSITION = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+var Move = class {
+  color;
+  from;
+  to;
+  piece;
+  captured;
+  promotion;
+  /**
+   * @deprecated This field is deprecated and will be removed in version 2.0.0.
+   * Please use move descriptor functions instead: `isCapture`, `isPromotion`,
+   * `isEnPassant`, `isKingsideCastle`, `isQueensideCastle`, `isCastle`, and
+   * `isBigPawn`
+   */
+  flags;
+  san;
+  lan;
+  before;
+  after;
+  constructor(chess, internal) {
+    const { color, piece, from, to, flags, captured, promotion } = internal;
+    const fromAlgebraic = algebraic(from);
+    const toAlgebraic = algebraic(to);
+    this.color = color;
+    this.piece = piece;
+    this.from = fromAlgebraic;
+    this.to = toAlgebraic;
+    this.san = chess["_moveToSan"](internal, chess["_moves"]({ legal: true }));
+    this.lan = fromAlgebraic + toAlgebraic;
+    this.before = chess.fen();
+    chess["_makeMove"](internal);
+    this.after = chess.fen();
+    chess["_undoMove"]();
+    this.flags = "";
+    for (const flag in BITS) {
+      if (BITS[flag] & flags) {
+        this.flags += FLAGS[flag];
+      }
+    }
+    if (captured) {
+      this.captured = captured;
+    }
+    if (promotion) {
+      this.promotion = promotion;
+      this.lan += promotion;
+    }
+  }
+  isCapture() {
+    return this.flags.indexOf(FLAGS["CAPTURE"]) > -1;
+  }
+  isPromotion() {
+    return this.flags.indexOf(FLAGS["PROMOTION"]) > -1;
+  }
+  isEnPassant() {
+    return this.flags.indexOf(FLAGS["EP_CAPTURE"]) > -1;
+  }
+  isKingsideCastle() {
+    return this.flags.indexOf(FLAGS["KSIDE_CASTLE"]) > -1;
+  }
+  isQueensideCastle() {
+    return this.flags.indexOf(FLAGS["QSIDE_CASTLE"]) > -1;
+  }
+  isBigPawn() {
+    return this.flags.indexOf(FLAGS["BIG_PAWN"]) > -1;
+  }
+};
+var EMPTY = -1;
+var FLAGS = {
+  NORMAL: "n",
+  CAPTURE: "c",
+  BIG_PAWN: "b",
+  EP_CAPTURE: "e",
+  PROMOTION: "p",
+  KSIDE_CASTLE: "k",
+  QSIDE_CASTLE: "q",
+  NULL_MOVE: "-"
+};
+var BITS = {
+  NORMAL: 1,
+  CAPTURE: 2,
+  BIG_PAWN: 4,
+  EP_CAPTURE: 8,
+  PROMOTION: 16,
+  KSIDE_CASTLE: 32,
+  QSIDE_CASTLE: 64,
+  NULL_MOVE: 128
+};
+var SEVEN_TAG_ROSTER = {
+  Event: "?",
+  Site: "?",
+  Date: "????.??.??",
+  Round: "?",
+  White: "?",
+  Black: "?",
+  Result: "*"
+};
+var SUPLEMENTAL_TAGS = {
+  WhiteTitle: null,
+  BlackTitle: null,
+  WhiteElo: null,
+  BlackElo: null,
+  WhiteUSCF: null,
+  BlackUSCF: null,
+  WhiteNA: null,
+  BlackNA: null,
+  WhiteType: null,
+  BlackType: null,
+  EventDate: null,
+  EventSponsor: null,
+  Section: null,
+  Stage: null,
+  Board: null,
+  Opening: null,
+  Variation: null,
+  SubVariation: null,
+  ECO: null,
+  NIC: null,
+  Time: null,
+  UTCTime: null,
+  UTCDate: null,
+  TimeControl: null,
+  SetUp: null,
+  FEN: null,
+  Termination: null,
+  Annotator: null,
+  Mode: null,
+  PlyCount: null
+};
+var HEADER_TEMPLATE = {
+  ...SEVEN_TAG_ROSTER,
+  ...SUPLEMENTAL_TAGS
+};
+var Ox88 = {
+  a8: 0,
+  b8: 1,
+  c8: 2,
+  d8: 3,
+  e8: 4,
+  f8: 5,
+  g8: 6,
+  h8: 7,
+  a7: 16,
+  b7: 17,
+  c7: 18,
+  d7: 19,
+  e7: 20,
+  f7: 21,
+  g7: 22,
+  h7: 23,
+  a6: 32,
+  b6: 33,
+  c6: 34,
+  d6: 35,
+  e6: 36,
+  f6: 37,
+  g6: 38,
+  h6: 39,
+  a5: 48,
+  b5: 49,
+  c5: 50,
+  d5: 51,
+  e5: 52,
+  f5: 53,
+  g5: 54,
+  h5: 55,
+  a4: 64,
+  b4: 65,
+  c4: 66,
+  d4: 67,
+  e4: 68,
+  f4: 69,
+  g4: 70,
+  h4: 71,
+  a3: 80,
+  b3: 81,
+  c3: 82,
+  d3: 83,
+  e3: 84,
+  f3: 85,
+  g3: 86,
+  h3: 87,
+  a2: 96,
+  b2: 97,
+  c2: 98,
+  d2: 99,
+  e2: 100,
+  f2: 101,
+  g2: 102,
+  h2: 103,
+  a1: 112,
+  b1: 113,
+  c1: 114,
+  d1: 115,
+  e1: 116,
+  f1: 117,
+  g1: 118,
+  h1: 119
+};
+var PAWN_OFFSETS = {
+  b: [16, 32, 17, 15],
+  w: [-16, -32, -17, -15]
+};
+var PIECE_OFFSETS = {
+  n: [-18, -33, -31, -14, 18, 33, 31, 14],
+  b: [-17, -15, 17, 15],
+  r: [-16, 1, 16, -1],
+  q: [-17, -16, -15, 1, 17, 16, 15, -1],
+  k: [-17, -16, -15, 1, 17, 16, 15, -1]
+};
+var ATTACKS = [
+  20,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  24,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  20,
+  0,
+  0,
+  20,
+  0,
+  0,
+  0,
+  0,
+  0,
+  24,
+  0,
+  0,
+  0,
+  0,
+  0,
+  20,
+  0,
+  0,
+  0,
+  0,
+  20,
+  0,
+  0,
+  0,
+  0,
+  24,
+  0,
+  0,
+  0,
+  0,
+  20,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  20,
+  0,
+  0,
+  0,
+  24,
+  0,
+  0,
+  0,
+  20,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  20,
+  0,
+  0,
+  24,
+  0,
+  0,
+  20,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  20,
+  2,
+  24,
+  2,
+  20,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  2,
+  53,
+  56,
+  53,
+  2,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  24,
+  24,
+  24,
+  24,
+  24,
+  24,
+  56,
+  0,
+  56,
+  24,
+  24,
+  24,
+  24,
+  24,
+  24,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  2,
+  53,
+  56,
+  53,
+  2,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  20,
+  2,
+  24,
+  2,
+  20,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  20,
+  0,
+  0,
+  24,
+  0,
+  0,
+  20,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  20,
+  0,
+  0,
+  0,
+  24,
+  0,
+  0,
+  0,
+  20,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  20,
+  0,
+  0,
+  0,
+  0,
+  24,
+  0,
+  0,
+  0,
+  0,
+  20,
+  0,
+  0,
+  0,
+  0,
+  20,
+  0,
+  0,
+  0,
+  0,
+  0,
+  24,
+  0,
+  0,
+  0,
+  0,
+  0,
+  20,
+  0,
+  0,
+  20,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  24,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  20
+];
+var RAYS = [
+  17,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  16,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  15,
+  0,
+  0,
+  17,
+  0,
+  0,
+  0,
+  0,
+  0,
+  16,
+  0,
+  0,
+  0,
+  0,
+  0,
+  15,
+  0,
+  0,
+  0,
+  0,
+  17,
+  0,
+  0,
+  0,
+  0,
+  16,
+  0,
+  0,
+  0,
+  0,
+  15,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  17,
+  0,
+  0,
+  0,
+  16,
+  0,
+  0,
+  0,
+  15,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  17,
+  0,
+  0,
+  16,
+  0,
+  0,
+  15,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  17,
+  0,
+  16,
+  0,
+  15,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  17,
+  16,
+  15,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  1,
+  1,
+  1,
+  1,
+  1,
+  1,
+  1,
+  0,
+  -1,
+  -1,
+  -1,
+  -1,
+  -1,
+  -1,
+  -1,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  -15,
+  -16,
+  -17,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  -15,
+  0,
+  -16,
+  0,
+  -17,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  -15,
+  0,
+  0,
+  -16,
+  0,
+  0,
+  -17,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  -15,
+  0,
+  0,
+  0,
+  -16,
+  0,
+  0,
+  0,
+  -17,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  -15,
+  0,
+  0,
+  0,
+  0,
+  -16,
+  0,
+  0,
+  0,
+  0,
+  -17,
+  0,
+  0,
+  0,
+  0,
+  -15,
+  0,
+  0,
+  0,
+  0,
+  0,
+  -16,
+  0,
+  0,
+  0,
+  0,
+  0,
+  -17,
+  0,
+  0,
+  -15,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  -16,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  -17
+];
+var PIECE_MASKS = { p: 1, n: 2, b: 4, r: 8, q: 16, k: 32 };
+var SYMBOLS = "pnbrqkPNBRQK";
+var PROMOTIONS = [KNIGHT, BISHOP, ROOK, QUEEN];
+var RANK_1 = 7;
+var RANK_2 = 6;
+var RANK_7 = 1;
+var RANK_8 = 0;
+var SIDES = {
+  [KING]: BITS.KSIDE_CASTLE,
+  [QUEEN]: BITS.QSIDE_CASTLE
+};
+var ROOKS = {
+  w: [
+    { square: Ox88.a1, flag: BITS.QSIDE_CASTLE },
+    { square: Ox88.h1, flag: BITS.KSIDE_CASTLE }
+  ],
+  b: [
+    { square: Ox88.a8, flag: BITS.QSIDE_CASTLE },
+    { square: Ox88.h8, flag: BITS.KSIDE_CASTLE }
+  ]
+};
+var SECOND_RANK = { b: RANK_7, w: RANK_2 };
+var SAN_NULLMOVE = "--";
+function rank(square) {
+  return square >> 4;
+}
+function file(square) {
+  return square & 15;
+}
+function isDigit(c) {
+  return "0123456789".indexOf(c) !== -1;
+}
+function algebraic(square) {
+  const f = file(square);
+  const r = rank(square);
+  return "abcdefgh".substring(f, f + 1) + "87654321".substring(r, r + 1);
+}
+function swapColor(color) {
+  return color === WHITE ? BLACK : WHITE;
+}
+function validateFen(fen) {
+  const tokens = fen.split(/\s+/);
+  if (tokens.length !== 6) {
+    return {
+      ok: false,
+      error: "Invalid FEN: must contain six space-delimited fields"
+    };
+  }
+  const moveNumber = parseInt(tokens[5], 10);
+  if (isNaN(moveNumber) || moveNumber <= 0) {
+    return {
+      ok: false,
+      error: "Invalid FEN: move number must be a positive integer"
+    };
+  }
+  const halfMoves = parseInt(tokens[4], 10);
+  if (isNaN(halfMoves) || halfMoves < 0) {
+    return {
+      ok: false,
+      error: "Invalid FEN: half move counter number must be a non-negative integer"
+    };
+  }
+  if (!/^(-|[abcdefgh][36])$/.test(tokens[3])) {
+    return { ok: false, error: "Invalid FEN: en-passant square is invalid" };
+  }
+  if (/[^kKqQ-]/.test(tokens[2])) {
+    return { ok: false, error: "Invalid FEN: castling availability is invalid" };
+  }
+  if (!/^(w|b)$/.test(tokens[1])) {
+    return { ok: false, error: "Invalid FEN: side-to-move is invalid" };
+  }
+  const rows = tokens[0].split("/");
+  if (rows.length !== 8) {
+    return {
+      ok: false,
+      error: "Invalid FEN: piece data does not contain 8 '/'-delimited rows"
+    };
+  }
+  for (let i = 0; i < rows.length; i++) {
+    let sumFields = 0;
+    let previousWasNumber = false;
+    for (let k = 0; k < rows[i].length; k++) {
+      if (isDigit(rows[i][k])) {
+        if (previousWasNumber) {
+          return {
+            ok: false,
+            error: "Invalid FEN: piece data is invalid (consecutive number)"
+          };
+        }
+        sumFields += parseInt(rows[i][k], 10);
+        previousWasNumber = true;
+      } else {
+        if (!/^[prnbqkPRNBQK]$/.test(rows[i][k])) {
+          return {
+            ok: false,
+            error: "Invalid FEN: piece data is invalid (invalid piece)"
+          };
+        }
+        sumFields += 1;
+        previousWasNumber = false;
+      }
+    }
+    if (sumFields !== 8) {
+      return {
+        ok: false,
+        error: "Invalid FEN: piece data is invalid (too many squares in rank)"
+      };
+    }
+  }
+  if (tokens[3][1] == "3" && tokens[1] == "w" || tokens[3][1] == "6" && tokens[1] == "b") {
+    return { ok: false, error: "Invalid FEN: illegal en-passant square" };
+  }
+  const kings = [
+    { color: "white", regex: /K/g },
+    { color: "black", regex: /k/g }
+  ];
+  for (const { color, regex } of kings) {
+    if (!regex.test(tokens[0])) {
+      return { ok: false, error: `Invalid FEN: missing ${color} king` };
+    }
+    if ((tokens[0].match(regex) || []).length > 1) {
+      return { ok: false, error: `Invalid FEN: too many ${color} kings` };
+    }
+  }
+  if (Array.from(rows[0] + rows[7]).some((char) => char.toUpperCase() === "P")) {
+    return {
+      ok: false,
+      error: "Invalid FEN: some pawns are on the edge rows"
+    };
+  }
+  return { ok: true };
+}
+function getDisambiguator(move, moves) {
+  const from = move.from;
+  const to = move.to;
+  const piece = move.piece;
+  let ambiguities = 0;
+  let sameRank = 0;
+  let sameFile = 0;
+  for (let i = 0, len = moves.length; i < len; i++) {
+    const ambigFrom = moves[i].from;
+    const ambigTo = moves[i].to;
+    const ambigPiece = moves[i].piece;
+    if (piece === ambigPiece && from !== ambigFrom && to === ambigTo) {
+      ambiguities++;
+      if (rank(from) === rank(ambigFrom)) {
+        sameRank++;
+      }
+      if (file(from) === file(ambigFrom)) {
+        sameFile++;
+      }
+    }
+  }
+  if (ambiguities > 0) {
+    if (sameRank > 0 && sameFile > 0) {
+      return algebraic(from);
+    } else if (sameFile > 0) {
+      return algebraic(from).charAt(1);
+    } else {
+      return algebraic(from).charAt(0);
+    }
+  }
+  return "";
+}
+function addMove(moves, color, from, to, piece, captured = void 0, flags = BITS.NORMAL) {
+  const r = rank(to);
+  if (piece === PAWN && (r === RANK_1 || r === RANK_8)) {
+    for (let i = 0; i < PROMOTIONS.length; i++) {
+      const promotion = PROMOTIONS[i];
+      moves.push({
+        color,
+        from,
+        to,
+        piece,
+        captured,
+        promotion,
+        flags: flags | BITS.PROMOTION
+      });
+    }
+  } else {
+    moves.push({
+      color,
+      from,
+      to,
+      piece,
+      captured,
+      flags
+    });
+  }
+}
+function inferPieceType(san2) {
+  let pieceType = san2.charAt(0);
+  if (pieceType >= "a" && pieceType <= "h") {
+    const matches = san2.match(/[a-h]\d.*[a-h]\d/);
+    if (matches) {
+      return void 0;
+    }
+    return PAWN;
+  }
+  pieceType = pieceType.toLowerCase();
+  if (pieceType === "o") {
+    return KING;
+  }
+  return pieceType;
+}
+function strippedSan(move) {
+  return move.replace(/=/, "").replace(/[+#]?[?!]*$/, "");
+}
+var Chess = class {
+  _board = new Array(128);
+  _turn = WHITE;
+  _header = {};
+  _kings = { w: EMPTY, b: EMPTY };
+  _epSquare = -1;
+  _halfMoves = 0;
+  _moveNumber = 0;
+  _history = [];
+  _comments = {};
+  _castling = { w: 0, b: 0 };
+  _hash = 0n;
+  // tracks number of times a position has been seen for repetition checking
+  _positionCount = /* @__PURE__ */ new Map();
+  constructor(fen = DEFAULT_POSITION, { skipValidation = false } = {}) {
+    this.load(fen, { skipValidation });
+  }
+  clear({ preserveHeaders = false } = {}) {
+    this._board = new Array(128);
+    this._kings = { w: EMPTY, b: EMPTY };
+    this._turn = WHITE;
+    this._castling = { w: 0, b: 0 };
+    this._epSquare = EMPTY;
+    this._halfMoves = 0;
+    this._moveNumber = 1;
+    this._history = [];
+    this._comments = {};
+    this._header = preserveHeaders ? this._header : { ...HEADER_TEMPLATE };
+    this._hash = this._computeHash();
+    this._positionCount = /* @__PURE__ */ new Map();
+    this._header["SetUp"] = null;
+    this._header["FEN"] = null;
+  }
+  load(fen, { skipValidation = false, preserveHeaders = false } = {}) {
+    let tokens = fen.split(/\s+/);
+    if (tokens.length >= 2 && tokens.length < 6) {
+      const adjustments = ["-", "-", "0", "1"];
+      fen = tokens.concat(adjustments.slice(-(6 - tokens.length))).join(" ");
+    }
+    tokens = fen.split(/\s+/);
+    if (!skipValidation) {
+      const { ok, error } = validateFen(fen);
+      if (!ok) {
+        throw new Error(error);
+      }
+    }
+    const position = tokens[0];
+    let square = 0;
+    this.clear({ preserveHeaders });
+    for (let i = 0; i < position.length; i++) {
+      const piece = position.charAt(i);
+      if (piece === "/") {
+        square += 8;
+      } else if (isDigit(piece)) {
+        square += parseInt(piece, 10);
+      } else {
+        const color = piece < "a" ? WHITE : BLACK;
+        this._put({ type: piece.toLowerCase(), color }, algebraic(square));
+        square++;
+      }
+    }
+    this._turn = tokens[1];
+    if (tokens[2].indexOf("K") > -1) {
+      this._castling.w |= BITS.KSIDE_CASTLE;
+    }
+    if (tokens[2].indexOf("Q") > -1) {
+      this._castling.w |= BITS.QSIDE_CASTLE;
+    }
+    if (tokens[2].indexOf("k") > -1) {
+      this._castling.b |= BITS.KSIDE_CASTLE;
+    }
+    if (tokens[2].indexOf("q") > -1) {
+      this._castling.b |= BITS.QSIDE_CASTLE;
+    }
+    this._epSquare = tokens[3] === "-" ? EMPTY : Ox88[tokens[3]];
+    this._halfMoves = parseInt(tokens[4], 10);
+    this._moveNumber = parseInt(tokens[5], 10);
+    this._hash = this._computeHash();
+    this._updateSetup(fen);
+    this._incPositionCount();
+  }
+  fen({ forceEnpassantSquare = false } = {}) {
+    let empty = 0;
+    let fen = "";
+    for (let i = Ox88.a8; i <= Ox88.h1; i++) {
+      if (this._board[i]) {
+        if (empty > 0) {
+          fen += empty;
+          empty = 0;
+        }
+        const { color, type: piece } = this._board[i];
+        fen += color === WHITE ? piece.toUpperCase() : piece.toLowerCase();
+      } else {
+        empty++;
+      }
+      if (i + 1 & 136) {
+        if (empty > 0) {
+          fen += empty;
+        }
+        if (i !== Ox88.h1) {
+          fen += "/";
+        }
+        empty = 0;
+        i += 8;
+      }
+    }
+    let castling = "";
+    if (this._castling[WHITE] & BITS.KSIDE_CASTLE) {
+      castling += "K";
+    }
+    if (this._castling[WHITE] & BITS.QSIDE_CASTLE) {
+      castling += "Q";
+    }
+    if (this._castling[BLACK] & BITS.KSIDE_CASTLE) {
+      castling += "k";
+    }
+    if (this._castling[BLACK] & BITS.QSIDE_CASTLE) {
+      castling += "q";
+    }
+    castling = castling || "-";
+    let epSquare = "-";
+    if (this._epSquare !== EMPTY) {
+      if (forceEnpassantSquare) {
+        epSquare = algebraic(this._epSquare);
+      } else {
+        const bigPawnSquare = this._epSquare + (this._turn === WHITE ? 16 : -16);
+        const squares = [bigPawnSquare + 1, bigPawnSquare - 1];
+        for (const square of squares) {
+          if (square & 136) {
+            continue;
+          }
+          const color = this._turn;
+          if (this._board[square]?.color === color && this._board[square]?.type === PAWN) {
+            this._makeMove({
+              color,
+              from: square,
+              to: this._epSquare,
+              piece: PAWN,
+              captured: PAWN,
+              flags: BITS.EP_CAPTURE
+            });
+            const isLegal = !this._isKingAttacked(color);
+            this._undoMove();
+            if (isLegal) {
+              epSquare = algebraic(this._epSquare);
+              break;
+            }
+          }
+        }
+      }
+    }
+    return [
+      fen,
+      this._turn,
+      castling,
+      epSquare,
+      this._halfMoves,
+      this._moveNumber
+    ].join(" ");
+  }
+  _pieceKey(i) {
+    if (!this._board[i]) {
+      return 0n;
+    }
+    const { color, type } = this._board[i];
+    const colorIndex = {
+      w: 0,
+      b: 1
+    }[color];
+    const typeIndex = {
+      p: 0,
+      n: 1,
+      b: 2,
+      r: 3,
+      q: 4,
+      k: 5
+    }[type];
+    return PIECE_KEYS[colorIndex][typeIndex][i];
+  }
+  _epKey() {
+    return this._epSquare === EMPTY ? 0n : EP_KEYS[this._epSquare & 7];
+  }
+  _castlingKey() {
+    const index = this._castling.w >> 5 | this._castling.b >> 3;
+    return CASTLING_KEYS[index];
+  }
+  _computeHash() {
+    let hash = 0n;
+    for (let i = Ox88.a8; i <= Ox88.h1; i++) {
+      if (i & 136) {
+        i += 7;
+        continue;
+      }
+      if (this._board[i]) {
+        hash ^= this._pieceKey(i);
+      }
+    }
+    hash ^= this._epKey();
+    hash ^= this._castlingKey();
+    if (this._turn === "b") {
+      hash ^= SIDE_KEY;
+    }
+    return hash;
+  }
+  /*
+   * Called when the initial board setup is changed with put() or remove().
+   * modifies the SetUp and FEN properties of the header object. If the FEN
+   * is equal to the default position, the SetUp and FEN are deleted the setup
+   * is only updated if history.length is zero, ie moves haven't been made.
+   */
+  _updateSetup(fen) {
+    if (this._history.length > 0)
+      return;
+    if (fen !== DEFAULT_POSITION) {
+      this._header["SetUp"] = "1";
+      this._header["FEN"] = fen;
+    } else {
+      this._header["SetUp"] = null;
+      this._header["FEN"] = null;
+    }
+  }
+  reset() {
+    this.load(DEFAULT_POSITION);
+  }
+  get(square) {
+    return this._board[Ox88[square]];
+  }
+  findPiece(piece) {
+    const squares = [];
+    for (let i = Ox88.a8; i <= Ox88.h1; i++) {
+      if (i & 136) {
+        i += 7;
+        continue;
+      }
+      if (!this._board[i] || this._board[i]?.color !== piece.color) {
+        continue;
+      }
+      if (this._board[i].color === piece.color && this._board[i].type === piece.type) {
+        squares.push(algebraic(i));
+      }
+    }
+    return squares;
+  }
+  put({ type, color }, square) {
+    if (this._put({ type, color }, square)) {
+      this._updateCastlingRights();
+      this._updateEnPassantSquare();
+      this._updateSetup(this.fen());
+      return true;
+    }
+    return false;
+  }
+  _set(sq, piece) {
+    this._hash ^= this._pieceKey(sq);
+    this._board[sq] = piece;
+    this._hash ^= this._pieceKey(sq);
+  }
+  _put({ type, color }, square) {
+    if (SYMBOLS.indexOf(type.toLowerCase()) === -1) {
+      return false;
+    }
+    if (!(square in Ox88)) {
+      return false;
+    }
+    const sq = Ox88[square];
+    if (type == KING && !(this._kings[color] == EMPTY || this._kings[color] == sq)) {
+      return false;
+    }
+    const currentPieceOnSquare = this._board[sq];
+    if (currentPieceOnSquare && currentPieceOnSquare.type === KING) {
+      this._kings[currentPieceOnSquare.color] = EMPTY;
+    }
+    this._set(sq, { type, color });
+    if (type === KING) {
+      this._kings[color] = sq;
+    }
+    return true;
+  }
+  _clear(sq) {
+    this._hash ^= this._pieceKey(sq);
+    delete this._board[sq];
+  }
+  remove(square) {
+    const piece = this.get(square);
+    this._clear(Ox88[square]);
+    if (piece && piece.type === KING) {
+      this._kings[piece.color] = EMPTY;
+    }
+    this._updateCastlingRights();
+    this._updateEnPassantSquare();
+    this._updateSetup(this.fen());
+    return piece;
+  }
+  _updateCastlingRights() {
+    this._hash ^= this._castlingKey();
+    const whiteKingInPlace = this._board[Ox88.e1]?.type === KING && this._board[Ox88.e1]?.color === WHITE;
+    const blackKingInPlace = this._board[Ox88.e8]?.type === KING && this._board[Ox88.e8]?.color === BLACK;
+    if (!whiteKingInPlace || this._board[Ox88.a1]?.type !== ROOK || this._board[Ox88.a1]?.color !== WHITE) {
+      this._castling.w &= -65;
+    }
+    if (!whiteKingInPlace || this._board[Ox88.h1]?.type !== ROOK || this._board[Ox88.h1]?.color !== WHITE) {
+      this._castling.w &= -33;
+    }
+    if (!blackKingInPlace || this._board[Ox88.a8]?.type !== ROOK || this._board[Ox88.a8]?.color !== BLACK) {
+      this._castling.b &= -65;
+    }
+    if (!blackKingInPlace || this._board[Ox88.h8]?.type !== ROOK || this._board[Ox88.h8]?.color !== BLACK) {
+      this._castling.b &= -33;
+    }
+    this._hash ^= this._castlingKey();
+  }
+  _updateEnPassantSquare() {
+    if (this._epSquare === EMPTY) {
+      return;
+    }
+    const startSquare = this._epSquare + (this._turn === WHITE ? -16 : 16);
+    const currentSquare = this._epSquare + (this._turn === WHITE ? 16 : -16);
+    const attackers = [currentSquare + 1, currentSquare - 1];
+    if (this._board[startSquare] !== null || this._board[this._epSquare] !== null || this._board[currentSquare]?.color !== swapColor(this._turn) || this._board[currentSquare]?.type !== PAWN) {
+      this._hash ^= this._epKey();
+      this._epSquare = EMPTY;
+      return;
+    }
+    const canCapture = (square) => !(square & 136) && this._board[square]?.color === this._turn && this._board[square]?.type === PAWN;
+    if (!attackers.some(canCapture)) {
+      this._hash ^= this._epKey();
+      this._epSquare = EMPTY;
+    }
+  }
+  _attacked(color, square, verbose) {
+    const attackers = [];
+    for (let i = Ox88.a8; i <= Ox88.h1; i++) {
+      if (i & 136) {
+        i += 7;
+        continue;
+      }
+      if (this._board[i] === void 0 || this._board[i].color !== color) {
+        continue;
+      }
+      const piece = this._board[i];
+      const difference = i - square;
+      if (difference === 0) {
+        continue;
+      }
+      const index = difference + 119;
+      if (ATTACKS[index] & PIECE_MASKS[piece.type]) {
+        if (piece.type === PAWN) {
+          if (difference > 0 && piece.color === WHITE || difference <= 0 && piece.color === BLACK) {
+            if (!verbose) {
+              return true;
+            } else {
+              attackers.push(algebraic(i));
+            }
+          }
+          continue;
+        }
+        if (piece.type === "n" || piece.type === "k") {
+          if (!verbose) {
+            return true;
+          } else {
+            attackers.push(algebraic(i));
+            continue;
+          }
+        }
+        const offset = RAYS[index];
+        let j = i + offset;
+        let blocked = false;
+        while (j !== square) {
+          if (this._board[j] != null) {
+            blocked = true;
+            break;
+          }
+          j += offset;
+        }
+        if (!blocked) {
+          if (!verbose) {
+            return true;
+          } else {
+            attackers.push(algebraic(i));
+            continue;
+          }
+        }
+      }
+    }
+    if (verbose) {
+      return attackers;
+    } else {
+      return false;
+    }
+  }
+  attackers(square, attackedBy) {
+    if (!attackedBy) {
+      return this._attacked(this._turn, Ox88[square], true);
+    } else {
+      return this._attacked(attackedBy, Ox88[square], true);
+    }
+  }
+  _isKingAttacked(color) {
+    const square = this._kings[color];
+    return square === -1 ? false : this._attacked(swapColor(color), square);
+  }
+  hash() {
+    return this._hash.toString(16);
+  }
+  isAttacked(square, attackedBy) {
+    return this._attacked(attackedBy, Ox88[square]);
+  }
+  isCheck() {
+    return this._isKingAttacked(this._turn);
+  }
+  inCheck() {
+    return this.isCheck();
+  }
+  isCheckmate() {
+    return this.isCheck() && this._moves().length === 0;
+  }
+  isStalemate() {
+    return !this.isCheck() && this._moves().length === 0;
+  }
+  isInsufficientMaterial() {
+    const pieces = {
+      b: 0,
+      n: 0,
+      r: 0,
+      q: 0,
+      k: 0,
+      p: 0
+    };
+    const bishops = [];
+    let numPieces = 0;
+    let squareColor = 0;
+    for (let i = Ox88.a8; i <= Ox88.h1; i++) {
+      squareColor = (squareColor + 1) % 2;
+      if (i & 136) {
+        i += 7;
+        continue;
+      }
+      const piece = this._board[i];
+      if (piece) {
+        pieces[piece.type] = piece.type in pieces ? pieces[piece.type] + 1 : 1;
+        if (piece.type === BISHOP) {
+          bishops.push(squareColor);
+        }
+        numPieces++;
+      }
+    }
+    if (numPieces === 2) {
+      return true;
+    } else if (
+      // k vs. kn .... or .... k vs. kb
+      numPieces === 3 && (pieces[BISHOP] === 1 || pieces[KNIGHT] === 1)
+    ) {
+      return true;
+    } else if (numPieces === pieces[BISHOP] + 2) {
+      let sum = 0;
+      const len = bishops.length;
+      for (let i = 0; i < len; i++) {
+        sum += bishops[i];
+      }
+      if (sum === 0 || sum === len) {
+        return true;
+      }
+    }
+    return false;
+  }
+  isThreefoldRepetition() {
+    return this._getPositionCount(this._hash) >= 3;
+  }
+  isDrawByFiftyMoves() {
+    return this._halfMoves >= 100;
+  }
+  isDraw() {
+    return this.isDrawByFiftyMoves() || this.isStalemate() || this.isInsufficientMaterial() || this.isThreefoldRepetition();
+  }
+  isGameOver() {
+    return this.isCheckmate() || this.isDraw();
+  }
+  moves({ verbose = false, square = void 0, piece = void 0 } = {}) {
+    const moves = this._moves({ square, piece });
+    if (verbose) {
+      return moves.map((move) => new Move(this, move));
+    } else {
+      return moves.map((move) => this._moveToSan(move, moves));
+    }
+  }
+  _moves({ legal = true, piece = void 0, square = void 0 } = {}) {
+    const forSquare = square ? square.toLowerCase() : void 0;
+    const forPiece = piece?.toLowerCase();
+    const moves = [];
+    const us = this._turn;
+    const them = swapColor(us);
+    let firstSquare = Ox88.a8;
+    let lastSquare = Ox88.h1;
+    let singleSquare = false;
+    if (forSquare) {
+      if (!(forSquare in Ox88)) {
+        return [];
+      } else {
+        firstSquare = lastSquare = Ox88[forSquare];
+        singleSquare = true;
+      }
+    }
+    for (let from = firstSquare; from <= lastSquare; from++) {
+      if (from & 136) {
+        from += 7;
+        continue;
+      }
+      if (!this._board[from] || this._board[from].color === them) {
+        continue;
+      }
+      const { type } = this._board[from];
+      let to;
+      if (type === PAWN) {
+        if (forPiece && forPiece !== type)
+          continue;
+        to = from + PAWN_OFFSETS[us][0];
+        if (!this._board[to]) {
+          addMove(moves, us, from, to, PAWN);
+          to = from + PAWN_OFFSETS[us][1];
+          if (SECOND_RANK[us] === rank(from) && !this._board[to]) {
+            addMove(moves, us, from, to, PAWN, void 0, BITS.BIG_PAWN);
+          }
+        }
+        for (let j = 2; j < 4; j++) {
+          to = from + PAWN_OFFSETS[us][j];
+          if (to & 136)
+            continue;
+          if (this._board[to]?.color === them) {
+            addMove(moves, us, from, to, PAWN, this._board[to].type, BITS.CAPTURE);
+          } else if (to === this._epSquare) {
+            addMove(moves, us, from, to, PAWN, PAWN, BITS.EP_CAPTURE);
+          }
+        }
+      } else {
+        if (forPiece && forPiece !== type)
+          continue;
+        for (let j = 0, len = PIECE_OFFSETS[type].length; j < len; j++) {
+          const offset = PIECE_OFFSETS[type][j];
+          to = from;
+          while (true) {
+            to += offset;
+            if (to & 136)
+              break;
+            if (!this._board[to]) {
+              addMove(moves, us, from, to, type);
+            } else {
+              if (this._board[to].color === us)
+                break;
+              addMove(moves, us, from, to, type, this._board[to].type, BITS.CAPTURE);
+              break;
+            }
+            if (type === KNIGHT || type === KING)
+              break;
+          }
+        }
+      }
+    }
+    if (forPiece === void 0 || forPiece === KING) {
+      if (!singleSquare || lastSquare === this._kings[us]) {
+        if (this._castling[us] & BITS.KSIDE_CASTLE) {
+          const castlingFrom = this._kings[us];
+          const castlingTo = castlingFrom + 2;
+          if (!this._board[castlingFrom + 1] && !this._board[castlingTo] && !this._attacked(them, this._kings[us]) && !this._attacked(them, castlingFrom + 1) && !this._attacked(them, castlingTo)) {
+            addMove(moves, us, this._kings[us], castlingTo, KING, void 0, BITS.KSIDE_CASTLE);
+          }
+        }
+        if (this._castling[us] & BITS.QSIDE_CASTLE) {
+          const castlingFrom = this._kings[us];
+          const castlingTo = castlingFrom - 2;
+          if (!this._board[castlingFrom - 1] && !this._board[castlingFrom - 2] && !this._board[castlingFrom - 3] && !this._attacked(them, this._kings[us]) && !this._attacked(them, castlingFrom - 1) && !this._attacked(them, castlingTo)) {
+            addMove(moves, us, this._kings[us], castlingTo, KING, void 0, BITS.QSIDE_CASTLE);
+          }
+        }
+      }
+    }
+    if (!legal || this._kings[us] === -1) {
+      return moves;
+    }
+    const legalMoves = [];
+    for (let i = 0, len = moves.length; i < len; i++) {
+      this._makeMove(moves[i]);
+      if (!this._isKingAttacked(us)) {
+        legalMoves.push(moves[i]);
+      }
+      this._undoMove();
+    }
+    return legalMoves;
+  }
+  move(move, { strict = false } = {}) {
+    let moveObj = null;
+    if (typeof move === "string") {
+      moveObj = this._moveFromSan(move, strict);
+    } else if (move === null) {
+      moveObj = this._moveFromSan(SAN_NULLMOVE, strict);
+    } else if (typeof move === "object") {
+      const moves = this._moves();
+      for (let i = 0, len = moves.length; i < len; i++) {
+        if (move.from === algebraic(moves[i].from) && move.to === algebraic(moves[i].to) && (!("promotion" in moves[i]) || move.promotion === moves[i].promotion)) {
+          moveObj = moves[i];
+          break;
+        }
+      }
+    }
+    if (!moveObj) {
+      if (typeof move === "string") {
+        throw new Error(`Invalid move: ${move}`);
+      } else {
+        throw new Error(`Invalid move: ${JSON.stringify(move)}`);
+      }
+    }
+    if (this.isCheck() && moveObj.flags & BITS.NULL_MOVE) {
+      throw new Error("Null move not allowed when in check");
+    }
+    const prettyMove = new Move(this, moveObj);
+    this._makeMove(moveObj);
+    this._incPositionCount();
+    return prettyMove;
+  }
+  _push(move) {
+    this._history.push({
+      move,
+      kings: { b: this._kings.b, w: this._kings.w },
+      turn: this._turn,
+      castling: { b: this._castling.b, w: this._castling.w },
+      epSquare: this._epSquare,
+      halfMoves: this._halfMoves,
+      moveNumber: this._moveNumber
+    });
+  }
+  _movePiece(from, to) {
+    this._hash ^= this._pieceKey(from);
+    this._board[to] = this._board[from];
+    delete this._board[from];
+    this._hash ^= this._pieceKey(to);
+  }
+  _makeMove(move) {
+    const us = this._turn;
+    const them = swapColor(us);
+    this._push(move);
+    if (move.flags & BITS.NULL_MOVE) {
+      if (us === BLACK) {
+        this._moveNumber++;
+      }
+      this._halfMoves++;
+      this._turn = them;
+      this._epSquare = EMPTY;
+      return;
+    }
+    this._hash ^= this._epKey();
+    this._hash ^= this._castlingKey();
+    if (move.captured) {
+      this._hash ^= this._pieceKey(move.to);
+    }
+    this._movePiece(move.from, move.to);
+    if (move.flags & BITS.EP_CAPTURE) {
+      if (this._turn === BLACK) {
+        this._clear(move.to - 16);
+      } else {
+        this._clear(move.to + 16);
+      }
+    }
+    if (move.promotion) {
+      this._clear(move.to);
+      this._set(move.to, { type: move.promotion, color: us });
+    }
+    if (this._board[move.to].type === KING) {
+      this._kings[us] = move.to;
+      if (move.flags & BITS.KSIDE_CASTLE) {
+        const castlingTo = move.to - 1;
+        const castlingFrom = move.to + 1;
+        this._movePiece(castlingFrom, castlingTo);
+      } else if (move.flags & BITS.QSIDE_CASTLE) {
+        const castlingTo = move.to + 1;
+        const castlingFrom = move.to - 2;
+        this._movePiece(castlingFrom, castlingTo);
+      }
+      this._castling[us] = 0;
+    }
+    if (this._castling[us]) {
+      for (let i = 0, len = ROOKS[us].length; i < len; i++) {
+        if (move.from === ROOKS[us][i].square && this._castling[us] & ROOKS[us][i].flag) {
+          this._castling[us] ^= ROOKS[us][i].flag;
+          break;
+        }
+      }
+    }
+    if (this._castling[them]) {
+      for (let i = 0, len = ROOKS[them].length; i < len; i++) {
+        if (move.to === ROOKS[them][i].square && this._castling[them] & ROOKS[them][i].flag) {
+          this._castling[them] ^= ROOKS[them][i].flag;
+          break;
+        }
+      }
+    }
+    this._hash ^= this._castlingKey();
+    if (move.flags & BITS.BIG_PAWN) {
+      let epSquare;
+      if (us === BLACK) {
+        epSquare = move.to - 16;
+      } else {
+        epSquare = move.to + 16;
+      }
+      if (!(move.to - 1 & 136) && this._board[move.to - 1]?.type === PAWN && this._board[move.to - 1]?.color === them || !(move.to + 1 & 136) && this._board[move.to + 1]?.type === PAWN && this._board[move.to + 1]?.color === them) {
+        this._epSquare = epSquare;
+        this._hash ^= this._epKey();
+      } else {
+        this._epSquare = EMPTY;
+      }
+    } else {
+      this._epSquare = EMPTY;
+    }
+    if (move.piece === PAWN) {
+      this._halfMoves = 0;
+    } else if (move.flags & (BITS.CAPTURE | BITS.EP_CAPTURE)) {
+      this._halfMoves = 0;
+    } else {
+      this._halfMoves++;
+    }
+    if (us === BLACK) {
+      this._moveNumber++;
+    }
+    this._turn = them;
+    this._hash ^= SIDE_KEY;
+  }
+  undo() {
+    const hash = this._hash;
+    const move = this._undoMove();
+    if (move) {
+      const prettyMove = new Move(this, move);
+      this._decPositionCount(hash);
+      return prettyMove;
+    }
+    return null;
+  }
+  _undoMove() {
+    const old = this._history.pop();
+    if (old === void 0) {
+      return null;
+    }
+    this._hash ^= this._epKey();
+    this._hash ^= this._castlingKey();
+    const move = old.move;
+    this._kings = old.kings;
+    this._turn = old.turn;
+    this._castling = old.castling;
+    this._epSquare = old.epSquare;
+    this._halfMoves = old.halfMoves;
+    this._moveNumber = old.moveNumber;
+    this._hash ^= this._epKey();
+    this._hash ^= this._castlingKey();
+    this._hash ^= SIDE_KEY;
+    const us = this._turn;
+    const them = swapColor(us);
+    if (move.flags & BITS.NULL_MOVE) {
+      return move;
+    }
+    this._movePiece(move.to, move.from);
+    if (move.piece) {
+      this._clear(move.from);
+      this._set(move.from, { type: move.piece, color: us });
+    }
+    if (move.captured) {
+      if (move.flags & BITS.EP_CAPTURE) {
+        let index;
+        if (us === BLACK) {
+          index = move.to - 16;
+        } else {
+          index = move.to + 16;
+        }
+        this._set(index, { type: PAWN, color: them });
+      } else {
+        this._set(move.to, { type: move.captured, color: them });
+      }
+    }
+    if (move.flags & (BITS.KSIDE_CASTLE | BITS.QSIDE_CASTLE)) {
+      let castlingTo, castlingFrom;
+      if (move.flags & BITS.KSIDE_CASTLE) {
+        castlingTo = move.to + 1;
+        castlingFrom = move.to - 1;
+      } else {
+        castlingTo = move.to - 2;
+        castlingFrom = move.to + 1;
+      }
+      this._movePiece(castlingFrom, castlingTo);
+    }
+    return move;
+  }
+  pgn({ newline = "\n", maxWidth = 0 } = {}) {
+    const result = [];
+    let headerExists = false;
+    for (const i in this._header) {
+      const headerTag = this._header[i];
+      if (headerTag)
+        result.push(`[${i} "${this._header[i]}"]` + newline);
+      headerExists = true;
+    }
+    if (headerExists && this._history.length) {
+      result.push(newline);
+    }
+    const appendComment = (moveString2) => {
+      const comment = this._comments[this.fen()];
+      if (typeof comment !== "undefined") {
+        const delimiter = moveString2.length > 0 ? " " : "";
+        moveString2 = `${moveString2}${delimiter}{${comment}}`;
+      }
+      return moveString2;
+    };
+    const reversedHistory = [];
+    while (this._history.length > 0) {
+      reversedHistory.push(this._undoMove());
+    }
+    const moves = [];
+    let moveString = "";
+    if (reversedHistory.length === 0) {
+      moves.push(appendComment(""));
+    }
+    while (reversedHistory.length > 0) {
+      moveString = appendComment(moveString);
+      const move = reversedHistory.pop();
+      if (!move) {
+        break;
+      }
+      if (!this._history.length && move.color === "b") {
+        const prefix = `${this._moveNumber}. ...`;
+        moveString = moveString ? `${moveString} ${prefix}` : prefix;
+      } else if (move.color === "w") {
+        if (moveString.length) {
+          moves.push(moveString);
+        }
+        moveString = this._moveNumber + ".";
+      }
+      moveString = moveString + " " + this._moveToSan(move, this._moves({ legal: true }));
+      this._makeMove(move);
+    }
+    if (moveString.length) {
+      moves.push(appendComment(moveString));
+    }
+    moves.push(this._header.Result || "*");
+    if (maxWidth === 0) {
+      return result.join("") + moves.join(" ");
+    }
+    const strip = function() {
+      if (result.length > 0 && result[result.length - 1] === " ") {
+        result.pop();
+        return true;
+      }
+      return false;
+    };
+    const wrapComment = function(width, move) {
+      for (const token of move.split(" ")) {
+        if (!token) {
+          continue;
+        }
+        if (width + token.length > maxWidth) {
+          while (strip()) {
+            width--;
+          }
+          result.push(newline);
+          width = 0;
+        }
+        result.push(token);
+        width += token.length;
+        result.push(" ");
+        width++;
+      }
+      if (strip()) {
+        width--;
+      }
+      return width;
+    };
+    let currentWidth = 0;
+    for (let i = 0; i < moves.length; i++) {
+      if (currentWidth + moves[i].length > maxWidth) {
+        if (moves[i].includes("{")) {
+          currentWidth = wrapComment(currentWidth, moves[i]);
+          continue;
+        }
+      }
+      if (currentWidth + moves[i].length > maxWidth && i !== 0) {
+        if (result[result.length - 1] === " ") {
+          result.pop();
+        }
+        result.push(newline);
+        currentWidth = 0;
+      } else if (i !== 0) {
+        result.push(" ");
+        currentWidth++;
+      }
+      result.push(moves[i]);
+      currentWidth += moves[i].length;
+    }
+    return result.join("");
+  }
+  /**
+   * @deprecated Use `setHeader` and `getHeaders` instead. This method will return null header tags (which is not what you want)
+   */
+  header(...args) {
+    for (let i = 0; i < args.length; i += 2) {
+      if (typeof args[i] === "string" && typeof args[i + 1] === "string") {
+        this._header[args[i]] = args[i + 1];
+      }
+    }
+    return this._header;
+  }
+  // TODO: value validation per spec
+  setHeader(key, value) {
+    this._header[key] = value ?? SEVEN_TAG_ROSTER[key] ?? null;
+    return this.getHeaders();
+  }
+  removeHeader(key) {
+    if (key in this._header) {
+      this._header[key] = SEVEN_TAG_ROSTER[key] || null;
+      return true;
+    }
+    return false;
+  }
+  // return only non-null headers (omit placemarker nulls)
+  getHeaders() {
+    const nonNullHeaders = {};
+    for (const [key, value] of Object.entries(this._header)) {
+      if (value !== null) {
+        nonNullHeaders[key] = value;
+      }
+    }
+    return nonNullHeaders;
+  }
+  loadPgn(pgn2, { strict = false, newlineChar = "\r?\n" } = {}) {
+    if (newlineChar !== "\r?\n") {
+      pgn2 = pgn2.replace(new RegExp(newlineChar, "g"), "\n");
+    }
+    const parsedPgn = peg$parse(pgn2);
+    this.reset();
+    const headers = parsedPgn.headers;
+    let fen = "";
+    for (const key in headers) {
+      if (key.toLowerCase() === "fen") {
+        fen = headers[key];
+      }
+      this.header(key, headers[key]);
+    }
+    if (!strict) {
+      if (fen) {
+        this.load(fen, { preserveHeaders: true });
+      }
+    } else {
+      if (headers["SetUp"] === "1") {
+        if (!("FEN" in headers)) {
+          throw new Error("Invalid PGN: FEN tag must be supplied with SetUp tag");
+        }
+        this.load(headers["FEN"], { preserveHeaders: true });
+      }
+    }
+    let node2 = parsedPgn.root;
+    while (node2) {
+      if (node2.move) {
+        const move = this._moveFromSan(node2.move, strict);
+        if (move == null) {
+          throw new Error(`Invalid move in PGN: ${node2.move}`);
+        } else {
+          this._makeMove(move);
+          this._incPositionCount();
+        }
+      }
+      if (node2.comment !== void 0) {
+        this._comments[this.fen()] = node2.comment;
+      }
+      node2 = node2.variations[0];
+    }
+    const result = parsedPgn.result;
+    if (result && Object.keys(this._header).length && this._header["Result"] !== result) {
+      this.setHeader("Result", result);
+    }
+  }
+  /*
+   * Convert a move from 0x88 coordinates to Standard Algebraic Notation
+   * (SAN)
+   *
+   * @param {boolean} strict Use the strict SAN parser. It will throw errors
+   * on overly disambiguated moves (see below):
+   *
+   * r1bqkbnr/ppp2ppp/2n5/1B1pP3/4P3/8/PPPP2PP/RNBQK1NR b KQkq - 2 4
+   * 4. ... Nge7 is overly disambiguated because the knight on c6 is pinned
+   * 4. ... Ne7 is technically the valid SAN
+   */
+  _moveToSan(move, moves) {
+    let output = "";
+    if (move.flags & BITS.KSIDE_CASTLE) {
+      output = "O-O";
+    } else if (move.flags & BITS.QSIDE_CASTLE) {
+      output = "O-O-O";
+    } else if (move.flags & BITS.NULL_MOVE) {
+      return SAN_NULLMOVE;
+    } else {
+      if (move.piece !== PAWN) {
+        const disambiguator = getDisambiguator(move, moves);
+        output += move.piece.toUpperCase() + disambiguator;
+      }
+      if (move.flags & (BITS.CAPTURE | BITS.EP_CAPTURE)) {
+        if (move.piece === PAWN) {
+          output += algebraic(move.from)[0];
+        }
+        output += "x";
+      }
+      output += algebraic(move.to);
+      if (move.promotion) {
+        output += "=" + move.promotion.toUpperCase();
+      }
+    }
+    this._makeMove(move);
+    if (this.isCheck()) {
+      if (this.isCheckmate()) {
+        output += "#";
+      } else {
+        output += "+";
+      }
+    }
+    this._undoMove();
+    return output;
+  }
+  // convert a move from Standard Algebraic Notation (SAN) to 0x88 coordinates
+  _moveFromSan(move, strict = false) {
+    let cleanMove = strippedSan(move);
+    if (!strict) {
+      if (cleanMove === "0-0") {
+        cleanMove = "O-O";
+      } else if (cleanMove === "0-0-0") {
+        cleanMove = "O-O-O";
+      }
+    }
+    if (cleanMove == SAN_NULLMOVE) {
+      const res = {
+        color: this._turn,
+        from: 0,
+        to: 0,
+        piece: "k",
+        flags: BITS.NULL_MOVE
+      };
+      return res;
+    }
+    let pieceType = inferPieceType(cleanMove);
+    let moves = this._moves({ legal: true, piece: pieceType });
+    for (let i = 0, len = moves.length; i < len; i++) {
+      if (cleanMove === strippedSan(this._moveToSan(moves[i], moves))) {
+        return moves[i];
+      }
+    }
+    if (strict) {
+      return null;
+    }
+    let piece = void 0;
+    let matches = void 0;
+    let from = void 0;
+    let to = void 0;
+    let promotion = void 0;
+    let overlyDisambiguated = false;
+    matches = cleanMove.match(/([pnbrqkPNBRQK])?([a-h][1-8])x?-?([a-h][1-8])([qrbnQRBN])?/);
+    if (matches) {
+      piece = matches[1];
+      from = matches[2];
+      to = matches[3];
+      promotion = matches[4];
+      if (from.length == 1) {
+        overlyDisambiguated = true;
+      }
+    } else {
+      matches = cleanMove.match(/([pnbrqkPNBRQK])?([a-h]?[1-8]?)x?-?([a-h][1-8])([qrbnQRBN])?/);
+      if (matches) {
+        piece = matches[1];
+        from = matches[2];
+        to = matches[3];
+        promotion = matches[4];
+        if (from.length == 1) {
+          overlyDisambiguated = true;
+        }
+      }
+    }
+    pieceType = inferPieceType(cleanMove);
+    moves = this._moves({
+      legal: true,
+      piece: piece ? piece : pieceType
+    });
+    if (!to) {
+      return null;
+    }
+    for (let i = 0, len = moves.length; i < len; i++) {
+      if (!from) {
+        if (cleanMove === strippedSan(this._moveToSan(moves[i], moves)).replace("x", "")) {
+          return moves[i];
+        }
+      } else if ((!piece || piece.toLowerCase() == moves[i].piece) && Ox88[from] == moves[i].from && Ox88[to] == moves[i].to && (!promotion || promotion.toLowerCase() == moves[i].promotion)) {
+        return moves[i];
+      } else if (overlyDisambiguated) {
+        const square = algebraic(moves[i].from);
+        if ((!piece || piece.toLowerCase() == moves[i].piece) && Ox88[to] == moves[i].to && (from == square[0] || from == square[1]) && (!promotion || promotion.toLowerCase() == moves[i].promotion)) {
+          return moves[i];
+        }
+      }
+    }
+    return null;
+  }
+  ascii() {
+    let s = "   +------------------------+\n";
+    for (let i = Ox88.a8; i <= Ox88.h1; i++) {
+      if (file(i) === 0) {
+        s += " " + "87654321"[rank(i)] + " |";
+      }
+      if (this._board[i]) {
+        const piece = this._board[i].type;
+        const color = this._board[i].color;
+        const symbol = color === WHITE ? piece.toUpperCase() : piece.toLowerCase();
+        s += " " + symbol + " ";
+      } else {
+        s += " . ";
+      }
+      if (i + 1 & 136) {
+        s += "|\n";
+        i += 8;
+      }
+    }
+    s += "   +------------------------+\n";
+    s += "     a  b  c  d  e  f  g  h";
+    return s;
+  }
+  perft(depth) {
+    const moves = this._moves({ legal: false });
+    let nodes = 0;
+    const color = this._turn;
+    for (let i = 0, len = moves.length; i < len; i++) {
+      this._makeMove(moves[i]);
+      if (!this._isKingAttacked(color)) {
+        if (depth - 1 > 0) {
+          nodes += this.perft(depth - 1);
+        } else {
+          nodes++;
+        }
+      }
+      this._undoMove();
+    }
+    return nodes;
+  }
+  setTurn(color) {
+    if (this._turn == color) {
+      return false;
+    }
+    this.move("--");
+    return true;
+  }
+  turn() {
+    return this._turn;
+  }
+  board() {
+    const output = [];
+    let row = [];
+    for (let i = Ox88.a8; i <= Ox88.h1; i++) {
+      if (this._board[i] == null) {
+        row.push(null);
+      } else {
+        row.push({
+          square: algebraic(i),
+          type: this._board[i].type,
+          color: this._board[i].color
+        });
+      }
+      if (i + 1 & 136) {
+        output.push(row);
+        row = [];
+        i += 8;
+      }
+    }
+    return output;
+  }
+  squareColor(square) {
+    if (square in Ox88) {
+      const sq = Ox88[square];
+      return (rank(sq) + file(sq)) % 2 === 0 ? "light" : "dark";
+    }
+    return null;
+  }
+  history({ verbose = false } = {}) {
+    const reversedHistory = [];
+    const moveHistory = [];
+    while (this._history.length > 0) {
+      reversedHistory.push(this._undoMove());
+    }
+    while (true) {
+      const move = reversedHistory.pop();
+      if (!move) {
+        break;
+      }
+      if (verbose) {
+        moveHistory.push(new Move(this, move));
+      } else {
+        moveHistory.push(this._moveToSan(move, this._moves()));
+      }
+      this._makeMove(move);
+    }
+    return moveHistory;
+  }
+  /*
+   * Keeps track of position occurrence counts for the purpose of repetition
+   * checking. Old positions are removed from the map if their counts are reduced to 0.
+   */
+  _getPositionCount(hash) {
+    return this._positionCount.get(hash) ?? 0;
+  }
+  _incPositionCount() {
+    this._positionCount.set(this._hash, (this._positionCount.get(this._hash) ?? 0) + 1);
+  }
+  _decPositionCount(hash) {
+    const currentCount = this._positionCount.get(hash) ?? 0;
+    if (currentCount === 1) {
+      this._positionCount.delete(hash);
+    } else {
+      this._positionCount.set(hash, currentCount - 1);
+    }
+  }
+  _pruneComments() {
+    const reversedHistory = [];
+    const currentComments = {};
+    const copyComment = (fen) => {
+      if (fen in this._comments) {
+        currentComments[fen] = this._comments[fen];
+      }
+    };
+    while (this._history.length > 0) {
+      reversedHistory.push(this._undoMove());
+    }
+    copyComment(this.fen());
+    while (true) {
+      const move = reversedHistory.pop();
+      if (!move) {
+        break;
+      }
+      this._makeMove(move);
+      copyComment(this.fen());
+    }
+    this._comments = currentComments;
+  }
+  getComment() {
+    return this._comments[this.fen()];
+  }
+  setComment(comment) {
+    this._comments[this.fen()] = comment.replace("{", "[").replace("}", "]");
+  }
+  /**
+   * @deprecated Renamed to `removeComment` for consistency
+   */
+  deleteComment() {
+    return this.removeComment();
+  }
+  removeComment() {
+    const comment = this._comments[this.fen()];
+    delete this._comments[this.fen()];
+    return comment;
+  }
+  getComments() {
+    this._pruneComments();
+    return Object.keys(this._comments).map((fen) => {
+      return { fen, comment: this._comments[fen] };
+    });
+  }
+  /**
+   * @deprecated Renamed to `removeComments` for consistency
+   */
+  deleteComments() {
+    return this.removeComments();
+  }
+  removeComments() {
+    this._pruneComments();
+    return Object.keys(this._comments).map((fen) => {
+      const comment = this._comments[fen];
+      delete this._comments[fen];
+      return { fen, comment };
+    });
+  }
+  setCastlingRights(color, rights) {
+    for (const side of [KING, QUEEN]) {
+      if (rights[side] !== void 0) {
+        if (rights[side]) {
+          this._castling[color] |= SIDES[side];
+        } else {
+          this._castling[color] &= ~SIDES[side];
+        }
+      }
+    }
+    this._updateCastlingRights();
+    const result = this.getCastlingRights(color);
+    return (rights[KING] === void 0 || rights[KING] === result[KING]) && (rights[QUEEN] === void 0 || rights[QUEEN] === result[QUEEN]);
+  }
+  getCastlingRights(color) {
+    return {
+      [KING]: (this._castling[color] & SIDES[KING]) !== 0,
+      [QUEEN]: (this._castling[color] & SIDES[QUEEN]) !== 0
+    };
+  }
+  moveNumber() {
+    return this._moveNumber;
+  }
+};
 
-const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => [...document.querySelectorAll(sel)];
-const other = (c) => (c === 'w' ? 'b' : 'w');
-const colorName = (c) => (c === 'w' ? 'White' : 'Black');
+// src/game.ts
+var START_FEN = DEFAULT_POSITION;
+var TIME_CONTROLS = [
+  { id: "none", label: "Unlimited", base: 0, inc: 0, moment: "No clock" },
+  { id: "1+0", label: "1 + 0", base: 1, inc: 0, kind: "Bullet", moment: "Lift ride" },
+  { id: "3+0", label: "3 + 0", base: 3, inc: 0, kind: "Blitz", moment: "Printer queue" },
+  { id: "3+2", label: "3 + 2", base: 3, inc: 2, kind: "Blitz", moment: "Coffee break" },
+  { id: "5+0", label: "5 + 0", base: 5, inc: 0, kind: "Blitz", moment: "Tea break" },
+  { id: "5+3", label: "5 + 3", base: 5, inc: 3, kind: "Blitz", moment: "After stand-up" },
+  { id: "10+0", label: "10 + 0", base: 10, inc: 0, kind: "Rapid", moment: "Build running" },
+  { id: "10+5", label: "10 + 5", base: 10, inc: 5, kind: "Rapid", moment: "Lunch" },
+  { id: "15+10", label: "15 + 10", base: 15, inc: 10, kind: "Rapid", moment: "Long lunch" },
+  { id: "30+0", label: "30 + 0", base: 30, inc: 0, kind: "Classical", moment: "Friday, 5 pm" }
+];
+var timeControl = (id) => TIME_CONTROLS.find((t) => t.id === id) || TIME_CONTROLS[0];
+var VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+var uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+function fenPieces(fen) {
+  const map = /* @__PURE__ */ new Map();
+  const rows = fen.split(" ")[0].split("/");
+  rows.forEach((row, r) => {
+    let f = 0;
+    for (const ch of row) {
+      if (/\d/.test(ch)) {
+        f += +ch;
+        continue;
+      }
+      const color = ch === ch.toUpperCase() ? "w" : "b";
+      map.set("abcdefgh"[f] + (8 - r), color + ch.toUpperCase());
+      f++;
+    }
+  });
+  return map;
+}
+function checkSquare(fen) {
+  const c = new Chess(fen);
+  if (!c.inCheck()) return null;
+  const turn = c.turn();
+  for (const [sq, code] of fenPieces(fen)) if (code === turn + "K") return sq;
+  return null;
+}
+var START = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+function captures(fen) {
+  const count = { w: {}, b: {} };
+  for (const code of fenPieces(fen).values()) {
+    const c = code[0], role = code[1].toLowerCase();
+    count[c][role] = (count[c][role] || 0) + 1;
+  }
+  const out = { w: { pieces: [], score: 0 }, b: { pieces: [], score: 0 } };
+  const points = { w: 0, b: 0 };
+  for (const c of ["w", "b"]) {
+    const o = c === "w" ? "b" : "w";
+    for (const role of ["p", "b", "n", "r", "q"]) {
+      for (let i = count[o][role] || 0; i < START[role]; i++) out[c].pieces.push(role);
+      points[c] += (count[c][role] || 0) * VALUES[role];
+    }
+  }
+  const diff = points.w - points.b;
+  if (diff > 0) out.w.score = diff;
+  if (diff < 0) out.b.score = -diff;
+  return out;
+}
+function bareKing(fen, color) {
+  for (const code of fenPieces(fen).values()) if (code[0] === color && code[1] !== "K") return false;
+  return true;
+}
+var Game = class _Game {
+  id;
+  white;
+  black;
+  tc;
+  startedAt;
+  endedAt;
+  result;
+  termination;
+  clocks;
+  remote;
+  ai;
+  chess;
+  plies;
+  constructor(data = {}) {
+    this.id = data.id || uid();
+    this.white = data.white || "White";
+    this.black = data.black || "Black";
+    this.tc = data.tc || "none";
+    this.startedAt = data.startedAt || Date.now();
+    this.endedAt = data.endedAt || null;
+    this.result = data.result || null;
+    this.termination = data.termination || null;
+    const tc = timeControl(this.tc);
+    this.clocks = data.clocks || { w: tc.base * 6e4, b: tc.base * 6e4 };
+    this.remote = data.remote ? { room: "", me: null, pw: null, pb: null, offer: null, ...data.remote } : null;
+    this.ai = data.ai ? { color: data.ai.color, level: data.ai.level } : null;
+    this.chess = new Chess();
+    this.plies = [];
+    for (const san2 of data.moves || []) this._push(this.chess.move(san2));
+    (data.clk || []).forEach((ms, i) => {
+      if (this.plies[i] && ms != null) this.plies[i].clock = ms;
+    });
+  }
+  get tcInfo() {
+    return timeControl(this.tc);
+  }
+  get hasClock() {
+    return this.tcInfo.base > 0;
+  }
+  get turn() {
+    return this.chess.turn();
+  }
+  get over() {
+    return !!this.result;
+  }
+  get length() {
+    return this.plies.length;
+  }
+  _push(m) {
+    this.plies.push({
+      san: m.san,
+      from: m.from,
+      to: m.to,
+      color: m.color,
+      piece: m.piece,
+      captured: m.captured || null,
+      promotion: m.promotion || null,
+      fen: m.after
+    });
+  }
+  fenAt(ply) {
+    return ply === 0 ? START_FEN : this.plies[ply - 1].fen;
+  }
+  lastMoveAt(ply) {
+    return ply === 0 ? null : [this.plies[ply - 1].from, this.plies[ply - 1].to];
+  }
+  /** Map<from, to[]> of legal moves in the live position. */
+  dests() {
+    const d = /* @__PURE__ */ new Map();
+    if (this.over) return d;
+    for (const m of this.chess.moves({ verbose: true })) {
+      if (!d.has(m.from)) d.set(m.from, []);
+      if (!d.get(m.from).includes(m.to)) d.get(m.from).push(m.to);
+    }
+    return d;
+  }
+  isPromotion(from, to) {
+    return this.chess.moves({ square: from, verbose: true }).some((m) => m.to === to && m.promotion);
+  }
+  /** Play a move given in SAN (used when applying an opponent's code). */
+  moveSan(san2) {
+    if (this.over) return null;
+    let m;
+    try {
+      m = this.chess.move(san2);
+    } catch {
+      return null;
+    }
+    this._push(m);
+    this._detectEnd();
+    return this.plies[this.plies.length - 1];
+  }
+  /** Play a move; returns the ply record or null if illegal. */
+  move(from, to, promotion) {
+    if (this.over) return null;
+    let m;
+    try {
+      m = this.chess.move({ from, to, promotion: promotion || "q" });
+    } catch {
+      return null;
+    }
+    this._push(m);
+    this._detectEnd();
+    return this.plies[this.plies.length - 1];
+  }
+  _detectEnd() {
+    const c = this.chess;
+    if (c.isCheckmate()) this.finish(c.turn() === "w" ? "0-1" : "1-0", "Checkmate");
+    else if (c.isStalemate()) this.finish("1/2-1/2", "Stalemate");
+    else if (c.isInsufficientMaterial()) this.finish("1/2-1/2", "Insufficient material");
+    else if (c.isThreefoldRepetition()) this.finish("1/2-1/2", "Threefold repetition");
+    else if (c.isDrawByFiftyMoves()) this.finish("1/2-1/2", "Fifty-move rule");
+  }
+  finish(result, termination) {
+    this.result = result;
+    this.termination = termination;
+    this.endedAt = Date.now();
+  }
+  resign(color) {
+    this.finish(color === "w" ? "0-1" : "1-0", `${this.nameOf(color)} resigned`);
+  }
+  agreeDraw() {
+    this.finish("1/2-1/2", "Draw by agreement");
+  }
+  flag(color) {
+    const other2 = color === "w" ? "b" : "w";
+    if (bareKing(this.chess.fen(), other2)) this.finish("1/2-1/2", "Time out vs insufficient material");
+    else this.finish(color === "w" ? "0-1" : "1-0", `${this.nameOf(color)} ran out of time`);
+  }
+  /**
+   * What each clock showed with `ply` moves played: the time its player had left after their
+   * last move up to that point, or the starting time before their first move.
+   */
+  clocksAt(ply) {
+    const out = { w: this.tcInfo.base * 6e4, b: this.tcInfo.base * 6e4 };
+    for (let i = 0; i < ply && i < this.plies.length; i++) {
+      const p = this.plies[i];
+      if (p.clock != null) out[p.color] = p.clock;
+    }
+    return out;
+  }
+  undo() {
+    if (!this.plies.length) return false;
+    this.chess.undo();
+    this.plies.pop();
+    this.result = this.termination = this.endedAt = null;
+    return true;
+  }
+  nameOf(color) {
+    return color === "w" ? this.white : this.black;
+  }
+  winnerText() {
+    if (this.result === "1-0") return `${this.white} wins`;
+    if (this.result === "0-1") return `${this.black} wins`;
+    if (this.result === "1/2-1/2") return "Draw";
+    return "";
+  }
+  toJSON() {
+    return {
+      id: this.id,
+      white: this.white,
+      black: this.black,
+      tc: this.tc,
+      startedAt: this.startedAt,
+      endedAt: this.endedAt,
+      result: this.result,
+      termination: this.termination,
+      clocks: this.clocks,
+      moves: this.plies.map((p) => p.san),
+      clk: this.plies.some((p) => p.clock != null) ? this.plies.map((p) => p.clock == null ? null : Math.round(p.clock)) : void 0,
+      remote: this.remote,
+      ai: this.ai || void 0
+    };
+  }
+  pgn() {
+    const d = new Date(this.startedAt);
+    const date = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+    const tc = this.tcInfo;
+    const esc2 = (s) => String(s).replace(/[\\"]/g, "'");
+    const headers = [
+      ["Event", this.remote ? "Casual remote game" : this.ai ? "Casual game against Stockfish" : "Casual over-the-board game"],
+      ["Site", "Deskmate"],
+      ["Date", date],
+      ["White", this.white],
+      ["Black", this.black],
+      ["Result", this.result || "*"],
+      ["TimeControl", tc.base ? `${tc.base * 60}+${tc.inc}` : "-"]
+    ];
+    if (this.termination) headers.push(["Termination", this.termination]);
+    let text = headers.map(([k, v]) => `[${k} "${esc2(v)}"]`).join("\n") + "\n\n";
+    const parts = [];
+    const clk = (ms) => {
+      const t = Math.max(0, Math.round(ms / 1e3));
+      return `{[%clk ${Math.floor(t / 3600)}:${String(Math.floor(t / 60) % 60).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}]}`;
+    };
+    this.plies.forEach((p, i) => {
+      if (i % 2 === 0) parts.push(`${i / 2 + 1}.`);
+      parts.push(p.san);
+      if (p.clock != null) parts.push(clk(p.clock));
+    });
+    parts.push(this.result || "*");
+    let line = "";
+    for (const tok of parts) {
+      if ((line + " " + tok).trim().length > 80) {
+        text += line.trim() + "\n";
+        line = "";
+      }
+      line += " " + tok;
+    }
+    return text + line.trim() + "\n";
+  }
+  /** Build a Game from PGN text; throws on invalid PGN. */
+  static fromPGN(text) {
+    const c = new Chess();
+    c.loadPgn(text);
+    const h = c.getHeaders();
+    const tcHeader = h.TimeControl && /^(\d+)\+(\d+)$/.exec(h.TimeControl);
+    const tcId = tcHeader ? `${+tcHeader[1] / 60}+${tcHeader[2]}` : "none";
+    const g = new _Game({
+      white: h.White && h.White !== "?" ? h.White : "White",
+      black: h.Black && h.Black !== "?" ? h.Black : "Black",
+      tc: timeControl(tcId).id,
+      moves: c.history()
+    });
+    const clocks = new Map(c.getComments().map(({ fen, comment }) => {
+      const m = /\[%clk (\d+):(\d+):(\d+(?:\.\d+)?)\]/.exec(comment || "");
+      return [fen, m ? ((+m[1] * 60 + +m[2]) * 60 + +m[3]) * 1e3 : null];
+    }));
+    g.plies.forEach((p) => {
+      if (clocks.get(p.fen) != null) p.clock = clocks.get(p.fen);
+    });
+    const date = h.Date && /^(\d{4})\.(\d{2})\.(\d{2})$/.exec(h.Date);
+    if (date) g.startedAt = new Date(+date[1], +date[2] - 1, +date[3]).getTime();
+    if (["1-0", "0-1", "1/2-1/2"].includes(h.Result)) {
+      g.result = h.Result;
+      g.termination = h.Termination || g.termination || "Imported";
+    } else if (!g.result) {
+      g._detectEnd();
+    }
+    return g;
+  }
+};
 
-const settings = storage.loadSettings();
-if (!['ember', 'stone', 'green'].includes(settings.theme)) settings.theme = 'ember';
-if (!settings.pid) {
-  settings.pid = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(36).padStart(2, '0')).join('');
-  storage.saveSettings(settings);
+// src/board.ts
+var FILES = "abcdefgh";
+var ROLE_NAMES = { K: "king", Q: "queen", R: "rook", B: "bishop", N: "knight", P: "pawn" };
+var el = (tag, cls, parent) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (parent) parent.appendChild(e);
+  return e;
+};
+var reflow = (e) => void e.offsetWidth;
+var Board = class {
+  root;
+  onMove;
+  orientation;
+  state;
+  prefs;
+  pieces;
+  selected;
+  drag;
+  shapes;
+  autoShapes;
+  drawing;
+  inner;
+  squaresEl;
+  squareEls;
+  piecesEl;
+  svg;
+  promoEl;
+  _sqByName;
+  constructor(root, opts) {
+    this.root = root;
+    this.onMove = opts.onMove;
+    this.orientation = "w";
+    this.state = { fen: "8/8/8/8/8/8/8/8", lastMove: null, check: null, dests: /* @__PURE__ */ new Map(), movable: null };
+    this.prefs = { showDests: true, coords: true };
+    this.pieces = /* @__PURE__ */ new Map();
+    this.selected = null;
+    this.drag = null;
+    this.shapes = [];
+    this.autoShapes = [];
+    this.drawing = null;
+    root.classList.add("board");
+    this.inner = el("div", "board-inner", root);
+    this.squaresEl = el("div", "squares", this.inner);
+    this.squareEls = [];
+    for (let i = 0; i < 64; i++) this.squareEls.push(el("div", "sq", this.squaresEl));
+    this.piecesEl = el("div", "pieces", this.inner);
+    this.svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    this.svg.setAttribute("class", "arrows");
+    this.svg.setAttribute("viewBox", "0 0 8 8");
+    this.svg.innerHTML = `<defs><marker id="ah" orient="auto" markerWidth="4" markerHeight="8" refX="2.05" refY="2.01">
+      <path d="M0,0 V4 L3,2 Z" fill="currentColor"/></marker>
+      <marker id="ah-auto" orient="auto" markerWidth="4" markerHeight="8" refX="2.05" refY="2.01">
+      <path d="M0,0 V4 L3,2 Z" fill="#121212" fill-opacity="0.62"/></marker></defs><g></g>`;
+    this.inner.appendChild(this.svg);
+    this.promoEl = el("div", "promo hidden", root);
+    root.addEventListener("pointerdown", (e) => this._down(e));
+    window.addEventListener("pointermove", (e) => this._move(e));
+    window.addEventListener("pointerup", (e) => this._up(e));
+    window.addEventListener("pointercancel", () => this._cancelDrag());
+    root.addEventListener("lostpointercapture", (e) => {
+      if (this.drag) this._up({ ...e, clientX: this.drag.px ?? e.clientX, clientY: this.drag.py ?? e.clientY });
+    });
+    window.addEventListener("blur", () => this._cancelDrag());
+    root.addEventListener("contextmenu", (e) => e.preventDefault());
+    this._layoutSquares();
+  }
+  /* ---------- geometry ---------- */
+  /** Visual (col,row) for a square under the current orientation. */
+  _pos(sq) {
+    const f = FILES.indexOf(sq[0]), r = +sq[1] - 1;
+    return this.orientation === "w" ? [f, 7 - r] : [7 - f, r];
+  }
+  _squareAt(col, row) {
+    return this.orientation === "w" ? FILES[col] + (8 - row) : FILES[7 - col] + (row + 1);
+  }
+  _eventSquare(e) {
+    const rect = this.inner.getBoundingClientRect();
+    const col = Math.floor((e.clientX - rect.left) / rect.width * 8);
+    const row = Math.floor((e.clientY - rect.top) / rect.height * 8);
+    if (col < 0 || col > 7 || row < 0 || row > 7) return null;
+    return this._squareAt(col, row);
+  }
+  _layoutSquares() {
+    this.squareEls.forEach((s, i) => {
+      const col = i % 8, row = Math.floor(i / 8);
+      const sq = this._squareAt(col, row);
+      s.dataset.sq = sq;
+      s.classList.toggle("light", (col + row) % 2 === 0);
+      s.classList.toggle("dark", (col + row) % 2 === 1);
+      s.innerHTML = "";
+      if (col === 0) el("span", "coord rank", s).textContent = sq[1];
+      if (row === 7) el("span", "coord file", s).textContent = sq[0];
+    });
+    this._sqByName = new Map(this.squareEls.map((s) => [s.dataset.sq, s]));
+  }
+  _place(pieceEl, sq) {
+    const [c, r] = this._pos(sq);
+    pieceEl.style.transform = `translate(${c * 100}%, ${r * 100}%)`;
+  }
+  /* ---------- public API ---------- */
+  setPrefs(prefs) {
+    Object.assign(this.prefs, prefs);
+    this.root.classList.toggle("no-coords", !this.prefs.coords);
+    this._highlight();
+  }
+  /** Update position & highlights. Pieces that moved glide to their new square. */
+  set(state) {
+    const posChanged = state.fen !== this.state.fen;
+    this.state = { ...this.state, ...state };
+    if (posChanged) {
+      this.shapes = [];
+      this._renderShapes();
+    }
+    if (this.selected && !(this.state.dests.get(this.selected) && this.state.movable)) this.selected = null;
+    this._syncPieces();
+    this._highlight();
+  }
+  setOrientation(color) {
+    if (color === this.orientation) return;
+    this.root.classList.add("no-anim");
+    this.orientation = color;
+    this._layoutSquares();
+    for (const [sq, p] of this.pieces) this._place(p.el, sq);
+    this._renderShapes();
+    this._highlight();
+    reflow(this.root);
+    this.root.classList.remove("no-anim");
+  }
+  /** Turn the board to the other side, instantly: no spin, no pieces sliding across. */
+  flip() {
+    this._cancelDrag();
+    this.root.classList.add("no-anim");
+    this.setOrientation(this.orientation === "w" ? "b" : "w");
+    reflow(this.root);
+    this.root.classList.remove("no-anim");
+  }
+  /** Show the promotion picker over the target file; resolves to 'q'|'r'|'b'|'n' or null. */
+  askPromotion(to, color) {
+    return new Promise((resolve) => {
+      const [col, row] = this._pos(to);
+      const fromTop = row === 0;
+      this.promoEl.innerHTML = "";
+      this.promoEl.classList.remove("hidden");
+      const close = (v) => {
+        this.promoEl.classList.add("hidden");
+        this.promoEl.innerHTML = "";
+        resolve(v);
+      };
+      ["q", "n", "r", "b"].forEach((role, i) => {
+        const b = el("button", "promo-choice", this.promoEl);
+        b.style.left = `${col * 12.5}%`;
+        b.style.top = `${(fromTop ? i : 7 - i) * 12.5}%`;
+        b.setAttribute("aria-label", `Promote to ${ROLE_NAMES[role.toUpperCase()]}`);
+        el("span", `piece-img ${color}${role.toUpperCase()}`, b);
+        b.addEventListener("pointerdown", (e) => {
+          e.stopPropagation();
+          close(role);
+        });
+      });
+      this.promoEl.onpointerdown = (e) => {
+        e.stopPropagation();
+        close(null);
+      };
+    });
+  }
+  /* ---------- pieces ---------- */
+  _syncPieces() {
+    const next = fenPieces(this.state.fen);
+    const removed = [];
+    for (const [sq, p] of this.pieces) {
+      if (next.get(sq) !== p.code) {
+        removed.push({ sq, ...p });
+        this.pieces.delete(sq);
+      }
+    }
+    const added = [];
+    for (const [sq, code] of next) if (!this.pieces.has(sq)) added.push({ sq, code });
+    for (const a of added) {
+      let best = -1, bestD = Infinity;
+      removed.forEach((r, i) => {
+        if (r.code !== a.code) return;
+        const [c1, r1] = this._pos(r.sq), [c2, r2] = this._pos(a.sq);
+        const d = Math.hypot(c1 - c2, r1 - r2);
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      });
+      if (best >= 0) {
+        const [r] = removed.splice(best, 1);
+        r.el.classList.add("moving");
+        this._place(r.el, a.sq);
+        setTimeout(() => r.el.classList.remove("moving"), 260);
+        this.pieces.set(a.sq, { el: r.el, code: a.code });
+      } else {
+        const p = el("div", `piece piece-img ${a.code} appear`, this.piecesEl);
+        p.setAttribute("aria-label", `${a.code[0] === "w" ? "white" : "black"} ${ROLE_NAMES[a.code[1]]} on ${a.sq}`);
+        this._place(p, a.sq);
+        setTimeout(() => p.classList.remove("appear"), 260);
+        this.pieces.set(a.sq, { el: p, code: a.code });
+      }
+    }
+    for (const r of removed) {
+      r.el.classList.add("fade");
+      setTimeout(() => r.el.remove(), 220);
+    }
+    for (const [sq, p] of this.pieces) p.el.setAttribute(
+      "aria-label",
+      `${p.code[0] === "w" ? "white" : "black"} ${ROLE_NAMES[p.code[1]]} on ${sq}`
+    );
+  }
+  /* ---------- highlights ---------- */
+  _highlight() {
+    const { lastMove, check, dests, movable } = this.state;
+    const sel = this.selected;
+    const targets = sel ? dests.get(sel) || [] : [];
+    const occupied = fenPieces(this.state.fen);
+    for (const s of this.squareEls) {
+      const sq = s.dataset.sq;
+      s.classList.toggle("last-move", !!lastMove && lastMove.includes(sq));
+      s.classList.toggle("selected", sel === sq);
+      s.classList.toggle("check", check === sq);
+      const isDest = this.prefs.showDests && targets.includes(sq);
+      s.classList.toggle("move-dest", isDest && !occupied.has(sq));
+      s.classList.toggle("capture-dest", isDest && occupied.has(sq));
+      s.classList.toggle("hover", !!this.drag?.moved && this.drag.over === sq);
+      s.classList.toggle("can-move", !!movable && dests.has(sq));
+    }
+    this.root.classList.toggle("movable", !!movable);
+    this.root.classList.toggle("dragging-piece", !!this.drag);
+  }
+  /* ---------- input ---------- */
+  _canMoveFrom(sq) {
+    const { movable, dests } = this.state;
+    const p = this.pieces.get(sq);
+    return !!movable && !!p && p.code[0] === movable && dests.has(sq);
+  }
+  _down(e) {
+    const sq = this._eventSquare(e);
+    if (!sq) return;
+    if (e.button === 2) {
+      this.drawing = { from: sq };
+      return;
+    }
+    if (e.button !== 0) return;
+    if (this.shapes.length) {
+      this.shapes = [];
+      this._renderShapes();
+    }
+    const targets = this.selected ? this.state.dests.get(this.selected) || [] : [];
+    if (this.selected && targets.includes(sq)) {
+      const from = this.selected;
+      this.selected = null;
+      this._highlight();
+      this.onMove(from, sq);
+      return;
+    }
+    if (this._canMoveFrom(sq)) {
+      e.preventDefault();
+      try {
+        this.root.setPointerCapture(e.pointerId);
+      } catch {
+      }
+      const wasSelected = this.selected === sq;
+      this.selected = sq;
+      const el2 = this.pieces.get(sq).el;
+      this.drag = { from: sq, el: el2, x: e.clientX, y: e.clientY, rect: this.inner.getBoundingClientRect(), moved: false, wasSelected, over: sq };
+      el2.classList.add("dragging");
+      this._follow(e.clientX, e.clientY);
+      this._highlight();
+    } else if (this.selected) {
+      this.selected = null;
+      this._highlight();
+    }
+  }
+  /** Put the dragged piece's centre at the pointer; batched to one update per frame. */
+  _follow(x, y) {
+    const d = this.drag;
+    d.px = x;
+    d.py = y;
+    if (d.raf) return;
+    d.raf = requestAnimationFrame(() => {
+      d.raf = 0;
+      if (this.drag !== d) return;
+      const size = d.rect.width / 8;
+      d.el.style.transform = `translate3d(${d.px - d.rect.left - size / 2}px, ${d.py - d.rect.top - size / 2}px, 0) scale(1.14)`;
+    });
+  }
+  _move(e) {
+    const d = this.drag;
+    if (!d) return;
+    if (e.pointerType === "mouse" && e.buttons === 0) {
+      this._up(e);
+      return;
+    }
+    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 3) d.moved = true;
+    this._follow(e.clientX, e.clientY);
+    const over = this._eventSquare(e);
+    if (over !== d.over) {
+      d.over = over;
+      this._highlight();
+    }
+  }
+  _up(e) {
+    if (this.drawing) {
+      const to2 = this._eventSquare(e);
+      if (to2) this._toggleShape(this.drawing.from, to2);
+      this.drawing = null;
+      return;
+    }
+    const d = this.drag;
+    if (!d) return;
+    this.drag = null;
+    if (d.raf) cancelAnimationFrame(d.raf);
+    const to = this._eventSquare(e);
+    const targets = this.state.dests.get(d.from) || [];
+    this.root.classList.add("no-anim");
+    d.el.classList.remove("dragging");
+    if (to && to !== d.from && targets.includes(to)) {
+      const { code } = this.pieces.get(d.from);
+      const captured = this.pieces.get(to);
+      if (captured) captured.el.remove();
+      this.pieces.delete(d.from);
+      this.pieces.set(to, { el: d.el, code });
+      this._place(d.el, to);
+      reflow(d.el);
+      this.root.classList.remove("no-anim");
+      this.selected = null;
+      this._highlight();
+      this.onMove(d.from, to);
+      return;
+    }
+    this._place(d.el, d.from);
+    reflow(d.el);
+    this.root.classList.remove("no-anim");
+    if (!d.moved && d.wasSelected) this.selected = null;
+    this._highlight();
+  }
+  _cancelDrag() {
+    if (!this.drag) return;
+    if (this.drag.raf) cancelAnimationFrame(this.drag.raf);
+    this.drag.el.classList.remove("dragging");
+    this._place(this.drag.el, this.drag.from);
+    this.drag = null;
+    this.selected = null;
+    this._highlight();
+  }
+  /* ---------- arrows & circles ---------- */
+  setAutoShapes(shapes) {
+    this.autoShapes = shapes;
+    this._renderShapes();
+  }
+  _toggleShape(from, to) {
+    const i = this.shapes.findIndex((s) => s.from === from && s.to === to);
+    if (i >= 0) this.shapes.splice(i, 1);
+    else this.shapes.push({ from, to });
+    this._renderShapes();
+  }
+  _renderShapes() {
+    const g = this.svg.querySelector("g");
+    g.innerHTML = "";
+    const ns = "http://www.w3.org/2000/svg";
+    for (const { from, to, auto } of [...this.autoShapes.map((x) => ({ ...x, auto: true })), ...this.shapes.map((x) => ({ ...x, auto: false }))]) {
+      const [c1, r1] = this._pos(from), [c2, r2] = this._pos(to);
+      if (from === to) {
+        const c = document.createElementNS(ns, "circle");
+        c.setAttribute("cx", String(c1 + 0.5));
+        c.setAttribute("cy", String(r1 + 0.5));
+        c.setAttribute("r", "0.45");
+        c.setAttribute("class", "shape-circle");
+        g.appendChild(c);
+        continue;
+      }
+      const x1 = c1 + 0.5, y1 = r1 + 0.5, x2 = c2 + 0.5, y2 = r2 + 0.5;
+      const len = Math.hypot(x2 - x1, y2 - y1);
+      const shorten = 0.3;
+      const line = document.createElementNS(ns, "line");
+      line.setAttribute("x1", String(x1));
+      line.setAttribute("y1", String(y1));
+      line.setAttribute("x2", String(x2 - (x2 - x1) / len * shorten));
+      line.setAttribute("y2", String(y2 - (y2 - y1) / len * shorten));
+      line.setAttribute("class", auto ? "shape-arrow auto" : "shape-arrow");
+      line.setAttribute("marker-end", auto ? "url(#ah-auto)" : "url(#ah)");
+      g.appendChild(line);
+    }
+  }
+};
+
+// src/storage.ts
+var KEYS = { current: "deskmate:current", archive: "deskmate:archive", settings: "deskmate:settings" };
+var ARCHIVE_LIMIT = 300;
+try {
+  for (const [name, key] of Object.entries(KEYS)) {
+    const legacy = `obchess:${name}`;
+    const old = localStorage.getItem(legacy);
+    if (old !== null && localStorage.getItem(key) === null) localStorage.setItem(key, old);
+    if (old !== null) localStorage.removeItem(legacy);
+  }
+} catch {
+}
+var read = (key, fallback) => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+var write = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+};
+var DEFAULT_SETTINGS = {
+  autoFlip: true,
+  sound: true,
+  showDests: true,
+  coords: true,
+  theme: "ember",
+  focus: true,
+  // during a game: only the board, the players and the clocks
+  winBar: true,
+  // a slim bar by the board with each side's winning chances
+  white: "White",
+  black: "Black",
+  tc: "none",
+  myName: "",
+  remoteTc: "none",
+  // anonymous id for this browser: tells the two laptops in a live game which seat is whose
+  pid: ""
+};
+var storage = {
+  loadSettings: () => ({ ...DEFAULT_SETTINGS, ...read(KEYS.settings, {}) }),
+  saveSettings: (s) => write(KEYS.settings, s),
+  loadCurrent: () => read(KEYS.current, null),
+  saveCurrent: (game2) => write(KEYS.current, game2),
+  loadArchive: () => read(KEYS.archive, []),
+  /** Insert or replace a game in the archive (newest first). */
+  archive(game2) {
+    const list = read(KEYS.archive, []).filter((g) => g.id !== game2.id);
+    list.unshift(game2);
+    write(KEYS.archive, list.slice(0, ARCHIVE_LIMIT));
+  },
+  removeFromArchive(id) {
+    write(KEYS.archive, read(KEYS.archive, []).filter((g) => g.id !== id));
+  },
+  clearArchive: () => write(KEYS.archive, [])
+};
+
+// src/sound.ts
+var ctx = null;
+var enabled = true;
+var audio = () => {
+  if (!ctx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    ctx = new AC();
+  }
+  if (ctx.state === "suspended") ctx.resume();
+  return ctx;
+};
+function drop(when, from, to, gain, dur) {
+  const a = audio();
+  if (!a) return;
+  const t = a.currentTime + when;
+  const o = a.createOscillator();
+  o.type = "sine";
+  o.frequency.setValueAtTime(from, t);
+  o.frequency.exponentialRampToValueAtTime(to, t + dur * 0.6);
+  const g = a.createGain();
+  g.gain.setValueAtTime(1e-4, t);
+  g.gain.exponentialRampToValueAtTime(gain, t + 6e-3);
+  g.gain.exponentialRampToValueAtTime(1e-4, t + dur);
+  o.connect(g).connect(a.destination);
+  o.start(t);
+  o.stop(t + dur + 0.02);
+}
+var sound = {
+  setEnabled(v) {
+    enabled = v;
+  },
+  capture() {
+    if (!enabled) return;
+    drop(0, 420, 1250, 0.32, 0.16);
+    drop(0.07, 650, 1500, 0.09, 0.12);
+  }
+};
+
+// src/confetti.ts
+var COLORS = ["#e5383b", "#ff4d4f", "#a8323e", "#ffffff", "#f3eee7", "#1d1d1f"];
+function confetti(count = 160) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const canvas = document.getElementById("confetti");
+  const ctx2 = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = innerWidth * dpr;
+  canvas.height = innerHeight * dpr;
+  ctx2.scale(dpr, dpr);
+  const parts = Array.from({ length: count }, () => ({
+    x: innerWidth / 2 + (Math.random() - 0.5) * 200,
+    y: innerHeight * 0.45,
+    vx: (Math.random() - 0.5) * 16,
+    vy: -Math.random() * 16 - 6,
+    w: 6 + Math.random() * 6,
+    h: 8 + Math.random() * 8,
+    rot: Math.random() * Math.PI,
+    vr: (Math.random() - 0.5) * 0.3,
+    color: COLORS[Math.floor(Math.random() * COLORS.length)]
+  }));
+  const start = performance.now();
+  canvas.classList.add("on");
+  const frame = (t) => {
+    const age = t - start;
+    ctx2.clearRect(0, 0, innerWidth, innerHeight);
+    ctx2.globalAlpha = Math.max(0, 1 - age / 3200);
+    for (const p of parts) {
+      p.vy += 0.38;
+      p.vx *= 0.99;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.vr;
+      ctx2.save();
+      ctx2.translate(p.x, p.y);
+      ctx2.rotate(p.rot);
+      ctx2.fillStyle = p.color;
+      ctx2.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * Math.abs(Math.cos(p.rot * 2)));
+      ctx2.restore();
+    }
+    if (age < 3200) requestAnimationFrame(frame);
+    else {
+      ctx2.setTransform(1, 0, 0, 1, 0, 0);
+      ctx2.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.classList.remove("on");
+    }
+  };
+  requestAnimationFrame(frame);
 }
 
-let game = restoreGame();
-let viewPly = game.length;
-let review = null; // a read-only Game opened from saved games / import
-// a same-laptop timed game resumes paused after a reload; live games keep running
-let paused = game.hasClock && game.length > 0 && !game.over && !game.remote;
-let lastTick = Date.now();
-let flipTimer = null;
-let room = null; // live connection for game.remote.room
-let relaysUp = 0; // relays the room is connected to right now
-let joining = null; // { code, name, timer } while waiting for a room's first snapshot
-let an = null; // post-game analysis: { game, evals[], summary, done }
-let view = 'game'; // 'home' | 'game'
-let engine = null;
-let aiEngine = null; // Stockfish as an opponent; a separate worker from the analysis one
-let aiTurn = 0; // bumped whenever a pending computer move must be thrown away
+// src/remote.ts
+var sortedMoves = (chess) => chess.moves({ verbose: true }).map((m) => ({ key: m.from + m.to + (m.promotion || ""), san: m.san })).sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+var toB64url = (bytes) => {
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
+var fromB64url = (str) => {
+  const bin = atob(str.replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+};
+function packMoves(sans) {
+  const chess = new Chess();
+  const bytes = sans.map((san2) => {
+    const list = sortedMoves(chess);
+    const i = list.findIndex((m) => m.san === san2);
+    if (i < 0) throw new Error(`illegal move ${san2}`);
+    chess.move(san2);
+    return i;
+  });
+  return toB64url(bytes);
+}
+function unpackMoves(packed) {
+  const chess = new Chess();
+  return [...fromB64url(packed)].map((i) => {
+    const m = sortedMoves(chess)[i];
+    if (!m) throw new Error("corrupt move data");
+    chess.move(m.san);
+    return m.san;
+  });
+}
 
-const board = new Board($('#board'), { onMove });
+// vendor/secp256k1.js
+/*! noble-secp256k1 - MIT License (c) 2019 Paul Miller (paulmillr.com) */
+var freeze = Object.freeze;
+var P = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn;
+var N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+var Gx = 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798n;
+var Gy = 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8n;
+var secp256k1_CURVE = freeze({
+  p: P,
+  n: N,
+  h: 1n,
+  a: 0n,
+  b: 7n,
+  Gx,
+  Gy
+});
+var L = 32;
+var isBytes = (a) => {
+  return a instanceof Uint8Array || ArrayBuffer.isView(a) && a.constructor.name === "Uint8Array" && a.BYTES_PER_ELEMENT === 1;
+};
+var abytes = (value, length, title = "") => {
+  if (isBytes(value) && (length === void 0 || value.length === length))
+    return value;
+  const bytes = isBytes(value);
+  const ofLen = length !== void 0 ? ` of length ${length}` : "";
+  const got = bytes ? `length=${value.length}` : `type=${typeof value}`;
+  const message = (title ? `"${title}" ` : "") + "expected Uint8Array" + ofLen + ", got " + got;
+  if (!bytes)
+    throw new TypeError(message);
+  throw new RangeError(message);
+};
+var cloneBytes = (value) => Uint8Array.from(value);
+var snapshotBytes = (value, title, length) => cloneBytes(abytes(value, length, title));
+var padh = (n, pad) => n.toString(16).padStart(pad, "0");
+var bytesToHex = (bytes) => {
+  let hex2 = "";
+  for (const byte of abytes(bytes))
+    hex2 += padh(byte, 2);
+  return hex2;
+};
+var hexToBytes = (hex2) => {
+  const e = "hex invalid";
+  if (typeof hex2 !== "string")
+    throw new TypeError(e);
+  if (hex2.length % 2 || !/^[\da-f]*$/i.test(hex2))
+    throw new RangeError(e);
+  const array = new Uint8Array(hex2.length / 2);
+  for (let ai = 0, hi = 0; ai < array.length; ai++, hi += 2) {
+    const n1 = hex2.charCodeAt(hi);
+    const n2 = hex2.charCodeAt(hi + 1);
+    array[ai] = ((n1 & 15) + (n1 >> 6) * 9) * 16 + (n2 & 15) + (n2 >> 6) * 9;
+  }
+  return array;
+};
+var subtle = () => {
+  const s = globalThis?.crypto?.subtle;
+  if (s)
+    return s;
+  throw new Error("crypto.subtle must be defined, consider polyfill");
+};
+var concatBytes = (...arrays) => {
+  let sum = 0;
+  for (const a of arrays)
+    sum += abytes(a).length;
+  const res = new Uint8Array(sum);
+  let pad = 0;
+  for (const a of arrays) {
+    res.set(a, pad);
+    pad += a.length;
+  }
+  return res;
+};
+var randomBytes = (len = L) => {
+  const c = globalThis?.crypto;
+  if (typeof c?.getRandomValues !== "function")
+    throw new Error("crypto.getRandomValues must be defined, consider polyfill");
+  return c.getRandomValues(new Uint8Array(len));
+};
+var big = BigInt;
+var arange = (n, min, max, msg = "bad number: out of range") => {
+  if (typeof n !== "bigint")
+    throw new TypeError(msg);
+  if (min <= n && n < max)
+    return n;
+  throw new RangeError(msg);
+};
+var M = (a, b = P) => (a %= b) >= 0n ? a : b + a;
+var modN = (a) => M(a, N);
+var invert = (number, modulo) => {
+  if (number === 0n)
+    throw new Error("invert: expected non-zero number");
+  if (modulo <= 1n)
+    throw new Error("invert: expected modulus > 1, got " + modulo);
+  let a = M(number, modulo);
+  let b = modulo;
+  let x = 0n, u = 1n;
+  while (a !== 0n) {
+    const q = b / a;
+    const r = b - a * q;
+    const m = x - u * q;
+    b = a, a = r, x = u, u = m;
+  }
+  const gcd = b;
+  if (gcd !== 1n)
+    throw new Error("invert: does not exist");
+  return M(x, modulo);
+};
+var _hash = (name) => {
+  const fn = hashes[name];
+  if (typeof fn !== "function")
+    throw new Error("hashes." + name + " not set");
+  return fn;
+};
+var callHash = (name, a, b) => abytes(_hash(name)(a, b), L, "digest");
+var callHashAsync = async (name, a, b) => abytes(await _hash(name)(a, b), L, "digest");
+var apoint = (p) => {
+  if (p instanceof Point)
+    return p;
+  throw new TypeError("Point expected");
+};
+var E_BADPOINT = "bad point: not on curve";
+var koblitz = (x) => M(M(x * x) * x + 7n);
+var FpIsValid = (n) => arange(n, 0n, P);
+var FpIsValidNot0 = (n) => arange(n, 1n, P);
+var FnIsValidNot0 = (n) => arange(n, 1n, N);
+var isEven = (y) => !(y & 1n);
+var getPrefix = (y) => Uint8Array.of(isEven(y) ? 2 : 3);
+var lift_x = (x) => {
+  const c = koblitz(FpIsValidNot0(x));
+  let r = 1n;
+  for (let num = c, e = (P + 1n) / 4n; e > 0n; e >>= 1n) {
+    if (e & 1n)
+      r = r * num % P;
+    num = num * num % P;
+  }
+  if (M(r * r) !== c)
+    throw new Error("sqrt invalid");
+  return new Point(x, isEven(r) ? r : M(-r), 1n);
+};
+var Point = class _Point {
+  static BASE;
+  static ZERO;
+  X;
+  Y;
+  Z;
+  constructor(X, Y, Z) {
+    this.X = FpIsValid(X);
+    this.Y = FpIsValidNot0(Y);
+    this.Z = FpIsValid(Z);
+    freeze(this);
+  }
+  /** Returns the shared curve metadata object by reference.
+   * It is readonly only at type level, and mutating it won't retarget arithmetic,
+   * which already uses module-load snapshots. */
+  static CURVE() {
+    return secp256k1_CURVE;
+  }
+  /** Create 3d xyz point from 2d xy. (0, 0) => (0, 1, 0), not (0, 0, 1) */
+  static fromAffine(ap) {
+    const { x, y } = ap;
+    return x === 0n && y === 0n ? I : new _Point(x, y, 1n);
+  }
+  /** Convert Uint8Array or hex string to Point. */
+  static fromBytes(bytes) {
+    abytes(bytes);
+    const length = bytes.length;
+    const head = bytes[0];
+    const x = sliceBytesNumBE(bytes, 1, 33);
+    try {
+      if (length === 33 && (head === 2 || head === 3)) {
+        const p = lift_x(x);
+        return head === 3 ? p.negate() : p;
+      }
+      if (length === 65 && head === 4)
+        return new _Point(x, sliceBytesNumBE(bytes, 33, 65), 1n).assertValidity();
+    } catch (error) {
+      throw new Error(E_BADPOINT);
+    }
+    throw new Error(E_BADPOINT);
+  }
+  static fromHex(hex2) {
+    return _Point.fromBytes(hexToBytes(hex2));
+  }
+  get x() {
+    return this.toAffine().x;
+  }
+  get y() {
+    return this.toAffine().y;
+  }
+  /** Equality check: compare points P&Q. */
+  equals(other2) {
+    const { X: X1, Y: Y1, Z: Z1 } = this;
+    const { X: X2, Y: Y2, Z: Z2 } = apoint(other2);
+    return M(X1 * Z2) === M(X2 * Z1) && M(Y1 * Z2) === M(Y2 * Z1);
+  }
+  is0() {
+    return this.Z === 0n;
+  }
+  /** Flip point over y coordinate. */
+  negate() {
+    return new _Point(this.X, M(-this.Y), this.Z);
+  }
+  /** Point doubling: P+P, complete formula. */
+  double() {
+    return this.add(this);
+  }
+  /**
+   * Point addition: P+Q, complete, exception-free formula
+   * (Renes-Costello-Batina, algo 1 of [2015/1060](https://eprint.iacr.org/2015/1060)).
+   * Cost: `12M + 0S + 3*a + 3*b3 + 23add`.
+   */
+  // prettier-ignore
+  add(other2) {
+    const { X: X1, Y: Y1, Z: Z1 } = this;
+    const { X: X2, Y: Y2, Z: Z2 } = apoint(other2);
+    const a = 0n;
+    const b = 7n;
+    let X3 = 0n, Y3 = 0n, Z3 = 0n;
+    const b3 = M(b * 3n);
+    let t0 = M(X1 * X2), t1 = M(Y1 * Y2), t2 = M(Z1 * Z2), t3 = M(X1 + Y1);
+    let t4 = M(X2 + Y2);
+    t3 = M(t3 * t4);
+    t4 = M(t0 + t1);
+    t3 = M(t3 - t4);
+    t4 = M(X1 + Z1);
+    let t5 = M(X2 + Z2);
+    t4 = M(t4 * t5);
+    t5 = M(t0 + t2);
+    t4 = M(t4 - t5);
+    t5 = M(Y1 + Z1);
+    X3 = M(Y2 + Z2);
+    t5 = M(t5 * X3);
+    X3 = M(t1 + t2);
+    t5 = M(t5 - X3);
+    Z3 = M(a * t4);
+    X3 = M(b3 * t2);
+    Z3 = M(X3 + Z3);
+    X3 = M(t1 - Z3);
+    Z3 = M(t1 + Z3);
+    Y3 = M(X3 * Z3);
+    t1 = M(t0 + t0);
+    t1 = M(t1 + t0);
+    t2 = M(a * t2);
+    t4 = M(b3 * t4);
+    t1 = M(t1 + t2);
+    t2 = M(t0 - t2);
+    t2 = M(a * t2);
+    t4 = M(t4 + t2);
+    t0 = M(t1 * t4);
+    Y3 = M(Y3 + t0);
+    t0 = M(t5 * t4);
+    X3 = M(t3 * X3);
+    X3 = M(X3 - t0);
+    t0 = M(t3 * t1);
+    Z3 = M(t5 * Z3);
+    Z3 = M(Z3 + t0);
+    return new _Point(X3, Y3, Z3);
+  }
+  subtract(other2) {
+    return this.add(apoint(other2).negate());
+  }
+  /**
+   * Point-by-scalar multiplication. Scalar must be in range 1 <= n < CURVE.n.
+   * Uses {@link wNAF} for base point.
+   * Uses fake point to mitigate leakage shape in JS, not as a hard constant-time guarantee.
+   * @param n scalar by which point is multiplied
+   * @param safe safe mode guards against timing attacks; unsafe mode is faster
+   */
+  multiply(n, safe = true) {
+    if (!safe && n === 0n)
+      return I;
+    FnIsValidNot0(n);
+    if (n === 1n)
+      return this;
+    if (this.equals(G))
+      return wNAF(n).p;
+    let p = I;
+    let f = G;
+    let d = this;
+    for (let i = 0; safe ? i < 256 : n > 0n; i++) {
+      if (n & 1n)
+        p = p.add(d);
+      else if (safe)
+        f = f.add(d);
+      d = d.double();
+      n >>= 1n;
+    }
+    return p;
+  }
+  multiplyUnsafe(scalar) {
+    return this.multiply(scalar, false);
+  }
+  /** Convert point to 2d xy affine point. (X, Y, Z) ∋ (x=X/Z, y=Y/Z) */
+  toAffine() {
+    const { X: x, Y: y, Z: z } = this;
+    if (z === 0n)
+      return { x: 0n, y: 0n };
+    if (z === 1n)
+      return { x, y };
+    const iz = invert(z, P);
+    if (M(z * iz) !== 1n)
+      throw new Error("inverse invalid");
+    return { x: M(x * iz), y: M(y * iz) };
+  }
+  /** Checks if the point is valid and on-curve. */
+  assertValidity() {
+    const { x, y } = this.toAffine();
+    FpIsValidNot0(x);
+    FpIsValidNot0(y);
+    if (M(y * y) !== koblitz(x))
+      throw new Error(E_BADPOINT);
+    return this;
+  }
+  /** Converts point to 33/65-byte Uint8Array. */
+  toBytes(isCompressed = true) {
+    const { x, y } = this.assertValidity().toAffine();
+    const x32b = numTo32b(x);
+    if (isCompressed)
+      return concatBytes(getPrefix(y), x32b);
+    return concatBytes(Uint8Array.of(4), x32b, numTo32b(y));
+  }
+  toHex(isCompressed) {
+    return bytesToHex(this.toBytes(isCompressed));
+  }
+};
+var G = new Point(Gx, Gy, 1n);
+var I = new Point(0n, 1n, 0n);
+Point.BASE = G;
+Point.ZERO = I;
+var doubleScalarMulUns = (R, u1, u2) => {
+  return G.multiply(u1, false).add(R.multiply(u2, false)).assertValidity();
+};
+var bytesToNumBE = (b) => big("0x" + (bytesToHex(b) || "0"));
+var sliceBytesNumBE = (b, from, to) => bytesToNumBE(b.subarray(from, to));
+var numTo32b = (num) => hexToBytes(padh(arange(num, 0n, 2n ** 256n), L * 2));
+var secretKeyToScalar = (secretKey) => {
+  const num = bytesToNumBE(abytes(secretKey, L, "secret key"));
+  return arange(num, 1n, N, "invalid secret key: outside of range");
+};
+var _sha = "SHA-256";
+var hashes = {
+  hmacSha256Async: async (key, message) => {
+    const s = subtle();
+    const k = await s.importKey("raw", key, { name: "HMAC", hash: _sha }, false, ["sign"]);
+    return new Uint8Array(await s.sign("HMAC", k, message));
+  },
+  hmacSha256: void 0,
+  sha256Async: async (msg) => new Uint8Array(await subtle().digest(_sha, msg)),
+  sha256: void 0
+};
+var randomSecretKey = (seed) => {
+  seed = seed === void 0 ? randomBytes(48) : seed;
+  abytes(seed);
+  if (seed.length < 48 || seed.length > 1024)
+    throw new RangeError("expected 48-1024b");
+  const num = M(bytesToNumBE(seed), N - 1n);
+  return numTo32b(num + 1n);
+};
+var createKeygen = (getPublicKey) => (seed) => {
+  const secretKey = randomSecretKey(seed);
+  return { secretKey, publicKey: getPublicKey(secretKey) };
+};
+var getTag = (tag) => Uint8Array.from("BIP0340/" + tag, (c) => c.charCodeAt(0));
+var taggedHash = (tag, ...messages) => {
+  const tagH = callHash("sha256", getTag(tag));
+  return callHash("sha256", concatBytes(tagH, tagH, ...messages));
+};
+var taggedHashAsync = (tag, ...messages) => callHashAsync("sha256Async", getTag(tag)).then((tagH) => callHashAsync("sha256Async", concatBytes(tagH, tagH, ...messages)));
+var extpubSchnorr = (priv) => {
+  const d_ = secretKeyToScalar(priv);
+  const p = G.multiply(d_);
+  const { x, y } = p.assertValidity().toAffine();
+  const d = isEven(y) ? d_ : modN(-d_);
+  const px = numTo32b(x);
+  return { d, px };
+};
+var bytesModN = (bytes) => modN(bytesToNumBE(bytes));
+var challenge = (...args) => bytesModN(taggedHash("challenge", ...args));
+var challengeAsync = async (...args) => bytesModN(await taggedHashAsync("challenge", ...args));
+var pubSchnorr = (secretKey) => {
+  return extpubSchnorr(secretKey).px;
+};
+var keygenSchnorr = /* @__PURE__ */ createKeygen(pubSchnorr);
+var prepSigSchnorr = (message, secretKey, auxRand) => {
+  const m = snapshotBytes(message, "message");
+  const { px, d } = extpubSchnorr(secretKey);
+  return { m, px, d, a: abytes(auxRand, L) };
+};
+var extractK = (rand2) => {
+  const k_ = bytesModN(rand2);
+  if (k_ === 0n)
+    throw new Error("sign failed: k is zero");
+  const { px, d } = extpubSchnorr(numTo32b(k_));
+  return { rx: px, k: d };
+};
+var createSigSchnorr = (k, px, e, d) => {
+  return concatBytes(px, numTo32b(modN(k + e * d)));
+};
+var E_INVSIG = "invalid signature produced";
+var signSchnorr = (message, secretKey, auxRand = randomBytes(L)) => {
+  const { m, px, d, a } = prepSigSchnorr(message, secretKey, auxRand);
+  const t = numTo32b(d ^ bytesToNumBE(taggedHash("aux", a)));
+  const { rx, k } = extractK(taggedHash("nonce", t, px, m));
+  const sig = createSigSchnorr(k, rx, challenge(rx, px, m), d);
+  if (!verifySchnorr(sig, m, px))
+    throw new Error(E_INVSIG);
+  return sig;
+};
+var signSchnorrAsync = async (message, secretKey, auxRand = randomBytes(L)) => {
+  const { m, px, d, a } = prepSigSchnorr(message, secretKey, auxRand);
+  const t = numTo32b(d ^ bytesToNumBE(await taggedHashAsync("aux", a)));
+  const { rx, k } = extractK(await taggedHashAsync("nonce", t, px, m));
+  const sig = createSigSchnorr(k, rx, await challengeAsync(rx, px, m), d);
+  if (!await verifySchnorrAsync(sig, m, px))
+    throw new Error(E_INVSIG);
+  return sig;
+};
+var callSyncAsyncFn = (res, later) => {
+  return res instanceof Promise ? res.then(later) : later(res);
+};
+var _verifSchnorr = (signature, message, publicKey, challengeFn) => {
+  const sig = abytes(signature, 64, "signature");
+  const msg = abytes(message, void 0, "message");
+  const pub = abytes(publicKey, L, "publicKey");
+  let P_;
+  let r;
+  let s;
+  let chalInput;
+  try {
+    const x = bytesToNumBE(pub);
+    P_ = lift_x(x);
+    r = FpIsValidNot0(sliceBytesNumBE(sig, 0, L));
+    s = FnIsValidNot0(sliceBytesNumBE(sig, L, 64));
+    chalInput = concatBytes(numTo32b(r), pub, msg);
+  } catch (error) {
+    return false;
+  }
+  return callSyncAsyncFn(challengeFn(chalInput), (e) => {
+    try {
+      const { x, y } = doubleScalarMulUns(P_, s, modN(-e)).toAffine();
+      if (!isEven(y) || x !== r)
+        return false;
+      return true;
+    } catch (error) {
+      return false;
+    }
+  });
+};
+var verifySchnorr = (s, m, p) => _verifSchnorr(s, m, p, challenge);
+var verifySchnorrAsync = async (s, m, p) => _verifSchnorr(s, m, p, challengeAsync);
+var schnorr = /* @__PURE__ */ freeze({
+  keygen: keygenSchnorr,
+  getPublicKey: pubSchnorr,
+  sign: signSchnorr,
+  verify: verifySchnorr,
+  signAsync: signSchnorrAsync,
+  verifyAsync: verifySchnorrAsync
+});
+var precompute = () => {
+  const points = [];
+  let p = G;
+  let b = p;
+  for (let w = 0; w < 33; w++) {
+    b = p;
+    points.push(b);
+    for (let i = 1; i < 128; i++) {
+      b = b.add(p);
+      points.push(b);
+    }
+    p = b.double();
+  }
+  return points;
+};
+var Gpows = void 0;
+var ctneg = (cnd, p) => {
+  const n = p.negate();
+  return cnd ? n : p;
+};
+var wNAF = (n) => {
+  const comp = Gpows || (Gpows = precompute());
+  let p = I;
+  let f = G;
+  for (let w = 0; w < 33; w++) {
+    let wbits = Number(n & 255n);
+    n >>= 8n;
+    if (wbits > 128) {
+      wbits -= 256;
+      n += 1n;
+    }
+    const off = w * 128;
+    const offP = off + Math.abs(wbits) - 1;
+    const isOddW = w % 2 !== 0;
+    const isNeg = wbits < 0;
+    if (wbits === 0) {
+      f = f.add(ctneg(isOddW, comp[off]));
+    } else {
+      p = p.add(ctneg(isNeg, comp[offP]));
+    }
+  }
+  if (n !== 0n)
+    throw new Error("invalid wnaf");
+  return { p, f };
+};
 
+// src/live.ts
+var DEFAULT_RELAYS = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net", "wss://offchain.pub"];
+var RELAYS = (() => {
+  try {
+    const custom = JSON.parse(globalThis.localStorage?.getItem("deskmate:relays") || "null");
+    if (Array.isArray(custom) && custom.length && custom.every((u) => /^wss?:\/\//.test(u))) return custom;
+  } catch {
+  }
+  return DEFAULT_RELAYS;
+})();
+var KIND = 30078;
+var ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+var CODE_LENGTH = 6;
+var newRoomCode = () => [...crypto.getRandomValues(new Uint8Array(CODE_LENGTH))].map((b) => ALPHABET[b % ALPHABET.length]).join("");
+function parseRoomCode(text) {
+  const s = String(text).toUpperCase().replace(/^.*#/, "").replace(/[^A-Z0-9]/g, "");
+  return s.length === CODE_LENGTH && [...s].every((c) => ALPHABET.includes(c)) ? s : null;
+}
+var formatRoomCode = (code) => `${code.slice(0, 3)}-${code.slice(3)}`;
+var enc = new TextEncoder();
+var hex = (bytes) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+var unhex = (s) => Uint8Array.from(s.match(/../g), (h) => parseInt(h, 16));
+var sha256 = async (data) => new Uint8Array(await crypto.subtle.digest("SHA-256", data));
+async function roomKeys(code) {
+  const secret = await sha256(enc.encode(`deskmate-room:${code}`));
+  return { secret, pubkey: hex(schnorr.getPublicKey(secret)) };
+}
+var Room = class {
+  code;
+  dTag;
+  onSnapshot;
+  onStatus;
+  relays;
+  sockets;
+  seen;
+  lastCreated;
+  lastEvent;
+  closed;
+  keys;
+  ready;
+  constructor(code, opts) {
+    this.code = code;
+    this.dTag = `deskmate:${code}`;
+    this.onSnapshot = opts.onSnapshot;
+    this.onStatus = opts.onStatus || (() => {
+    });
+    this.relays = opts.relays || RELAYS;
+    this.sockets = /* @__PURE__ */ new Map();
+    this.seen = /* @__PURE__ */ new Set();
+    this.lastCreated = 0;
+    this.lastEvent = null;
+    this.closed = false;
+    this.ready = roomKeys(code).then((k) => {
+      this.keys = k;
+    });
+  }
+  get connected() {
+    let n = 0;
+    for (const ws of this.sockets.values()) if (ws.readyState === WebSocket.OPEN) n++;
+    return n;
+  }
+  async connect() {
+    await this.ready;
+    for (const url of this.relays) this._open(url, 0);
+  }
+  _open(url, attempt) {
+    if (this.closed) return;
+    let ws;
+    try {
+      ws = new WebSocket(url);
+    } catch {
+      return this._retry(url, attempt);
+    }
+    this.sockets.set(url, ws);
+    ws.onopen = () => {
+      attempt = 0;
+      ws.send(JSON.stringify(["REQ", "dm", { kinds: [KIND], authors: [this.keys.pubkey], "#d": [this.dTag] }]));
+      if (this.lastEvent) ws.send(JSON.stringify(["EVENT", this.lastEvent]));
+      this.onStatus(this.connected);
+    };
+    ws.onmessage = (msg) => this._message(msg.data);
+    ws.onclose = () => {
+      if (this.sockets.get(url) === ws) this.sockets.delete(url);
+      this.onStatus(this.connected);
+      this._retry(url, attempt + 1);
+    };
+    ws.onerror = () => ws.close();
+  }
+  _retry(url, attempt) {
+    if (this.closed) return;
+    setTimeout(() => this._open(url, attempt), Math.min(3e4, 1e3 * 2 ** attempt));
+  }
+  async _message(data) {
+    let msg;
+    try {
+      msg = JSON.parse(data);
+    } catch {
+      return;
+    }
+    if (msg[0] !== "EVENT" || !msg[2]) return;
+    const ev = msg[2];
+    if (this.seen.has(ev.id) || ev.pubkey !== this.keys.pubkey || ev.kind !== KIND) return;
+    try {
+      const id = hex(await sha256(enc.encode(JSON.stringify([0, ev.pubkey, ev.created_at, ev.kind, ev.tags, ev.content]))));
+      if (id !== ev.id || !await schnorr.verifyAsync(unhex(ev.sig), unhex(ev.id), unhex(ev.pubkey))) return;
+    } catch {
+      return;
+    }
+    if (this.seen.has(ev.id)) return;
+    this.seen.add(ev.id);
+    this.lastCreated = Math.max(this.lastCreated, ev.created_at);
+    let snap;
+    try {
+      snap = JSON.parse(ev.content);
+    } catch {
+      return;
+    }
+    this.onSnapshot(snap);
+  }
+  async publish(snapshot2) {
+    await this.ready;
+    const created_at = Math.max(Math.floor(Date.now() / 1e3), this.lastCreated + 1);
+    this.lastCreated = created_at;
+    const tags = [["d", this.dTag]];
+    const content = JSON.stringify(snapshot2);
+    const id = hex(await sha256(enc.encode(JSON.stringify([0, this.keys.pubkey, created_at, KIND, tags, content]))));
+    const sig = hex(await schnorr.signAsync(unhex(id), this.keys.secret));
+    const ev = { id, pubkey: this.keys.pubkey, created_at, kind: KIND, tags, content, sig };
+    this.seen.add(id);
+    this.lastEvent = ev;
+    for (const ws of this.sockets.values()) if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(["EVENT", ev]));
+  }
+  close() {
+    this.closed = true;
+    for (const ws of this.sockets.values()) {
+      ws.onclose = null;
+      ws.close();
+    }
+    this.sockets.clear();
+  }
+};
+
+// src/engine.ts
+function appBase() {
+  const p = location.pathname;
+  if (p.endsWith("/")) return p;
+  const last = p.slice(p.lastIndexOf("/") + 1);
+  return last.includes(".") ? p.slice(0, p.lastIndexOf("/") + 1) : `${p}/`;
+}
+var vendorUrl = (path) => new URL(`${appBase()}vendor/${path}`, location.href).href;
+var engineFile = (file2) => vendorUrl(`stockfish/${file2}`);
+function engineCandidates() {
+  let wasm = false;
+  try {
+    wasm = typeof WebAssembly === "object" && WebAssembly.validate(Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0));
+  } catch {
+  }
+  return [...wasm ? [{ url: engineFile("stockfish.js"), flavor: "wasm" }] : [], { url: engineFile("stockfish.asm.js"), flavor: "asm" }];
+}
+var LOAD_TIMEOUT = 25e3;
+var Engine = class {
+  candidates;
+  listeners;
+  busy;
+  worker = null;
+  flavor = null;
+  ready = null;
+  constructor(candidates = engineCandidates()) {
+    this.candidates = candidates;
+    this.listeners = /* @__PURE__ */ new Set();
+    this.busy = Promise.resolve();
+  }
+  _send(cmd) {
+    this.worker.postMessage(cmd);
+  }
+  _waitFor(prefix) {
+    return new Promise((resolve) => {
+      const l = (line) => {
+        if (line.startsWith(prefix)) {
+          this.listeners.delete(l);
+          resolve(line);
+        }
+      };
+      this.listeners.add(l);
+    });
+  }
+  /** Boots one build; rejects on a worker error or if it never answers. */
+  _boot({ url, flavor }) {
+    return new Promise((resolve, reject) => {
+      let worker;
+      try {
+        worker = new Worker(url);
+      } catch (e) {
+        reject(e);
+        return;
+      }
+      this.worker = worker;
+      this.flavor = flavor;
+      const fail = (msg) => {
+        clearTimeout(timer);
+        worker.terminate();
+        this.listeners.clear();
+        reject(new Error(msg));
+      };
+      const timer = setTimeout(() => fail(`${flavor} engine did not start`), LOAD_TIMEOUT);
+      worker.onmessage = (e) => {
+        for (const l of [...this.listeners]) l(String(e.data));
+      };
+      worker.onerror = (e) => {
+        e.preventDefault?.();
+        fail(e.message || `${flavor} engine failed to load`);
+      };
+      this._waitFor("uciok").then(() => {
+        clearTimeout(timer);
+        this._send("setoption name Hash value 32");
+        this._send("setoption name Contempt value 0");
+        this._send("setoption name Analysis Contempt value Off");
+        this._send("isready");
+        return this._waitFor("readyok");
+      }).then(() => resolve());
+      this._send("uci");
+    });
+  }
+  /** Starts the first build that works; rejects if none does (e.g. the page was opened from a file). */
+  start() {
+    if (!this.ready) {
+      this.ready = (async () => {
+        let err;
+        for (const c of this.candidates) {
+          try {
+            await this._boot(c);
+            return this.flavor;
+          } catch (e) {
+            err = e;
+          }
+        }
+        this.worker = null;
+        throw err || new Error("no engine");
+      })();
+      this.ready.catch(() => {
+        this.ready = null;
+      });
+    }
+    return this.ready;
+  }
+  /**
+   * Evaluate a position. Resolves to { cp | mate, pv: ['e2e4', …], depth }, scored from White's
+   * side. Calls are queued, one search at a time. The search ends at `depth` or after `movetime`
+   * ms, whichever comes first, so a slow laptop still finishes a whole game in reasonable time.
+   */
+  analyse(fen, { depth, movetime }, onInfo) {
+    const run = async () => {
+      await this.start();
+      const whiteToMove = fen.split(" ")[1] === "w";
+      let best = null;
+      const done = new Promise((resolve) => {
+        const l = (line) => {
+          if (line.startsWith("info") && line.includes(" pv ") && !/ (upper|lower)bound /.test(line)) {
+            const m = / depth (\d+) .*score (cp|mate) (-?\d+) .* pv (.+)$/.exec(line);
+            if (m && !/ multipv [2-9]/.test(line)) {
+              const v = +m[3] * (whiteToMove ? 1 : -1);
+              const pv = [];
+              for (const t of m[4].trim().split(/\s+/)) {
+                if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(t)) break;
+                pv.push(t);
+              }
+              best = { depth: +m[1], pv, ...m[2] === "cp" ? { cp: v } : { mate: v } };
+              onInfo?.(best);
+            }
+          } else if (line.startsWith("bestmove")) {
+            this.listeners.delete(l);
+            clearTimeout(watchdog);
+            resolve(best);
+          }
+        };
+        this.listeners.add(l);
+        const watchdog = setTimeout(() => {
+          this._send("stop");
+          setTimeout(() => {
+            if (this.listeners.delete(l)) resolve(best);
+          }, 3e3);
+        }, movetime + 4e3);
+      });
+      this._send(`position fen ${fen}`);
+      this._send(`go depth ${depth} movetime ${movetime}`);
+      return done;
+    };
+    const result = this.busy.then(run, run);
+    this.busy = result.catch(() => {
+    });
+    return result;
+  }
+  /**
+   * Choose a move to play, for games against the computer. `skill` is Stockfish's Skill Level
+   * (0–20): below 20 it deliberately picks weaker moves now and then, which is what makes the
+   * easy levels beatable. Resolves to a UCI move ("e2e4", "e7e8q") or null.
+   */
+  play(fen, { skill, depth, movetime }) {
+    const run = async () => {
+      await this.start();
+      const done = new Promise((resolve) => {
+        const l = (line) => {
+          if (!line.startsWith("bestmove")) return;
+          this.listeners.delete(l);
+          clearTimeout(watchdog);
+          const m = /^bestmove ([a-h][1-8][a-h][1-8][qrbn]?)/.exec(line);
+          resolve(m ? m[1] : null);
+        };
+        this.listeners.add(l);
+        const watchdog = setTimeout(() => {
+          this._send("stop");
+          setTimeout(() => {
+            if (this.listeners.delete(l)) resolve(null);
+          }, 3e3);
+        }, movetime + 4e3);
+      });
+      this._send(`setoption name Skill Level value ${skill}`);
+      this._send(`position fen ${fen}`);
+      this._send(`go depth ${depth} movetime ${movetime}`);
+      return done;
+    };
+    const result = this.busy.then(run, run);
+    this.busy = result.catch(() => {
+    });
+    return result;
+  }
+  stop() {
+    this.worker?.postMessage("stop");
+  }
+  terminate() {
+    this.worker?.terminate();
+    this.worker = null;
+    this.ready = null;
+    this.listeners.clear();
+  }
+};
+
+// src/office.ts
+var ANON = /* @__PURE__ */ new Set(["", "?", "white", "black", "opponent", "player 1", "player 2"]);
+function standings(games) {
+  const rows = /* @__PURE__ */ new Map();
+  const row = (raw) => {
+    const name = String(raw || "").trim().replace(/\s+/g, " ");
+    const key = name.toLowerCase();
+    if (ANON.has(key)) return null;
+    if (!rows.has(key)) rows.set(key, { name, played: 0, won: 0, drawn: 0, lost: 0, score: 0 });
+    return rows.get(key);
+  };
+  for (const g of games) {
+    if (!["1-0", "0-1", "1/2-1/2"].includes(g.result)) continue;
+    const w = row(g.white), b = row(g.black);
+    for (const [r, mine] of [[w, "1-0"], [b, "0-1"]]) {
+      if (!r) continue;
+      r.played++;
+      if (g.result === "1/2-1/2") {
+        r.drawn++;
+        r.score += 0.5;
+      } else if (g.result === mine) {
+        r.won++;
+        r.score++;
+      } else r.lost++;
+    }
+  }
+  return [...rows.values()].sort((a, b) => b.score - a.score || b.score / b.played - a.score / a.played || a.name.localeCompare(b.name));
+}
+
+// src/openings.ts
+var table = null;
+function loadOpenings() {
+  table = table || fetch(vendorUrl("openings/openings.json")).then((r) => {
+    if (!r.ok) throw new Error(`openings: ${r.status}`);
+    return r.json();
+  });
+  table.catch(() => {
+    table = null;
+  });
+  return table;
+}
+function openingName(openings2, fens) {
+  for (let i = fens.length - 1; i >= 0; i--) {
+    const hit = openings2[fens[i].split(" ").slice(0, 4).join(" ")];
+    if (hit) return hit.slice(4);
+  }
+  return null;
+}
+
+// src/analysis.ts
+var clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+function winPct(ev) {
+  if (!ev) return 50;
+  if (ev.mate != null) return ev.mate > 0 || Object.is(ev.mate, 0) && ev.winner === "w" ? 100 : ev.mate < 0 || ev.winner === "b" ? 0 : 50;
+  const cp = clamp(ev.cp, -1e3, 1e3);
+  return 50 + 50 * (2 / (1 + Math.exp(-368208e-8 * cp)) - 1);
+}
+function classify(before, after, color) {
+  const b = color === "w" ? winPct(before) : 100 - winPct(before);
+  const a = color === "w" ? winPct(after) : 100 - winPct(after);
+  const loss = Math.max(0, b - a);
+  const kind = loss >= 15 ? "blunder" : loss >= 10 ? "mistake" : loss >= 5 ? "inaccuracy" : null;
+  return { loss, kind };
+}
+var MARKS = { blunder: "??", mistake: "?", inaccuracy: "?!" };
+var moveAccuracy = (loss) => clamp(103.1668 * Math.exp(-0.04354 * loss) - 3.1669, 0, 100);
+function summarize(evals, plyCount) {
+  const moves = [];
+  const side = { w: { losses: [], blunder: 0, mistake: 0, inaccuracy: 0 }, b: { losses: [], blunder: 0, mistake: 0, inaccuracy: 0 } };
+  for (let i = 1; i <= plyCount; i++) {
+    if (!evals[i - 1] || !evals[i]) {
+      moves.push(null);
+      continue;
+    }
+    const color = i % 2 === 1 ? "w" : "b";
+    const c = classify(evals[i - 1], evals[i], color);
+    moves.push(c);
+    side[color].losses.push(c.loss);
+    if (c.kind) side[color][c.kind]++;
+  }
+  const acc = (losses) => losses.length ? losses.reduce((s, l) => s + moveAccuracy(l), 0) / losses.length : null;
+  return {
+    moves,
+    w: { ...side.w, accuracy: acc(side.w.losses) },
+    b: { ...side.b, accuracy: acc(side.b.losses) }
+  };
+}
+function formatEval(ev) {
+  if (!ev) return "…";
+  if (ev.mate != null) {
+    if (ev.mate === 0) return ev.winner === "w" ? "1-0" : ev.winner === "b" ? "0-1" : "½-½";
+    return `${ev.mate < 0 ? "-" : ""}M${Math.abs(ev.mate)}`;
+  }
+  const v = ev.cp / 100;
+  return `${v > 0 ? "+" : ""}${v.toFixed(Math.abs(v) >= 10 ? 0 : 1)}`;
+}
+
+// src/app.ts
+var $ = (sel) => document.querySelector(sel);
+var $$ = (sel) => [...document.querySelectorAll(sel)];
+var other = (c) => c === "w" ? "b" : "w";
+var colorName = (c) => c === "w" ? "White" : "Black";
+var settings = storage.loadSettings();
+if (!["ember", "stone", "green"].includes(settings.theme)) settings.theme = "ember";
+if (!settings.pid) {
+  settings.pid = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(36).padStart(2, "0")).join("");
+  storage.saveSettings(settings);
+}
+var game = restoreGame();
+var viewPly = game.length;
+var review = null;
+var paused = game.hasClock && game.length > 0 && !game.over && !game.remote;
+var lastTick = Date.now();
+var flipTimer = null;
+var room = null;
+var relaysUp = 0;
+var joining = null;
+var an = null;
+var view = "game";
+var engine = null;
+var aiEngine = null;
+var aiTurn = 0;
+var board = new Board($("#board"), { onMove });
 function restoreGame() {
   const saved = storage.loadCurrent();
   if (saved) {
-    try { return new Game(saved); } catch { /* corrupt save: start fresh */ }
+    try {
+      return new Game(saved);
+    } catch {
+    }
   }
   return new Game({ white: settings.white, black: settings.black, tc: settings.tc });
 }
-
-const active = () => review || game;
-const isLive = () => !review && viewPly === game.length;
-const clockRunning = () => !review && game.hasClock && !game.over && game.length > 0 && !paused;
-const seated = (color) => !game.remote || !!(color === 'w' ? game.remote.pw : game.remote.pb);
-// a live game starts once both seats are taken; this browser moves only its own colour
-const bothSeated = () => seated('w') && seated('b');
-const myTurn = () => (game.ai ? game.turn !== game.ai.color : !game.remote || (game.turn === game.remote.me && bothSeated()));
-const homeOrientation = () => (game.ai ? other(game.ai.color) : game.remote ? game.remote.me || 'w' : settings.autoFlip ? game.turn : 'w');
-
-/* ---------------- rendering ---------------- */
-
+var active = () => review || game;
+var isLive = () => !review && viewPly === game.length;
+var clockRunning = () => !review && game.hasClock && !game.over && game.length > 0 && !paused;
+var seated = (color) => !game.remote || !!(color === "w" ? game.remote.pw : game.remote.pb);
+var bothSeated = () => seated("w") && seated("b");
+var myTurn = () => game.ai ? game.turn !== game.ai.color : !game.remote || game.turn === game.remote.me && bothSeated();
+var homeOrientation = () => game.ai ? other(game.ai.color) : game.remote ? game.remote.me || "w" : settings.autoFlip ? game.turn : "w";
 function render() {
   const g = active();
   const fen = g.fenAt(viewPly);
@@ -69,8 +5353,8 @@ function render() {
     fen,
     lastMove: g.lastMoveAt(viewPly),
     check: checkSquare(fen),
-    dests: canMove ? g.dests() : new Map(),
-    movable: canMove ? g.turn : null,
+    dests: canMove ? g.dests() : /* @__PURE__ */ new Map(),
+    movable: canMove ? g.turn : null
   });
   renderPlayers();
   renderMoves();
@@ -80,88 +5364,73 @@ function render() {
   applyFocus();
   scheduleWinBar();
 }
-
 function renderPlayers() {
   const g = active();
   const fen = g.fenAt(viewPly);
   const mat = captures(fen);
   const bottom = board.orientation, top = other(bottom);
-  const turn = fen.split(' ')[1];
+  const turn = fen.split(" ")[1];
   const atEnd = viewPly === g.length;
   const inCheck = !!checkSquare(fen);
-  for (const [id, color] of [['#player-top', top], ['#player-bottom', bottom]]) {
+  for (const [id, color] of [["#player-top", top], ["#player-bottom", bottom]]) {
     const card = $(id);
     const here = review || seated(color);
     card.dataset.color = color;
-    card.querySelector('[data-name]').textContent =
-      (here ? g.nameOf(color) || colorName(color) : 'Opponent') + (!review && g.remote?.me === color ? ' (you)' : '');
-    // pieces this player has taken, grouped by kind like chess.com, then the points lead
+    card.querySelector("[data-name]").textContent = (here ? g.nameOf(color) || colorName(color) : "Opponent") + (!review && g.remote?.me === color ? " (you)" : "");
     const m = mat[color];
     const groups = [];
     for (const r of m.pieces) (groups.at(-1)?.[0] === r ? groups.at(-1) : groups[groups.push([]) - 1]).push(r);
-    card.querySelector('[data-material]').innerHTML =
-      groups.map((grp) => `<span class="cap">${grp.map((r) => `<i class="pc ${other(color)}${r.toUpperCase()}"></i>`).join('')}</span>`).join('') +
-      (m.score ? `<b>+${m.score}</b>` : '');
+    card.querySelector("[data-material]").innerHTML = groups.map((grp) => `<span class="cap">${grp.map((r) => `<i class="pc ${other(color)}${r.toUpperCase()}"></i>`).join("")}</span>`).join("") + (m.score ? `<b>+${m.score}</b>` : "");
     const toMove = !g.over && turn === color && atEnd && here;
-    const won = g.result === (color === 'w' ? '1-0' : '0-1');
+    const won = g.result === (color === "w" ? "1-0" : "0-1");
     const offers = !g.over && g.remote?.offer === color;
-    card.classList.toggle('to-move', toMove);
-    card.classList.toggle('winner', won);
-    card.classList.toggle('offer', offers);
-    card.querySelector('[data-status]').textContent =
-      playerStatus(g, color, { here, toMove, won, offers, inCheck: inCheck && turn === color });
+    card.classList.toggle("to-move", toMove);
+    card.classList.toggle("winner", won);
+    card.classList.toggle("offer", offers);
+    card.querySelector("[data-status]").textContent = playerStatus(g, color, { here, toMove, won, offers, inCheck: inCheck && turn === color });
   }
   renderClocks();
 }
-
-/** One short line under a player's name. */
 function playerStatus(g, color, { here, toMove, won, offers, inCheck }) {
-  if (g.result) return won ? '♛ Won' : g.result === '1/2-1/2' ? '½ Draw' : '';
+  if (g.result) return won ? "♛ Won" : g.result === "1/2-1/2" ? "½ Draw" : "";
   const r = !review && g.remote;
   if (r && !here) return `Waiting to join · code ${formatRoomCode(r.room)}`;
-  if (r && color !== r.me && relaysUp === 0) return 'Reconnecting…';
-  if (offers) return 'Offers a draw';
-  if (inCheck && toMove) return 'Check!';
-  // whose turn it is only needs saying when two people share one laptop
-  if (!toMove || r || g.ai) return '';
-  return 'To move';
+  if (r && color !== r.me && relaysUp === 0) return "Reconnecting…";
+  if (offers) return "Offers a draw";
+  if (inCheck && toMove) return "Check!";
+  if (!toMove || r || g.ai) return "";
+  return "To move";
 }
-
 function fmtClock(ms) {
   ms = Math.max(0, ms);
-  if (ms < 10000) return `0:0${(ms / 1000).toFixed(1)}`.replace(/0(\d\d)/, '$1');
-  const s = Math.ceil(ms / 1000);
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  return (h ? `${h}:${String(m).padStart(2, '0')}` : m) + ':' + String(sec).padStart(2, '0');
+  if (ms < 1e4) return `0:0${(ms / 1e3).toFixed(1)}`.replace(/0(\d\d)/, "$1");
+  const s = Math.ceil(ms / 1e3);
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+  return (h ? `${h}:${String(m).padStart(2, "0")}` : m) + ":" + String(sec).padStart(2, "0");
 }
-
 function renderClocks() {
   const g = active();
   const bottom = board.orientation;
-  for (const [sel, color] of [['#clock-top', other(bottom)], ['#clock-bottom', bottom]]) {
+  for (const [sel, color] of [["#clock-top", other(bottom)], ["#clock-bottom", bottom]]) {
     const clock = $(sel);
-    clock.parentElement.classList.toggle('hidden', !g.hasClock);
-
-    const time = clock.querySelector('[data-time]');
-    clock.classList.toggle('active', !g.over && !review && viewPly === g.length && g.turn === color && bothSeated());
-    clock.classList.toggle('unlimited', !g.hasClock);
-    clock.setAttribute('aria-label', `${g.nameOf(color) || colorName(color)}'s clock`);
+    clock.parentElement.classList.toggle("hidden", !g.hasClock);
+    const time = clock.querySelector("[data-time]");
+    clock.classList.toggle("active", !g.over && !review && viewPly === g.length && g.turn === color && bothSeated());
+    clock.classList.toggle("unlimited", !g.hasClock);
+    clock.setAttribute("aria-label", `${g.nameOf(color) || colorName(color)}'s clock`);
     if (!g.hasClock) {
-      time.textContent = '∞';
-      clock.classList.remove('running', 'low', 'paused');
+      time.textContent = "∞";
+      clock.classList.remove("running", "low", "paused");
       continue;
     }
-    // replaying: the clocks as they stood after the move on the board
     const past = review || viewPly < g.length;
     const ms = past ? g.clocksAt(viewPly)[color] : g.clocks[color];
     time.textContent = fmtClock(ms);
-    clock.classList.toggle('running', !past && clockRunning() && game.turn === color);
-    clock.classList.toggle('low', ms < 20000 && !past);
-    clock.classList.toggle('paused', !review && paused && game.turn === color && game.length > 0 && !game.over);
+    clock.classList.toggle("running", !past && clockRunning() && game.turn === color);
+    clock.classList.toggle("low", ms < 2e4 && !past);
+    clock.classList.toggle("paused", !review && paused && game.turn === color && game.length > 0 && !game.over);
   }
 }
-
-/** One line of moves (top right), like chess.com's analysis strip; marks come from the analysis. */
 function renderMoves() {
   const g = active();
   const marks = an && an.game === g ? an.summary?.moves || [] : [];
@@ -169,144 +5438,130 @@ function renderMoves() {
   g.plies.forEach((p, i) => {
     if (i % 2 === 0) parts.push(`<span class="ml-num">${i / 2 + 1}.</span>`);
     const m = marks[i]?.kind;
-    parts.push(`<button class="mv${viewPly === i + 1 ? ' active' : ''}${m ? ` ${m}` : ''}" data-ply="${i + 1}">${san(p.san)}${m ? `<span class="mark">${MARKS[m]}</span>` : ''}</button>`);
+    parts.push(`<button class="mv${viewPly === i + 1 ? " active" : ""}${m ? ` ${m}` : ""}" data-ply="${i + 1}">${san(p.san)}${m ? `<span class="mark">${MARKS[m]}</span>` : ""}</button>`);
   });
   if (!g.plies.length) parts.push('<span class="empty">No moves yet</span>');
-  const list = $('#moves');
-  list.innerHTML = parts.join('');
-  // keep the current move in view by scrolling the strip itself (never the page)
-  const act = list.querySelector('.active');
+  const list = $("#moves");
+  list.innerHTML = parts.join("");
+  const act = list.querySelector(".active");
   if (act) {
     const l = act.offsetLeft - list.offsetLeft, r = l + act.offsetWidth;
     if (l < list.scrollLeft + 20) list.scrollLeft = l - 40;
     else if (r > list.scrollLeft + list.clientWidth - 20) list.scrollLeft = r - list.clientWidth + 40;
   } else if (viewPly === 0) list.scrollLeft = 0;
   else list.scrollLeft = list.scrollWidth;
-
   renderAnMoves();
   renderOpening(g);
-  $('#tc-label').textContent = g.tcInfo.base ? g.tcInfo.label.replace(/ /g, '') : '';
-
-  const rl = $('#result-line');
-  rl.classList.toggle('hidden', !g.result);
-  if (g.result) rl.innerHTML = `<strong>${g.result.replace(/1\/2/g, '½')}</strong><span>${g.termination} · ${g.winnerText()}</span>`;
+  $("#tc-label").textContent = g.tcInfo.base ? g.tcInfo.label.replace(/ /g, "") : "";
+  const rl = $("#result-line");
+  rl.classList.toggle("hidden", !g.result);
+  if (g.result) rl.innerHTML = `<strong>${g.result.replace(/1\/2/g, "½")}</strong><span>${g.termination} · ${g.winnerText()}</span>`;
 }
-
-// SAN with figurine piece letters
-const FIG = { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘' };
-const san = (s) => s.replace(/[KQRBN]/g, (c) => `<span class="fig">${FIG[c]}</span>`);
-
-const tcText = (tc) => (tc.base ? `${tc.label} · ${tc.kind}` : 'Unlimited');
-
+var FIG = { K: "♔", Q: "♕", R: "♖", B: "♗", N: "♘" };
+var san = (s) => s.replace(/[KQRBN]/g, (c) => `<span class="fig">${FIG[c]}</span>`);
+var tcText = (tc) => tc.base ? `${tc.label} · ${tc.kind}` : "Unlimited";
 function renderStatus() {
   const g = active();
-  $('#tc-badge').textContent = tcText(g.tcInfo);
-  document.title = g.result ? `${g.winnerText()} · Deskmate` : review ? 'Review · Deskmate' : `${colorName(game.turn)} to move · Deskmate`;
-
-  const banner = $('#review-banner');
+  $("#tc-badge").textContent = tcText(g.tcInfo);
+  document.title = g.result ? `${g.winnerText()} · Deskmate` : review ? "Review · Deskmate" : `${colorName(game.turn)} to move · Deskmate`;
+  const banner = $("#review-banner");
   const showBanner = !an && (!!review || viewPly !== game.length);
-  banner.classList.toggle('hidden', !showBanner);
-  if (review) $('#review-text').textContent = `Reviewing ${review.white} vs ${review.black}${review.result ? ` · ${review.result}` : ''}`;
-  else if (showBanner) $('#review-text').textContent = `Viewing move ${Math.ceil(viewPly / 2) || 0}${viewPly % 2 ? '' : viewPly ? '…' : ''}`;
-  $('#review-exit').textContent = review ? 'Back to live game' : 'Back to current move';
+  banner.classList.toggle("hidden", !showBanner);
+  if (review) $("#review-text").textContent = `Reviewing ${review.white} vs ${review.black}${review.result ? ` · ${review.result}` : ""}`;
+  else if (showBanner) $("#review-text").textContent = `Viewing move ${Math.ceil(viewPly / 2) || 0}${viewPly % 2 ? "" : viewPly ? "…" : ""}`;
+  $("#review-exit").textContent = review ? "Back to live game" : "Back to current move";
 }
-
-const ICON_PAUSE = '<svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span>';
-const ICON_RESUME = '<svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg><span>Resume</span>';
-
+var ICON_PAUSE = '<svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span>';
+var ICON_RESUME = '<svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg><span>Resume</span>';
 function renderControls() {
   const g = active();
-  for (const b of [$('#nav-first'), $('#nav-prev'), $('[data-nav="prev"]')]) b.disabled = viewPly === 0;
-  for (const b of [$('#nav-last'), $('#nav-next'), $('[data-nav="next"]')]) b.disabled = viewPly === g.length;
+  for (const b of [$("#nav-first"), $("#nav-prev"), $('[data-nav="prev"]')]) b.disabled = viewPly === 0;
+  for (const b of [$("#nav-last"), $("#nav-next"), $('[data-nav="next"]')]) b.disabled = viewPly === g.length;
   const liveGame = !review;
-  $('#btn-undo').disabled = !liveGame || game.length === 0 || !!game.remote;
+  $("#btn-undo").disabled = !liveGame || game.length === 0 || !!game.remote;
   const noActions = !liveGame || game.over || (game.remote ? !bothSeated() : game.length === 0);
   const theyOffer = !!game.remote && !game.over && game.remote.offer === other(game.remote.me);
-  for (const b of $$('.act-draw')) {
+  for (const b of $$(".act-draw")) {
     b.disabled = noActions;
-    b.classList.toggle('offer', theyOffer);
-    b.title = game.remote ? (theyOffer ? 'Accept the draw offer' : 'Offer a draw') : 'Agree to a draw';
+    b.classList.toggle("offer", theyOffer);
+    b.title = game.remote ? theyOffer ? "Accept the draw offer" : "Offer a draw" : "Agree to a draw";
   }
-  for (const b of $$('.act-resign')) b.disabled = noActions;
-  // while a game is on: Draw / Resign. Once it is over: Analyse.
-  const finished = !!g.result || (!!review && g.length > 0);
-  for (const b of $$('.act-draw, .act-resign')) b.classList.toggle('hidden', finished);
-  for (const b of $$('.act-draw')) if (game.ai && !review) b.classList.add('hidden'); // the computer plays on
-  for (const b of $$('.act-analyse')) b.classList.toggle('hidden', !finished || !!an);
-  $('.game').classList.toggle('analysing', !!an);
-  for (const b of $$('.act-pause')) {
-    b.classList.toggle('hidden', !game.hasClock || !liveGame || !!game.remote);
+  for (const b of $$(".act-resign")) b.disabled = noActions;
+  const finished = !!g.result || !!review && g.length > 0;
+  for (const b of $$(".act-draw, .act-resign")) b.classList.toggle("hidden", finished);
+  for (const b of $$(".act-draw")) if (game.ai && !review) b.classList.add("hidden");
+  for (const b of $$(".act-analyse")) b.classList.toggle("hidden", !finished || !!an);
+  $(".game").classList.toggle("analysing", !!an);
+  for (const b of $$(".act-pause")) {
+    b.classList.toggle("hidden", !game.hasClock || !liveGame || !!game.remote);
     b.disabled = game.over || game.length === 0;
     b.innerHTML = paused ? ICON_RESUME : ICON_PAUSE;
-    b.title = paused ? 'Resume clocks (Space)' : 'Pause clocks (Space)';
+    b.title = paused ? "Resume clocks (Space)" : "Pause clocks (Space)";
   }
 }
-
-/** The opening's name above the moves, from lichess's open data set (loaded once, on first use). */
-let openings = null;
+var openings = null;
 function renderOpening(g) {
-  const el = $('#opening');
-  if (!g.length) { el.textContent = 'Starting position'; return; }
+  const el2 = $("#opening");
+  if (!g.length) {
+    el2.textContent = "Starting position";
+    return;
+  }
   if (!openings) {
-    loadOpenings().then((t) => { openings = t; renderOpening(active()); }).catch(() => {});
+    loadOpenings().then((t) => {
+      openings = t;
+      renderOpening(active());
+    }).catch(() => {
+    });
     return;
   }
   const fens = [];
   for (let i = 1; i <= Math.min(viewPly || g.length, g.length); i++) fens.push(g.fenAt(i));
-  el.textContent = openingName(openings, fens) || el.textContent;
+  el2.textContent = openingName(openings, fens) || el2.textContent;
 }
-
-/* ---------------- moves ---------------- */
-
 async function onMove(from, to) {
   if (!isLive() || game.over || !myTurn()) return;
   let promotion;
   if (game.isPromotion(from, to)) {
     promotion = await board.askPromotion(to, game.turn);
-    if (!promotion) { render(); return; }
+    if (!promotion) {
+      render();
+      return;
+    }
   }
   if (!applyMove(from, to, promotion)) render();
 }
-
-/** Plays a move on the live game (from either player or the computer): clocks, sound, save, sync. */
 function applyMove(from, to, promotion) {
   const mover = game.turn;
   const now = Date.now();
   const ply = game.move(from, to, promotion);
   if (!ply) return null;
-
-  if (game.remote) game.remote.offer = null; // moving declines a pending offer
+  if (game.remote) game.remote.offer = null;
   if (game.hasClock) {
     if (game.length > 1 && !paused) game.clocks[mover] -= now - lastTick;
-    if (game.length > 1) game.clocks[mover] += game.tcInfo.inc * 1000;
+    if (game.length > 1) game.clocks[mover] += game.tcInfo.inc * 1e3;
     ply.clock = game.clocks[mover];
     paused = false;
     lastTick = now;
   }
   viewPly = game.length;
   if (ply.captured) sound.capture();
-
   persist();
   publish();
   render();
   if (game.over) onGameOver();
-  else { scheduleFlip(); computerMove(); }
+  else {
+    scheduleFlip();
+    computerMove();
+  }
   return ply;
 }
-
-/* ---------------- win chances during the game ---------------- */
-
-// A slim bar by the board with each side's chances (lichess's win% from a short Stockfish search),
-// refreshed after every move. Quiet on purpose: no numbers in the move list, no best move, no arrows.
-const WIN_LIMITS = { wasm: { depth: 12, movetime: 350 }, asm: { depth: 8, movetime: 300 } };
-let liveEngine = null;
-let liveTurn = 0;
-const liveEvals = new Map(); // fen → evaluation, so stepping back and forth costs nothing
-
+var WIN_LIMITS = { wasm: { depth: 12, movetime: 350 }, asm: { depth: 8, movetime: 300 } };
+var liveEngine = null;
+var liveTurn = 0;
+var liveEvals = /* @__PURE__ */ new Map();
 function winBarWanted() {
-  return settings.winBar && view === 'game' && !an && !review && game.length > 0;
+  return settings.winBar && view === "game" && !an && !review && game.length > 0;
 }
-
 async function scheduleWinBar() {
   if (!winBarWanted()) return renderWinBar();
   const fen = game.fenAt(viewPly);
@@ -318,39 +5573,33 @@ async function scheduleWinBar() {
     if (turn !== liveTurn) return;
     const ev = terminalEval(fen) || await liveEngine.analyse(fen, WIN_LIMITS[flavor]);
     if (ev) liveEvals.set(fen, ev);
-  } catch { return; } // no engine in this browser: no bar, nothing else changes
+  } catch {
+    return;
+  }
   if (turn === liveTurn) renderWinBar();
 }
-
 function renderWinBar() {
-  const bar = $('#evalbar');
+  const bar = $("#evalbar");
   const ev = winBarWanted() && liveEvals.get(game.fenAt(viewPly));
-  if (an && an.game === active()) return; // the analysis owns the bar
-  bar.classList.toggle('hidden', !ev);
+  if (an && an.game === active()) return;
+  bar.classList.toggle("hidden", !ev);
   if (!ev) return;
   const white = winPct(ev);
-  bar.style.setProperty('--w', `${white}%`);
-  bar.classList.toggle('flip', board.orientation === 'b');
-  bar.classList.toggle('black-better', white < 50);
+  bar.style.setProperty("--w", `${white}%`);
+  bar.classList.toggle("flip", board.orientation === "b");
+  bar.classList.toggle("black-better", white < 50);
   const top = other(board.orientation);
-  const pct = (c) => `${Math.round(c === 'w' ? white : 100 - white)}%`;
-  $('#wb-top').textContent = pct(top);
-  $('#wb-bot').textContent = pct(board.orientation);
+  const pct = (c) => `${Math.round(c === "w" ? white : 100 - white)}%`;
+  $("#wb-top").textContent = pct(top);
+  $("#wb-bot").textContent = pct(board.orientation);
   bar.title = `Winning chances: White ${Math.round(white)}%, Black ${Math.round(100 - white)}%`;
 }
-
-/* ---------------- playing the computer ---------------- */
-
-// Stockfish 11 Skill Level 0–20 plus a search limit per level; lower skill makes it pick
-// weaker moves on purpose. Roughly: Easy loses to a beginner who is careful, Hard is club strength+.
-const AI_LEVELS = {
-  easy: { label: 'Easy', skill: 0, depth: 2, movetime: 150 },
-  medium: { label: 'Medium', skill: 7, depth: 7, movetime: 400 },
-  hard: { label: 'Hard', skill: 16, depth: 14, movetime: 1200 },
+var AI_LEVELS = {
+  easy: { label: "Easy", skill: 0, depth: 2, movetime: 150 },
+  medium: { label: "Medium", skill: 7, depth: 7, movetime: 400 },
+  hard: { label: "Hard", skill: 16, depth: 14, movetime: 1200 }
 };
-const aiName = (level) => `Stockfish · ${AI_LEVELS[level]?.label || 'Medium'}`;
-
-/** If it's the computer's turn in the live game, think and play. */
+var aiName = (level) => `Stockfish · ${AI_LEVELS[level]?.label || "Medium"}`;
 async function computerMove() {
   if (!game.ai || game.over || review || game.turn !== game.ai.color) return;
   const g = game, turn = ++aiTurn, fen = game.fenAt(game.length);
@@ -360,19 +5609,19 @@ async function computerMove() {
     aiEngine = aiEngine || new Engine();
     uci = await aiEngine.play(fen, AI_LEVELS[g.ai.level] || AI_LEVELS.medium);
   } catch {
-    if (turn === aiTurn) toast('Stockfish could not start in this browser. Try reloading the page.');
+    if (turn === aiTurn) toast("Stockfish could not start in this browser. Try reloading the page.");
     return;
   }
-  // never instant: a short beat makes the reply readable
   const wait = 350 - (Date.now() - started);
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   if (turn !== aiTurn || game !== g || g.over || review || g.fenAt(g.length) !== fen || !uci) return;
-  if (paused) { paused = false; lastTick = Date.now(); }
+  if (paused) {
+    paused = false;
+    lastTick = Date.now();
+  }
   viewPly = g.length;
   applyMove(uci.slice(0, 2), uci.slice(2, 4), uci[4]);
 }
-
-/** Same-laptop games: after a move, show the board from the side of whoever moves next. */
 function scheduleFlip(delay = 300) {
   clearTimeout(flipTimer);
   if (!settings.autoFlip || review || game.remote || game.ai) return;
@@ -383,29 +5632,24 @@ function scheduleFlip(delay = 300) {
     renderAnalysis();
   }, delay);
 }
-
 function onGameOver() {
   persist();
   storage.archive(game.toJSON());
   render();
   const g = game;
-  $('#over-title').textContent = g.winnerText();
-  $('#over-reason').textContent = g.termination;
-  $('#dlg-over').classList.toggle('drawn', g.result === '1/2-1/2');
-  $('#dlg-over .over-crown').textContent = g.result === '1-0' ? '♔' : g.result === '0-1' ? '♚' : '½';
+  $("#over-title").textContent = g.winnerText();
+  $("#over-reason").textContent = g.termination;
+  $("#dlg-over").classList.toggle("drawn", g.result === "1/2-1/2");
+  $("#dlg-over .over-crown").textContent = g.result === "1-0" ? "♔" : g.result === "0-1" ? "♚" : "½";
   setTimeout(() => {
     if (game !== g || !g.over) return;
-    openDialog('#dlg-over');
-    if (g.result !== '1/2-1/2') confetti();
+    openDialog("#dlg-over");
+    if (g.result !== "1/2-1/2") confetti();
   }, 650);
 }
-
 function persist() {
   storage.saveCurrent(game.toJSON());
 }
-
-/* ---------------- clocks ---------------- */
-
 setInterval(() => {
   const now = Date.now();
   if (clockRunning()) {
@@ -421,30 +5665,32 @@ setInterval(() => {
   }
   lastTick = now;
 }, 100);
-
-setInterval(() => { if (clockRunning()) persist(); }, 3000);
-addEventListener('pagehide', persist);
-document.addEventListener('visibilitychange', () => { if (document.hidden) persist(); });
-
+setInterval(() => {
+  if (clockRunning()) persist();
+}, 3e3);
+addEventListener("pagehide", persist);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) persist();
+});
 function togglePause() {
   if (review || game.remote || !game.hasClock || game.over || game.length === 0) return;
   paused = !paused;
   lastTick = Date.now();
   persist();
   render();
-  toast(paused ? 'Clocks paused' : 'Clocks running');
+  toast(paused ? "Clocks paused" : "Clocks running");
 }
-
-/* ---------------- game lifecycle ---------------- */
-
 function startGame({ white, black, tc, remote = null, ai = null, id, startedAt }) {
-  if (game.length && !game.over) storage.archive(game.toJSON()); // keep unfinished games too
+  if (game.length && !game.over) storage.archive(game.toJSON());
   clearTimeout(flipTimer);
   if (!remote || remote.room !== room?.code) leaveRoom();
   stopAnalysis();
   aiTurn++;
   game = new Game({ white, black, tc, remote, ai, id, startedAt });
-  if (remote) { game.white = white; game.black = black; } // an empty seat keeps an empty name
+  if (remote) {
+    game.white = white;
+    game.black = black;
+  }
   review = null;
   viewPly = 0;
   paused = false;
@@ -453,36 +5699,32 @@ function startGame({ white, black, tc, remote = null, ai = null, id, startedAt }
   storage.saveSettings(settings);
   persist();
   board.setOrientation(homeOrientation());
-  setView('game');
+  setView("game");
   requestWakeLock();
   computerMove();
 }
-
 function takeback() {
   if (review || !game.length || game.remote) return;
   clearTimeout(flipTimer);
   aiTurn++;
   game.undo();
-  // against the computer, take back its reply too, so it's your move again
   if (game.ai && game.length && game.turn === game.ai.color) game.undo();
   viewPly = game.length;
   lastTick = Date.now();
   persist();
   render();
   scheduleFlip(0);
-  toast('Move taken back');
+  toast("Move taken back");
 }
-
 function openReview(data) {
   stopAnalysis();
   review = data instanceof Game ? data : new Game(data);
   viewPly = review.length;
   clearTimeout(flipTimer);
-  board.setOrientation('w');
+  board.setOrientation("w");
   closeDialogs();
-  setView('game');
+  setView("game");
 }
-
 function exitReview() {
   stopAnalysis();
   review = null;
@@ -491,113 +5733,117 @@ function exitReview() {
   render();
   computerMove();
 }
-
 function goto(ply) {
   const g = active();
   viewPly = Math.max(0, Math.min(g.length, ply));
   render();
   if (isLive()) scheduleFlip(0);
 }
-
-/* ---------------- live remote games ---------------- */
-
-/** The full state of the game as the other laptop needs it. */
 function snapshot() {
   const r = game.remote;
   return {
-    v: 1, g: game.id, st: game.startedAt, tc: game.tc,
-    w: game.white, b: game.black, pw: r.pw || '', pb: r.pb || '',
+    v: 1,
+    g: game.id,
+    st: game.startedAt,
+    tc: game.tc,
+    w: game.white,
+    b: game.black,
+    pw: r.pw || "",
+    pb: r.pb || "",
     m: packMoves(game.plies.map((p) => p.san)),
     c: [Math.round(game.clocks.w), Math.round(game.clocks.b)],
-    r: game.result, t: game.termination, o: r.offer || null,
+    r: game.result,
+    t: game.termination,
+    o: r.offer || null
   };
 }
-
 function publish() {
   if (room && game.remote?.room === room.code) room.publish(snapshot());
 }
-
 function connectRoom(code) {
   if (room?.code === code) return;
   leaveRoom();
   room = new Room(code, {
     onSnapshot: onRoomSnapshot,
-    onStatus: (n) => { relaysUp = n; renderPlayers(); renderStatus(); renderRoomStatus(); },
+    onStatus: (n) => {
+      relaysUp = n;
+      renderPlayers();
+      renderStatus();
+      renderRoomStatus();
+    }
   });
   room.connect();
 }
-
 function leaveRoom() {
   room?.close();
   room = null;
   relaysUp = 0;
 }
-
 function onRoomSnapshot(snap) {
   if (!snap || snap.v !== 1 || !snap.g) return;
   let moves;
-  try { moves = unpackMoves(snap.m || ''); } catch { return; }
+  try {
+    moves = unpackMoves(snap.m || "");
+  } catch {
+    return;
+  }
   if (joining) completeJoin(snap, moves);
   else applySnapshot(snap, moves);
 }
-
-const seatOf = (snap) => (snap.pw === settings.pid ? 'w' : snap.pb === settings.pid ? 'b' : null);
-
-/** First snapshot after "Join": take the free seat and set up the game locally. */
+var seatOf = (snap) => snap.pw === settings.pid ? "w" : snap.pb === settings.pid ? "b" : null;
 function completeJoin(snap, moves) {
   const { code, name } = joining;
   clearTimeout(joining.timer);
   joining = null;
-  const me = seatOf(snap) || (!snap.pw ? 'w' : !snap.pb ? 'b' : null);
+  const me = seatOf(snap) || (!snap.pw ? "w" : !snap.pb ? "b" : null);
   if (!me) {
-    joinFailed('This game already has two players.');
+    joinFailed("This game already has two players.");
     return;
   }
   startGame({
-    id: snap.g, startedAt: snap.st, tc: snap.tc,
-    white: me === 'w' ? name : snap.w, black: me === 'b' ? name : snap.b,
+    id: snap.g,
+    startedAt: snap.st,
+    tc: snap.tc,
+    white: me === "w" ? name : snap.w,
+    black: me === "b" ? name : snap.b,
     remote: {
-      room: code, me, offer: snap.o || null,
-      pw: me === 'w' ? settings.pid : snap.pw, pb: me === 'b' ? settings.pid : snap.pb,
-    },
+      room: code,
+      me,
+      offer: snap.o || null,
+      pw: me === "w" ? settings.pid : snap.pw,
+      pb: me === "b" ? settings.pid : snap.pb
+    }
   });
-  for (const san of moves) game.moveSan(san);
-  if (snap.r && !game.result) game.finish(snap.r, snap.t || 'Game over');
+  for (const san2 of moves) game.moveSan(san2);
+  if (snap.r && !game.result) game.finish(snap.r, snap.t || "Game over");
   if (game.hasClock && snap.c) game.clocks = { w: snap.c[0], b: snap.c[1] };
   viewPly = game.length;
   lastTick = Date.now();
   persist();
-  publish(); // tells the other laptop we are here, with our name
+  publish();
   closeDialogs();
   render();
-  toast(`You play ${colorName(me).toLowerCase()} against ${game.nameOf(other(me)) || 'your colleague'}`);
+  toast(`You play ${colorName(me).toLowerCase()} against ${game.nameOf(other(me)) || "your colleague"}`);
 }
-
-/** Any later snapshot: a move, a draw offer, a result, the colleague joining, or a rematch. */
 function applySnapshot(snap, moves) {
   if (!game.remote) return;
   const me = seatOf(snap);
   if (snap.g !== game.id) {
-    // a new game in this room (rematch); ignore old snapshots of earlier games
     if (!me || (snap.st || 0) <= game.startedAt) return;
-    const r = game.remote;
-    startGame({ id: snap.g, startedAt: snap.st, tc: snap.tc, white: snap.w, black: snap.b, remote: { room: r.room, me, pw: snap.pw, pb: snap.pb } });
+    const r2 = game.remote;
+    startGame({ id: snap.g, startedAt: snap.st, tc: snap.tc, white: snap.w, black: snap.b, remote: { room: r2.room, me, pw: snap.pw, pb: snap.pb } });
     toast(`Rematch! You play ${colorName(me).toLowerCase()}.`);
   }
   const r = game.remote;
-  const someoneJoined = (!r.pw && snap.pw) || (!r.pb && snap.pb);
+  const someoneJoined = !r.pw && snap.pw || !r.pb && snap.pb;
   if (snap.pw) r.pw = snap.pw;
   if (snap.pb) r.pb = snap.pb;
-  if (snap.w && r.me !== 'w') game.white = snap.w; // the colleague's name; ours stays ours
-  if (snap.b && r.me !== 'b') game.black = snap.b;
-
+  if (snap.w && r.me !== "w") game.white = snap.w;
+  if (snap.b && r.me !== "b") game.black = snap.b;
   const local = game.plies.map((p) => p.san);
-  // The game ended on the other laptop (their clock saw ours run out, or they resigned or
-  // agreed a draw) while a move of ours was still on its way: the result stands, and the
-  // moves we made after it are taken back, so both laptops end on the same position.
   if (snap.r && !game.result && moves.length < local.length && moves.every((s, i) => s === local[i])) {
     while (game.length > moves.length) game.undo();
-    game.finish(snap.r, snap.t || 'Game over');
+    game.finish(snap.r, snap.t || "Game over");
     if (game.hasClock && snap.c) game.clocks = { w: snap.c[0], b: snap.c[1] };
     viewPly = game.length;
     persist();
@@ -605,12 +5851,15 @@ function applySnapshot(snap, moves) {
     onGameOver();
     return;
   }
-  if (!local.every((s, i) => s === moves[i])) { render(); return; } // an older snapshot: ours is newer
+  if (!local.every((s, i) => s === moves[i])) {
+    render();
+    return;
+  }
   const wasAtEnd = viewPly === game.length;
   const wasOver = game.over;
   let last = null;
-  for (const san of moves.slice(local.length)) last = game.moveSan(san) || last;
-  if (snap.r && !game.result) game.finish(snap.r, snap.t || 'Game over');
+  for (const san2 of moves.slice(local.length)) last = game.moveSan(san2) || last;
+  if (snap.r && !game.result) game.finish(snap.r, snap.t || "Game over");
   r.offer = snap.o || null;
   if (game.hasClock && snap.c && (last || snap.r)) {
     game.clocks = { w: snap.c[0], b: snap.c[1] };
@@ -622,157 +5871,143 @@ function applySnapshot(snap, moves) {
   persist();
   render();
   if (someoneJoined && r.me) {
-    $('#dlg-remote').close(); // the board is what matters now
-    toast(`${game.nameOf(other(r.me)) || 'Your colleague'} joined${myTurn() ? '. Your move!' : ''}`);
+    $("#dlg-remote").close();
+    toast(`${game.nameOf(other(r.me)) || "Your colleague"} joined${myTurn() ? ". Your move!" : ""}`);
   }
   if (game.over && !wasOver) onGameOver();
 }
-
-/* the "Play a colleague" dialog */
-
-const REMOTE_TCS = ['none', '3+2', '5+0', '10+0', '15+10'];
-const shareLink = (code) =>
-  /^https?:$/.test(location.protocol) ? `${location.origin}${location.pathname}#${code}` : null;
-
+var REMOTE_TCS = ["none", "3+2", "5+0", "10+0", "15+10"];
+var shareLink = (code) => /^https?:$/.test(location.protocol) ? `${location.origin}${location.pathname}#${code}` : null;
 function setRemotePane(pane) {
-  $$('#dlg-remote [data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== pane));
-  $$('#remote-tabs [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === pane)));
-  $('#remote-tabs').classList.toggle('hidden', pane === 'invite');
-  $('#remote-title').textContent = pane === 'invite' ? 'Share this code' : 'Play a colleague';
+  $$("#dlg-remote [data-pane]").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== pane));
+  $$("#remote-tabs [data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === pane)));
+  $("#remote-tabs").classList.toggle("hidden", pane === "invite");
+  $("#remote-title").textContent = pane === "invite" ? "Share this code" : "Play a colleague";
 }
-$$('#remote-tabs [data-tab]').forEach((b) => b.addEventListener('click', () => setRemotePane(b.dataset.tab)));
-
-function openRemote(pane = 'create', code = '') {
-  $('#remote-create-name').value = $('#remote-join-name').value = settings.myName || '';
-  $('#remote-join-code').value = code ? formatRoomCode(code) : '';
-  $('#remote-join-error').classList.add('hidden');
-  $('#remote-join-btn').disabled = false;
-  $('#remote-join-btn').textContent = 'Join game';
-  const tc = settings.remoteTc || 'none';
-  $('#remote-tc').innerHTML = REMOTE_TCS.map((id) => {
+$$("#remote-tabs [data-tab]").forEach((b) => b.addEventListener("click", () => setRemotePane(b.dataset.tab)));
+function openRemote(pane = "create", code = "") {
+  $("#remote-create-name").value = $("#remote-join-name").value = settings.myName || "";
+  $("#remote-join-code").value = code ? formatRoomCode(code) : "";
+  $("#remote-join-error").classList.add("hidden");
+  $("#remote-join-btn").disabled = false;
+  $("#remote-join-btn").textContent = "Join game";
+  const tc = settings.remoteTc || "none";
+  $("#remote-tc").innerHTML = REMOTE_TCS.map((id) => {
     const t = timeControl(id);
-    return `<label class="chip"><input type="radio" name="remote-tc" value="${id}"${id === tc ? ' checked' : ''} /><span>${t.base ? t.label : 'No clock'}</span></label>`;
-  }).join('');
+    return `<label class="chip"><input type="radio" name="remote-tc" value="${id}"${id === tc ? " checked" : ""} /><span>${t.base ? t.label : "No clock"}</span></label>`;
+  }).join("");
   setRemotePane(pane);
-  openDialog('#dlg-remote');
-  (pane === 'join' && code ? $('#remote-join-name') : pane === 'join' ? $('#remote-join-code') : $('#remote-create-name')).focus();
+  openDialog("#dlg-remote");
+  (pane === "join" && code ? $("#remote-join-name") : pane === "join" ? $("#remote-join-code") : $("#remote-create-name")).focus();
 }
-
 function showInvite() {
   const code = game.remote.room;
-  $('#room-code').textContent = formatRoomCode(code);
-  $('#room-copy-link').classList.toggle('hidden', !shareLink(code));
+  $("#room-code").textContent = formatRoomCode(code);
+  $("#room-copy-link").classList.toggle("hidden", !shareLink(code));
   renderRoomStatus();
-  setRemotePane('invite');
-  if (!$('#dlg-remote').open) openDialog('#dlg-remote');
+  setRemotePane("invite");
+  if (!$("#dlg-remote").open) openDialog("#dlg-remote");
 }
-
 function renderRoomStatus() {
-  const el = $('#room-status');
-  if (!el || !game.remote) return;
-  el.className = 'room-status';
-  if (bothSeated()) { el.classList.add('ok'); el.textContent = 'Connected. Game on!'; return; }
-  el.innerHTML = relaysUp
-    ? '<span class="pulse"></span>Waiting for your colleague…'
-    : '<span class="pulse"></span>Connecting…';
+  const el2 = $("#room-status");
+  if (!el2 || !game.remote) return;
+  el2.className = "room-status";
+  if (bothSeated()) {
+    el2.classList.add("ok");
+    el2.textContent = "Connected. Game on!";
+    return;
+  }
+  el2.innerHTML = relaysUp ? '<span class="pulse"></span>Waiting for your colleague…' : '<span class="pulse"></span>Connecting…';
 }
-
-$('#form-remote-create').addEventListener('submit', (e) => {
+$("#form-remote-create").addEventListener("submit", (e) => {
   e.preventDefault();
-  const name = $('#remote-create-name').value.trim();
-  if (!name) return $('#remote-create-name').focus();
-  let color = (document.querySelector('input[name="remote-color"]:checked') || {}).value || 'w';
-  if (color === 'random') color = Math.random() < 0.5 ? 'w' : 'b';
-  const tc = (document.querySelector('input[name="remote-tc"]:checked') || {}).value || 'none';
+  const name = $("#remote-create-name").value.trim();
+  if (!name) return $("#remote-create-name").focus();
+  let color = document.querySelector('input[name="remote-color"]:checked')?.value || "w";
+  if (color === "random") color = Math.random() < 0.5 ? "w" : "b";
+  const tc = document.querySelector('input[name="remote-tc"]:checked')?.value || "none";
   Object.assign(settings, { myName: name, remoteTc: tc });
   const code = newRoomCode();
   const pid = settings.pid;
   connectRoom(code);
   startGame({
-    tc, white: color === 'w' ? name : '', black: color === 'b' ? name : '',
-    remote: { room: code, me: color, pw: color === 'w' ? pid : '', pb: color === 'b' ? pid : '' },
+    tc,
+    white: color === "w" ? name : "",
+    black: color === "b" ? name : "",
+    remote: { room: code, me: color, pw: color === "w" ? pid : "", pb: color === "b" ? pid : "" }
   });
   publish();
   showInvite();
 });
-
-$('#form-remote-join').addEventListener('submit', (e) => {
+$("#form-remote-join").addEventListener("submit", (e) => {
   e.preventDefault();
-  const code = parseRoomCode($('#remote-join-code').value);
-  const name = $('#remote-join-name').value.trim();
-  if (!code) return joinError('A code has 6 letters and digits, like K7Q-M2X.');
-  if (!name) return $('#remote-join-name').focus();
-  if (game.remote?.room === code) { closeDialogs(); return toast('You are already in this game'); }
+  const code = parseRoomCode($("#remote-join-code").value);
+  const name = $("#remote-join-name").value.trim();
+  if (!code) return joinError("A code has 6 letters and digits, like K7Q-M2X.");
+  if (!name) return $("#remote-join-name").focus();
+  if (game.remote?.room === code) {
+    closeDialogs();
+    return toast("You are already in this game");
+  }
   settings.myName = name;
   storage.saveSettings(settings);
-  $('#remote-join-error').classList.add('hidden');
-  $('#remote-join-btn').disabled = true;
-  $('#remote-join-btn').textContent = 'Connecting…';
+  $("#remote-join-error").classList.add("hidden");
+  $("#remote-join-btn").disabled = true;
+  $("#remote-join-btn").textContent = "Connecting…";
   joining = {
-    code, name,
-    timer: setTimeout(() => joinFailed(relaysUp
-      ? 'No game found with this code. Check it, and ask your colleague to keep Deskmate open.'
-      : "Couldn't reach the game servers from this network."), 12000),
+    code,
+    name,
+    timer: setTimeout(() => joinFailed(relaysUp ? "No game found with this code. Check it, and ask your colleague to keep Deskmate open." : "Couldn't reach the game servers from this network."), 12e3)
   };
   connectRoom(code);
 });
-
 function joinError(msg) {
-  const err = $('#remote-join-error');
+  const err = $("#remote-join-error");
   err.textContent = msg;
-  err.classList.remove('hidden');
-  $('#remote-join-btn').disabled = false;
-  $('#remote-join-btn').textContent = 'Join game';
+  err.classList.remove("hidden");
+  $("#remote-join-btn").disabled = false;
+  $("#remote-join-btn").textContent = "Join game";
 }
-
 function joinFailed(msg) {
   if (joining) clearTimeout(joining.timer);
   joining = null;
-  // go back to the room of the game on the board, if it is a live one
-  if (game.remote) connectRoom(game.remote.room); else leaveRoom();
+  if (game.remote) connectRoom(game.remote.room);
+  else leaveRoom();
   joinError(msg);
 }
-
-$('#room-copy').addEventListener('click', () => copy(formatRoomCode(game.remote.room), 'Code'));
-$('#room-copy-link').addEventListener('click', () => copy(shareLink(game.remote.room), 'Link'));
-$('#btn-remote').addEventListener('click', () => (game.remote && !game.over && !bothSeated() ? showInvite() : openRemote()));
-
-/* ---------------- post-game analysis (Stockfish) ---------------- */
-
-// depth 16 or one second per position on WebAssembly; the plain-JS fallback is ~25x slower,
-// so it gets less depth and less time (a 40-move game then takes about a minute)
-const AN_LIMITS = { wasm: { depth: 16, movetime: 1000 }, asm: { depth: 12, movetime: 700 } };
-
-/** A finished position needs no engine: mate or draw on the board. */
+$("#room-copy").addEventListener("click", () => copy(formatRoomCode(game.remote.room), "Code"));
+$("#room-copy-link").addEventListener("click", () => copy(shareLink(game.remote.room), "Link"));
+$("#btn-remote").addEventListener("click", () => game.remote && !game.over && !bothSeated() ? showInvite() : openRemote());
+var AN_LIMITS = { wasm: { depth: 16, movetime: 1e3 }, asm: { depth: 12, movetime: 700 } };
 function terminalEval(fen) {
   const c = new Chess(fen);
-  if (c.isCheckmate()) return { mate: 0, winner: c.turn() === 'w' ? 'b' : 'w', pv: [] };
+  if (c.isCheckmate()) return { mate: 0, winner: c.turn() === "w" ? "b" : "w", pv: [] };
   if (c.isStalemate() || c.isInsufficientMaterial()) return { cp: 0, pv: [], draw: true };
   return null;
 }
-
-/** Engine line in readable notation: "14. Nf3 Nc6 15. Bb5 …". */
 function pvSan(fen, pv, max = 8) {
   const c = new Chess(fen);
-  let n = +fen.split(' ')[5];
-  let white = fen.split(' ')[1] === 'w';
+  let n = +fen.split(" ")[5];
+  let white = fen.split(" ")[1] === "w";
   const out = [];
   for (const u of pv.slice(0, max)) {
     let m;
-    try { m = c.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); } catch { break; }
+    try {
+      m = c.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] });
+    } catch {
+      break;
+    }
     out.push(white ? `${n}. ${m.san}` : out.length ? m.san : `${n}… ${m.san}`);
     if (!white) n++;
     white = !white;
   }
-  return out.join(' ');
+  return out.join(" ");
 }
-
 async function startAnalysis() {
-  setView('game');
+  setView("game");
   const g = active();
-  if (!g.length) return toast('Play some moves first');
-  // no engine help while a game is still being played
-  if (!g.result && !review) return toast('Analysis opens once the game is over');
+  if (!g.length) return toast("Play some moves first");
+  if (!g.result && !review) return toast("Analysis opens once the game is over");
   if (an?.game === g) return;
   stopAnalysis();
   const run = { game: g, evals: [], summary: null, done: false };
@@ -783,14 +6018,14 @@ async function startAnalysis() {
     engine = engine || new Engine();
     limits = AN_LIMITS[await engine.start()];
   } catch {
-    if (an === run) { an = null; render(); }
-    return toast(location.protocol === 'file:'
-      ? 'Analysis needs the hosted page (e.g. abhieq31.com/deskmate), not a downloaded file.'
-      : 'Stockfish could not start in this browser (blocked download?). Try reloading the page.');
+    if (an === run) {
+      an = null;
+      render();
+    }
+    return toast(location.protocol === "file:" ? "Analysis needs the hosted page (e.g. abhieq31.com/deskmate), not a downloaded file." : "Stockfish could not start in this browser (blocked download?). Try reloading the page.");
   }
   if (an !== run) return;
   run.flavor = engine.flavor;
-  // the position on screen first, then the whole game from the start
   const order = [viewPly, ...Array.from({ length: g.length + 1 }, (_, i) => i).filter((i) => i !== viewPly)];
   for (const i of order) {
     if (an !== run) return;
@@ -804,94 +6039,78 @@ async function startAnalysis() {
   run.done = true;
   renderAnalysis();
 }
-
 function stopAnalysis() {
   if (!an) return;
   an = null;
-  engine?.terminate(); // quickest way to drop a search in progress
+  engine?.terminate();
   engine = null;
   board.setAutoShapes([]);
 }
-
 function renderAnalysis() {
   const g = active();
   const on = !!an && an.game === g;
-  $('#analysis').classList.toggle('hidden', !on);
-  $('#evalbar').classList.toggle('quiet', !on);
-  $$('#board .sq-glyph').forEach((e) => e.remove());
-  $('#an-acc').classList.toggle('hidden', !on);
-  if (!on) { board.setAutoShapes([]); renderWinBar(); return; }
-  $('#evalbar').classList.remove('hidden');
+  $("#analysis").classList.toggle("hidden", !on);
+  $("#evalbar").classList.toggle("quiet", !on);
+  $$("#board .sq-glyph").forEach((e) => e.remove());
+  $("#an-acc").classList.toggle("hidden", !on);
+  if (!on) {
+    board.setAutoShapes([]);
+    renderWinBar();
+    return;
+  }
+  $("#evalbar").classList.remove("hidden");
   const ev = an.evals[viewPly];
   const white = winPct(ev);
-
-  // eval bar: White's share, White's end at White's side of the board
-  const bar = $('#evalbar');
-  bar.style.setProperty('--w', `${ev ? white : 50}%`);
-  bar.classList.toggle('flip', board.orientation === 'b');
-  bar.classList.toggle('black-better', white < 50);
-  $('#evalbar-num').textContent = ev ? formatEval(ev).replace(/^\+/, '') : '';
-
-  const evEl = $('#an-eval');
+  const bar = $("#evalbar");
+  bar.style.setProperty("--w", `${ev ? white : 50}%`);
+  bar.classList.toggle("flip", board.orientation === "b");
+  bar.classList.toggle("black-better", white < 50);
+  $("#evalbar-num").textContent = ev ? formatEval(ev).replace(/^\+/, "") : "";
+  const evEl = $("#an-eval");
   evEl.textContent = formatEval(ev);
-  evEl.classList.toggle('black', !!ev && white < 50);
+  evEl.classList.toggle("black", !!ev && white < 50);
   const fen = g.fenAt(viewPly);
   const evalsDone = an.evals.filter(Boolean).length;
-  $('#an-line').textContent = !ev ? `Stockfish is thinking… ${evalsDone}/${g.length + 1}` : ev.pv?.length ? pvSan(fen, ev.pv) : g.result && viewPly === g.length ? g.termination : '';
+  $("#an-line").textContent = !ev ? `Stockfish is thinking… ${evalsDone}/${g.length + 1}` : ev.pv?.length ? pvSan(fen, ev.pv) : g.result && viewPly === g.length ? g.termination : "";
   const best = ev?.pv?.[0];
   board.setAutoShapes(best ? [{ from: best.slice(0, 2), to: best.slice(2, 4) }] : []);
-
-  // chess.com-style verdict on the move that led here: "Nf6 is a blunder. Best was Qe7."
   const played = g.plies[viewPly - 1];
   const before = an.evals[viewPly - 1];
   const kind = an.summary?.moves[viewPly - 1]?.kind;
-  let verdict = '';
+  let verdict = "";
   if (played && before && ev) {
     const bestUci = before.pv?.[0];
-    const bestSan = bestUci ? pvSan(g.fenAt(viewPly - 1), [bestUci]).replace(/^\d+(\.|…) /, '') : '';
-    const isBest = bestUci && bestUci === played.from + played.to + (played.promotion || '');
+    const bestSan = bestUci ? pvSan(g.fenAt(viewPly - 1), [bestUci]).replace(/^\d+(\.|…) /, "") : "";
+    const isBest = bestUci && bestUci === played.from + played.to + (played.promotion || "");
     const name = esc(played.san);
-    if (played.san.endsWith('#')) verdict = `<b class="k-best">${name}</b> is checkmate.`;
-    else if (kind) verdict = `<b class="k-${kind}">${name}${MARKS[kind]}</b> is ${kind === 'inaccuracy' ? 'an' : 'a'} ${kind}.${bestSan ? ` Best was <b>${esc(bestSan)}</b>.` : ''}`;
+    if (played.san.endsWith("#")) verdict = `<b class="k-best">${name}</b> is checkmate.`;
+    else if (kind) verdict = `<b class="k-${kind}">${name}${MARKS[kind]}</b> is ${kind === "inaccuracy" ? "an" : "a"} ${kind}.${bestSan ? ` Best was <b>${esc(bestSan)}</b>.` : ""}`;
     else if (isBest) verdict = `<b class="k-best">${name}</b> is the best move.`;
-    else verdict = `<b>${name}</b> is a good move.${bestSan ? ` The engine prefers <b>${esc(bestSan)}</b>.` : ''}`;
+    else verdict = `<b>${name}</b> is a good move.${bestSan ? ` The engine prefers <b>${esc(bestSan)}</b>.` : ""}`;
   }
-  $('#an-verdict').innerHTML = verdict;
+  $("#an-verdict").innerHTML = verdict;
   if (played && kind) {
     const sq = $(`#board .sq[data-sq="${played.to}"]`);
-    sq?.insertAdjacentHTML('beforeend', `<span class="sq-glyph k-${kind}">${MARKS[kind]}</span>`);
+    sq?.insertAdjacentHTML("beforeend", `<span class="sq-glyph k-${kind}">${MARKS[kind]}</span>`);
   }
-
-  // graph: White's winning chances over the game
   const n = g.length;
   const pts = [];
-  for (let i = 0; i <= n; i++) if (an.evals[i]) pts.push([(i / n) * 100, 40 - (winPct(an.evals[i]) / 100) * 40, i]);
+  for (let i = 0; i <= n; i++) if (an.evals[i]) pts.push([i / n * 100, 40 - winPct(an.evals[i]) / 100 * 40, i]);
   const marks = an.summary?.moves || [];
-  const color = { blunder: '#ca3431', mistake: '#e58f2a', inaccuracy: '#f7c045' };
-  $('#an-graph').innerHTML =
-    (pts.length > 1 ? `<path class="area" d="M0,40 ${pts.map(([x, y]) => `L${x.toFixed(2)},${y.toFixed(2)}`).join(' ')} L100,40 Z"/>` : '') +
-    '<line class="mid" x1="0" y1="20" x2="100" y2="20"/>' +
-    `<line class="cur" x1="${(viewPly / n) * 100}" y1="0" x2="${(viewPly / n) * 100}" y2="40"/>` +
-    pts.filter(([, , i]) => marks[i - 1]?.kind).map(([x, y, i]) =>
-      `<ellipse class="dot" cx="${x}" cy="${y}" rx="0.9" ry="2" fill="${color[marks[i - 1].kind]}"/>`).join('');
-
+  const color = { blunder: "#ca3431", mistake: "#e58f2a", inaccuracy: "#f7c045" };
+  $("#an-graph").innerHTML = (pts.length > 1 ? `<path class="area" d="M0,40 ${pts.map(([x, y]) => `L${x.toFixed(2)},${y.toFixed(2)}`).join(" ")} L100,40 Z"/>` : "") + `<line class="mid" x1="0" y1="20" x2="100" y2="20"/><line class="cur" x1="${viewPly / n * 100}" y1="0" x2="${viewPly / n * 100}" y2="40"/>` + pts.filter(([, , i]) => marks[i - 1]?.kind).map(([x, y, i]) => `<ellipse class="dot" cx="${x}" cy="${y}" rx="0.9" ry="2" fill="${color[marks[i - 1].kind]}"/>`).join("");
   const done = an.evals.filter(Boolean).length;
-  $('#an-progress').classList.toggle('done', an.done);
-  $('#an-progress span').style.width = `${(done / (n + 1)) * 100}%`;
-
+  $("#an-progress").classList.toggle("done", an.done);
+  $("#an-progress span").style.width = `${done / (n + 1) * 100}%`;
   const sum = an.summary;
   const card = (c) => {
     const s = sum?.[c];
-    const acc = s?.accuracy == null ? '…' : `${s.accuracy.toFixed(1)}%`;
-    // each count jumps to that player's next move of that kind
-    const tally = s ? [['blunder', '??'], ['mistake', '?'], ['inaccuracy', '?!']].map(([k, m]) =>
-      `<button class="tk k-${k}" data-color="${c}" data-kind="${k}" ${s[k] ? '' : 'disabled'} title="Next ${k}">${s[k]}${m}</button>`).join('') : '';
+    const acc = s?.accuracy == null ? "…" : `${s.accuracy.toFixed(1)}%`;
+    const tally = s ? [["blunder", "??"], ["mistake", "?"], ["inaccuracy", "?!"]].map(([k, m]) => `<button class="tk k-${k}" data-color="${c}" data-kind="${k}" ${s[k] ? "" : "disabled"} title="Next ${k}">${s[k]}${m}</button>`).join("") : "";
     return `<div><small>${esc(g.nameOf(c) || colorName(c))}</small><b>${acc}</b><span class="tally">${tally}</span></div>`;
   };
-  $('#an-acc').innerHTML = card('w') + card('b');
+  $("#an-acc").innerHTML = card("w") + card("b");
 }
-
-/** The whole game in the panel, two moves a row, with the analysis marks once there are some. */
 function renderAnMoves() {
   const g = active();
   const marks = an && an.game === g ? an.summary?.moves || [] : [];
@@ -899,218 +6118,217 @@ function renderAnMoves() {
   for (let i = 0; i < g.length; i += 2) {
     const cell = (j) => {
       const p = g.plies[j];
-      if (!p) return '<span></span>';
+      if (!p) return "<span></span>";
       const k = marks[j]?.kind;
-      return `<button class="mv${viewPly === j + 1 ? ' active' : ''}${k ? ` ${k}` : ''}" data-ply="${j + 1}">${san(p.san)}${k ? `<span class="mark">${MARKS[k]}</span>` : ''}</button>`;
+      return `<button class="mv${viewPly === j + 1 ? " active" : ""}${k ? ` ${k}` : ""}" data-ply="${j + 1}">${san(p.san)}${k ? `<span class="mark">${MARKS[k]}</span>` : ""}</button>`;
     };
     rows.push(`<span class="an-num">${i / 2 + 1}.</span>${cell(i)}${cell(i + 1)}`);
   }
-  const list = $('#an-moves');
-  list.innerHTML = rows.join('') || '<span class="an-empty">No moves yet</span>';
-  // keep the current move in view by scrolling the list itself (never the page)
-  const act = list.querySelector('.active');
+  const list = $("#an-moves");
+  list.innerHTML = rows.join("") || '<span class="an-empty">No moves yet</span>';
+  const act = list.querySelector(".active");
   if (act) {
-    // offsets relative to the list itself (it is positioned), so this never scrolls the page
     const t = act.offsetTop;
     if (t < list.scrollTop) list.scrollTop = t - 8;
     else if (t + act.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = t + act.offsetHeight - list.clientHeight + 8;
   } else if (viewPly === g.length) list.scrollTop = list.scrollHeight;
 }
-
-$('#an-moves').addEventListener('click', (e) => { const b = e.target.closest('[data-ply]'); if (b) goto(+b.dataset.ply); });
-$('#an-acc').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-kind]');
+$("#an-moves").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-ply]");
+  if (b) goto(+b.dataset.ply);
+});
+$("#an-acc").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-kind]");
   if (!b || !an?.summary) return;
   const moves = an.summary.moves;
-  const mine = (j) => moves[j]?.kind === b.dataset.kind && (j % 2 === 0 ? 'w' : 'b') === b.dataset.color;
-  // next one after the move on screen, wrapping round to the first
+  const mine = (j2) => moves[j2]?.kind === b.dataset.kind && (j2 % 2 === 0 ? "w" : "b") === b.dataset.color;
   let j = moves.findIndex((_, k) => k >= viewPly && mine(k));
   if (j < 0) j = moves.findIndex((_, k) => mine(k));
   if (j >= 0) goto(j + 1);
 });
-
-$('#an-graph').addEventListener('click', (e) => {
+$("#an-graph").addEventListener("click", (e) => {
   const r = e.currentTarget.getBoundingClientRect();
-  goto(Math.round(((e.clientX - r.left) / r.width) * active().length));
+  goto(Math.round((e.clientX - r.left) / r.width * active().length));
 });
-
-/* ---------------- dialogs ---------------- */
-
 function openDialog(sel) {
   const d = $(sel);
   setSidebar(false);
   if (!d.open) d.showModal();
 }
-function closeDialogs() { $$('dialog[open]').forEach((d) => d.close()); }
-
-$$('[data-close]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
-// click on the backdrop closes a dialog
-$$('dialog').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d) d.close(); }));
-
+function closeDialogs() {
+  $$("dialog[open]").forEach((d) => d.close());
+}
+$$("[data-close]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
+$$("dialog").forEach((d) => d.addEventListener("click", (e) => {
+  if (e.target === d) d.close();
+}));
 function openNewGame(prefill) {
   const p = prefill || (game.remote ? { white: settings.white, black: settings.black, tc: settings.tc } : { white: game.white, black: game.black, tc: game.tc });
-  $('#new-white').value = p.white;
-  $('#new-black').value = p.black;
-  const grid = $('#tc-grid');
+  $("#new-white").value = p.white;
+  $("#new-black").value = p.black;
+  const grid = $("#tc-grid");
   grid.innerHTML = TIME_CONTROLS.map((t) => `
-    <label class="tc${t.id === p.tc ? ' checked' : ''}">
-      <input type="radio" name="tc" value="${t.id}"${t.id === p.tc ? ' checked' : ''} />
-      <strong>${t.base ? t.label : '∞'}</strong><small>${t.moment}</small>
-    </label>`).join('');
-  openDialog('#dlg-new');
+    <label class="tc${t.id === p.tc ? " checked" : ""}">
+      <input type="radio" name="tc" value="${t.id}"${t.id === p.tc ? " checked" : ""} />
+      <strong>${t.base ? t.label : "∞"}</strong><small>${t.moment}</small>
+    </label>`).join("");
+  openDialog("#dlg-new");
 }
-
-$('#tc-grid').addEventListener('change', (e) => {
-  $$('#tc-grid .tc').forEach((l) => l.classList.toggle('checked', l.querySelector('input') === e.target));
+$("#tc-grid").addEventListener("change", (e) => {
+  $$("#tc-grid .tc").forEach((l) => l.classList.toggle("checked", l.querySelector("input") === e.target));
 });
-$('#new-swap').addEventListener('click', () => {
-  const w = $('#new-white').value;
-  $('#new-white').value = $('#new-black').value;
-  $('#new-black').value = w;
+$("#new-swap").addEventListener("click", () => {
+  const w = $("#new-white").value;
+  $("#new-white").value = $("#new-black").value;
+  $("#new-black").value = w;
 });
-$('#form-new').addEventListener('submit', () => {
+$("#form-new").addEventListener("submit", () => {
   startGame({
-    white: $('#new-white').value.trim() || 'White',
-    black: $('#new-black').value.trim() || 'Black',
-    tc: (document.querySelector('#tc-grid input:checked') || {}).value || 'none',
+    white: $("#new-white").value.trim() || "White",
+    black: $("#new-black").value.trim() || "Black",
+    tc: document.querySelector("#tc-grid input:checked")?.value || "none"
   });
 });
-
 function renderArchive() {
   const list = storage.loadArchive();
-  const ul = $('#archive-list');
+  const ul = $("#archive-list");
   if (!list.length) {
     ul.innerHTML = '<li class="empty">No saved games yet. Finished games appear here automatically.</li>';
     return;
   }
   ul.innerHTML = list.map((g) => {
     const d = new Date(g.endedAt || g.startedAt);
-    const res = g.result ? g.result.replace(/1\/2/g, '½') : 'unfinished';
-    const cls = g.result === '1-0' ? 'w' : g.result === '0-1' ? 'b' : g.result ? 'd' : 'u';
+    const res = g.result ? g.result.replace(/1\/2/g, "½") : "unfinished";
+    const cls = g.result === "1-0" ? "w" : g.result === "0-1" ? "b" : g.result ? "d" : "u";
     return `<li data-id="${g.id}">
       <span class="res ${cls}">${res}</span>
-      <span class="who"><strong>${esc(g.white || '?')}</strong> vs <strong>${esc(g.black || '?')}</strong>
-        <small>${esc(g.termination || 'In progress')} · ${Math.ceil(g.moves.length / 2)} moves · ${d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</small></span>
+      <span class="who"><strong>${esc(g.white || "?")}</strong> vs <strong>${esc(g.black || "?")}</strong>
+        <small>${esc(g.termination || "In progress")} · ${Math.ceil(g.moves.length / 2)} moves · ${d.toLocaleString(void 0, { dateStyle: "medium", timeStyle: "short" })}</small></span>
       <span class="acts">
-        ${g.result ? '' : '<button class="btn small" data-act="resume">Resume</button>'}
+        ${g.result ? "" : '<button class="btn small" data-act="resume">Resume</button>'}
         <button class="btn small" data-act="review">Review</button>
         <button class="btn small icon-only" data-act="pgn" title="Download PGN" aria-label="Download PGN"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
         <button class="btn small icon-only danger ghost" data-act="del" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg></button>
       </span></li>`;
-  }).join('');
+  }).join("");
 }
-
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
-$('#archive-list').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-act]');
+var esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+$("#archive-list").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-act]");
   if (!btn) return;
-  const id = btn.closest('li').dataset.id;
+  const id = btn.closest("li").dataset.id;
   const data = storage.loadArchive().find((g) => g.id === id);
   if (!data) return;
   const act = btn.dataset.act;
-  if (act === 'review') openReview(data);
-  else if (act === 'pgn') download(new Game(data));
-  else if (act === 'del') { storage.removeFromArchive(id); renderArchive(); }
-  else if (act === 'resume') {
+  if (act === "review") openReview(data);
+  else if (act === "pgn") download(new Game(data));
+  else if (act === "del") {
+    storage.removeFromArchive(id);
+    renderArchive();
+  } else if (act === "resume") {
     if (game.length && !game.over && game.id !== id) storage.archive(game.toJSON());
     storage.removeFromArchive(id);
     game = new Game(data);
     review = null;
     viewPly = game.length;
     paused = game.hasClock && game.length > 0 && !game.remote;
-    if (game.remote) connectRoom(game.remote.room); else leaveRoom();
+    if (game.remote) connectRoom(game.remote.room);
+    else leaveRoom();
     persist();
     closeDialogs();
     board.setOrientation(homeOrientation());
-    setView('game');
+    setView("game");
   }
 });
-
-$('#archive-clear').addEventListener('click', () => {
-  if (confirm('Delete all saved games from this browser?')) { storage.clearArchive(); renderArchive(); }
+$("#archive-clear").addEventListener("click", () => {
+  if (confirm("Delete all saved games from this browser?")) {
+    storage.clearArchive();
+    renderArchive();
+  }
 });
-$('#archive-export').addEventListener('click', () => {
+$("#archive-export").addEventListener("click", () => {
   const list = storage.loadArchive();
-  if (!list.length) return toast('Nothing to export');
-  saveFile(`deskmate-games-${Date.now()}.pgn`, list.map((g) => new Game(g).pgn()).join('\n'));
+  if (!list.length) return toast("Nothing to export");
+  saveFile(`deskmate-games-${Date.now()}.pgn`, list.map((g) => new Game(g).pgn()).join("\n"));
 });
-
-/* ---------------- export helpers ---------------- */
-
 function saveFile(name, text) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/x-chess-pgn' }));
-  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  const url = URL.createObjectURL(new Blob([text], { type: "application/x-chess-pgn" }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: name });
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), 1e3);
 }
-
 function download(g) {
-  const slug = (s) => (s || '').replace(/[^\w-]+/g, '_').slice(0, 20);
+  const slug = (s) => (s || "").replace(/[^\w-]+/g, "_").slice(0, 20);
   saveFile(`${slug(g.white)}_vs_${slug(g.black)}_${new Date(g.startedAt).toISOString().slice(0, 10)}.pgn`, g.pgn());
 }
-
 async function copy(text, what) {
   try {
     await navigator.clipboard.writeText(text);
     toast(`${what} copied`);
   } catch {
-    prompt(`Copy the ${what}:`, text); // clipboard blocked: let the user copy by hand
+    prompt(`Copy the ${what}:`, text);
   }
 }
-
-let toastTimer;
+var toastTimer;
 function toast(msg) {
-  const t = $('#toast');
+  const t = $("#toast");
   t.textContent = msg;
-  t.classList.add('show');
+  t.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
 }
-
-/* ---------------- wake lock: keep the screen on during a game ---------------- */
-
-let wakeLock = null;
+var wakeLock = null;
 async function requestWakeLock() {
   try {
-    if ('wakeLock' in navigator && !wakeLock && !document.hidden) {
-      wakeLock = await navigator.wakeLock.request('screen');
-      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    if ("wakeLock" in navigator && !wakeLock && !document.hidden) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => {
+        wakeLock = null;
+      });
     }
-  } catch { /* not allowed: fine */ }
+  } catch {
+  }
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden) requestWakeLock(); });
-
-/* ---------------- buttons & keyboard ---------------- */
-
-$('#btn-new').addEventListener('click', () => openNewGame());
-$('#btn-archive').addEventListener('click', () => { renderArchive(); openDialog('#dlg-archive'); });
-$('#btn-help').addEventListener('click', () => openDialog('#dlg-help'));
-$('#btn-settings').addEventListener('click', () => openDialog('#dlg-settings'));
-$('#btn-analyse').addEventListener('click', () => startAnalysis());
-$$('.act-analyse').forEach((b) => b.addEventListener('click', () => startAnalysis()));
-$('#over-analyse').addEventListener('click', () => { $('#dlg-over').close(); startAnalysis(); });
-$('[data-nav="prev"]').addEventListener('click', () => goto(viewPly - 1));
-$('[data-nav="next"]').addEventListener('click', () => goto(viewPly + 1));
-$$('.act-pause').forEach((b) => b.addEventListener('click', togglePause));
-$('#btn-flip2').addEventListener('click', () => $('#btn-flip').click());
-$('#btn-flip').addEventListener('click', () => { clearTimeout(flipTimer); board.flip(); renderPlayers(); renderAnalysis(); });
-$('#btn-undo').addEventListener('click', takeback);
-
-$$('.act-draw').forEach((b) => b.addEventListener('click', () => {
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) requestWakeLock();
+});
+$("#btn-new").addEventListener("click", () => openNewGame());
+$("#btn-archive").addEventListener("click", () => {
+  renderArchive();
+  openDialog("#dlg-archive");
+});
+$("#btn-help").addEventListener("click", () => openDialog("#dlg-help"));
+$("#btn-settings").addEventListener("click", () => openDialog("#dlg-settings"));
+$("#btn-analyse").addEventListener("click", () => startAnalysis());
+$$(".act-analyse").forEach((b) => b.addEventListener("click", () => startAnalysis()));
+$("#over-analyse").addEventListener("click", () => {
+  $("#dlg-over").close();
+  startAnalysis();
+});
+$('[data-nav="prev"]').addEventListener("click", () => goto(viewPly - 1));
+$('[data-nav="next"]').addEventListener("click", () => goto(viewPly + 1));
+$$(".act-pause").forEach((b) => b.addEventListener("click", togglePause));
+$("#btn-flip2").addEventListener("click", () => $("#btn-flip").click());
+$("#btn-flip").addEventListener("click", () => {
+  clearTimeout(flipTimer);
+  board.flip();
+  renderPlayers();
+  renderAnalysis();
+});
+$("#btn-undo").addEventListener("click", takeback);
+$$(".act-draw").forEach((b) => b.addEventListener("click", () => {
   const r = game.remote;
-  const opp = r && (game.nameOf(other(r.me)) || 'your colleague');
+  const opp = r && (game.nameOf(other(r.me)) || "your colleague");
   const theyOffer = r && r.offer === other(r.me);
-  $('#draw-title').textContent = !r ? 'Agree to a draw?' : theyOffer ? `Accept ${opp}'s draw offer?` : `Offer ${opp} a draw?`;
-  $('#draw-sub').textContent = !r ? 'Both players should agree before confirming.'
-    : theyOffer ? 'The game ends as a draw.' : 'They can accept it, or decline by making a move.';
-  $('#draw-confirm').textContent = r && !theyOffer ? 'Offer draw' : 'Draw';
-  openDialog('#dlg-draw');
+  $("#draw-title").textContent = !r ? "Agree to a draw?" : theyOffer ? `Accept ${opp}'s draw offer?` : `Offer ${opp} a draw?`;
+  $("#draw-sub").textContent = !r ? "Both players should agree before confirming." : theyOffer ? "The game ends as a draw." : "They can accept it, or decline by making a move.";
+  $("#draw-confirm").textContent = r && !theyOffer ? "Offer draw" : "Draw";
+  openDialog("#dlg-draw");
 }));
-$('#draw-confirm').addEventListener('click', () => {
-  $('#dlg-draw').close();
+$("#draw-confirm").addEventListener("click", () => {
+  $("#dlg-draw").close();
   if (game.over) return;
   const r = game.remote;
   if (r && r.offer !== other(r.me)) {
@@ -1118,37 +6336,34 @@ $('#draw-confirm').addEventListener('click', () => {
     persist();
     publish();
     render();
-    toast('Draw offered');
+    toast("Draw offered");
     return;
   }
   game.agreeDraw();
   publish();
   onGameOver();
 });
-$$('.act-resign').forEach((b) => b.addEventListener('click', () => {
-  $('#resign-w span').textContent = `${game.white || 'White'} resigns`;
-  $('#resign-b span').textContent = `${game.black || 'Black'} resigns`;
-  // in a remote game, or against the computer, you can only resign for yourself
-  const me = game.remote?.me || (game.ai && other(game.ai.color));
-  $('#resign-w').classList.toggle('hidden', me === 'b');
-  $('#resign-b').classList.toggle('hidden', me === 'w');
-  openDialog('#dlg-resign');
+$$(".act-resign").forEach((b) => b.addEventListener("click", () => {
+  $("#resign-w span").textContent = `${game.white || "White"} resigns`;
+  $("#resign-b span").textContent = `${game.black || "Black"} resigns`;
+  const me = game.remote?.me || game.ai && other(game.ai.color);
+  $("#resign-w").classList.toggle("hidden", me === "b");
+  $("#resign-b").classList.toggle("hidden", me === "w");
+  openDialog("#dlg-resign");
 }));
-for (const c of ['w', 'b']) {
-  $(`#resign-${c}`).addEventListener('click', () => {
-    $('#dlg-resign').close();
+for (const c of ["w", "b"]) {
+  $(`#resign-${c}`).addEventListener("click", () => {
+    $("#dlg-resign").close();
     if (game.over) return;
     game.resign(c);
     publish();
     onGameOver();
   });
 }
-
-$('#over-rematch').addEventListener('click', () => {
-  $('#dlg-over').close();
+$("#over-rematch").addEventListener("click", () => {
+  $("#dlg-over").close();
   const r = game.remote;
   if (r && r.me) {
-    // same room, colours swapped; the other laptop picks the new game up from the room
     startGame({ white: game.black, black: game.white, tc: game.tc, remote: { room: r.room, me: other(r.me), pw: r.pb, pb: r.pw } });
     publish();
     toast(`Rematch: you play ${colorName(game.remote.me).toLowerCase()}`);
@@ -1156,200 +6371,184 @@ $('#over-rematch').addEventListener('click', () => {
   }
   const ai = game.ai && { color: other(game.ai.color), level: game.ai.level };
   startGame({ white: game.black, black: game.white, tc: game.tc, ai });
-  toast('Colours swapped. Good luck!');
+  toast("Colours swapped. Good luck!");
 });
-$('#over-new').addEventListener('click', () => { $('#dlg-over').close(); game.ai ? openComputer() : openNewGame(); });
-$('#over-review').addEventListener('click', () => { $('#dlg-over').close(); goto(0); toast('Use ← → to step through the game'); });
-$('#over-pgn').addEventListener('click', () => download(game));
-
-$('#nav-first').addEventListener('click', () => goto(0));
-$('#nav-prev').addEventListener('click', () => goto(viewPly - 1));
-$('#nav-next').addEventListener('click', () => goto(viewPly + 1));
-$('#nav-last').addEventListener('click', () => goto(active().length));
-$('#moves').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-ply]');
+$("#over-new").addEventListener("click", () => {
+  $("#dlg-over").close();
+  game.ai ? openComputer() : openNewGame();
+});
+$("#over-review").addEventListener("click", () => {
+  $("#dlg-over").close();
+  goto(0);
+  toast("Use ← → to step through the game");
+});
+$("#over-pgn").addEventListener("click", () => download(game));
+$("#nav-first").addEventListener("click", () => goto(0));
+$("#nav-prev").addEventListener("click", () => goto(viewPly - 1));
+$("#nav-next").addEventListener("click", () => goto(viewPly + 1));
+$("#nav-last").addEventListener("click", () => goto(active().length));
+$("#moves").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-ply]");
   if (b) goto(+b.dataset.ply);
 });
-$('#review-exit').addEventListener('click', () => (review ? exitReview() : goto(game.length)));
-
-$('#btn-pgn-copy').addEventListener('click', () => copy(active().pgn(), 'PGN'));
-$('#btn-pgn-download').addEventListener('click', () => download(active()));
-$('#btn-fen').addEventListener('click', () => copy(active().fenAt(viewPly), 'FEN'));
-
-document.addEventListener('keydown', (e) => {
-  if (e.target.closest('input, textarea') || $$('dialog[open]').length) return;
-  if (e.key === 'Escape') return setSidebar(false);
+$("#review-exit").addEventListener("click", () => review ? exitReview() : goto(game.length));
+$("#btn-pgn-copy").addEventListener("click", () => copy(active().pgn(), "PGN"));
+$("#btn-pgn-download").addEventListener("click", () => download(active()));
+$("#btn-fen").addEventListener("click", () => copy(active().fenAt(viewPly), "FEN"));
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest("input, textarea") || $$("dialog[open]").length) return;
+  if (e.key === "Escape") return setSidebar(false);
   const k = e.key;
-  if (k === 'ArrowLeft') goto(viewPly - 1);
-  else if (k === 'ArrowRight') goto(viewPly + 1);
-  else if (k === 'ArrowUp') goto(0);
-  else if (k === 'ArrowDown') goto(active().length);
-  else if (k === 'f' || k === 'F') $('#btn-flip').click();
-  else if (k === ' ') togglePause();
-  else if ((e.ctrlKey || e.metaKey) && k === 'z') takeback();
-  else if (k === 'n' || k === 'N') openNewGame();
-  else if (k === 'h' || k === 'H') $('#btn-archive').click();
-  else if (k === 'm' || k === 'M') setSidebar(!$('#sidebar').classList.contains('open'));
-  else if (k === 'z' || k === 'Z') toggleFocus();
-  else if (k === '?') openDialog('#dlg-help');
+  if (k === "ArrowLeft") goto(viewPly - 1);
+  else if (k === "ArrowRight") goto(viewPly + 1);
+  else if (k === "ArrowUp") goto(0);
+  else if (k === "ArrowDown") goto(active().length);
+  else if (k === "f" || k === "F") $("#btn-flip").click();
+  else if (k === " ") togglePause();
+  else if ((e.ctrlKey || e.metaKey) && k === "z") takeback();
+  else if (k === "n" || k === "N") openNewGame();
+  else if (k === "h" || k === "H") $("#btn-archive").click();
+  else if (k === "m" || k === "M") setSidebar(!$("#sidebar").classList.contains("open"));
+  else if (k === "z" || k === "Z") toggleFocus();
+  else if (k === "?") openDialog("#dlg-help");
   else return;
   e.preventDefault();
 });
-
-/* ---------------- settings ---------------- */
-
-const bindSwitch = (sel, key, after) => {
+var bindSwitch = (sel, key, after) => {
   const input = $(sel);
   input.checked = settings[key];
-  input.addEventListener('change', () => {
+  input.addEventListener("change", () => {
     settings[key] = input.checked;
     storage.saveSettings(settings);
     after?.();
   });
 };
-bindSwitch('#set-autoflip', 'autoFlip', () => { render(); if (settings.autoFlip) scheduleFlip(0); });
-bindSwitch('#set-dests', 'showDests', applyPrefs);
-bindSwitch('#set-coords', 'coords', applyPrefs);
-bindSwitch('#set-sound', 'sound', applyPrefs);
-bindSwitch('#set-winbar', 'winBar', render);
-
-$$('.swatch').forEach((s) => s.addEventListener('click', () => {
+bindSwitch("#set-autoflip", "autoFlip", () => {
+  render();
+  if (settings.autoFlip) scheduleFlip(0);
+});
+bindSwitch("#set-dests", "showDests", applyPrefs);
+bindSwitch("#set-coords", "coords", applyPrefs);
+bindSwitch("#set-sound", "sound", applyPrefs);
+bindSwitch("#set-winbar", "winBar", render);
+$$(".swatch").forEach((s) => s.addEventListener("click", () => {
   settings.theme = s.dataset.theme;
   storage.saveSettings(settings);
   applyPrefs();
 }));
-
 function applyPrefs() {
   board.setPrefs({ showDests: settings.showDests, coords: settings.coords });
   sound.setEnabled(settings.sound);
-  $('#board').dataset.theme = settings.theme;
-  $$('.swatch').forEach((s) => s.setAttribute('aria-checked', String(s.dataset.theme === settings.theme)));
+  $("#board").dataset.theme = settings.theme;
+  $$(".swatch").forEach((s) => s.setAttribute("aria-checked", String(s.dataset.theme === settings.theme)));
 }
-
-
-/* ---------------- sidebar ---------------- */
-
 function setSidebar(open) {
-  $('#sidebar').classList.toggle('open', open);
-  $('#sb-backdrop').classList.toggle('open', open);
-  $('#sb-toggle').setAttribute('aria-expanded', String(open));
-  $('#sb-toggle').title = open ? 'Collapse menu' : 'Expand menu';
-  $('#sb-toggle span').textContent = open ? 'Collapse' : 'Expand';
+  $("#sidebar").classList.toggle("open", open);
+  $("#sb-backdrop").classList.toggle("open", open);
+  $("#sb-toggle").setAttribute("aria-expanded", String(open));
+  $("#sb-toggle").title = open ? "Collapse menu" : "Expand menu";
+  $("#sb-toggle span").textContent = open ? "Collapse" : "Expand";
 }
-$('#sb-toggle').addEventListener('click', () => setSidebar(!$('#sidebar').classList.contains('open')));
-$('#btn-sidebar').addEventListener('click', () => setSidebar(true));
-$('#sb-backdrop').addEventListener('click', () => setSidebar(false));
-// after picking something from the menu, fold it away again
-$$('#sidebar .sb-item:not(.sb-toggle)').forEach((b) => b.addEventListener('click', () => setSidebar(false)));
-
-/* ---------------- home page & focus mode ---------------- */
-
-const inProgress = () => !game.over && (game.length > 0 || !!game.remote);
-
+$("#sb-toggle").addEventListener("click", () => setSidebar(!$("#sidebar").classList.contains("open")));
+$("#btn-sidebar").addEventListener("click", () => setSidebar(true));
+$("#sb-backdrop").addEventListener("click", () => setSidebar(false));
+$$("#sidebar .sb-item:not(.sb-toggle)").forEach((b) => b.addEventListener("click", () => setSidebar(false)));
+var inProgress = () => !game.over && (game.length > 0 || !!game.remote);
 function setView(v) {
   view = v;
   document.body.dataset.view = v;
-  if (v === 'home') renderHome();
+  if (v === "home") renderHome();
   else render();
 }
-
-/** Focus mode (on by default): only the board, the players and their clocks while you play. */
 function applyFocus() {
-  document.body.classList.toggle('focus', view === 'game' && settings.focus && !an);
-  const b = $('#btn-focus');
-  b.title = settings.focus ? 'Show menu and moves (Z)' : 'Hide menu and moves (Z)';
-  b.setAttribute('aria-pressed', String(!!settings.focus));
+  document.body.classList.toggle("focus", view === "game" && settings.focus && !an);
+  const b = $("#btn-focus");
+  b.title = settings.focus ? "Show menu and moves (Z)" : "Hide menu and moves (Z)";
+  b.setAttribute("aria-pressed", String(!!settings.focus));
 }
-
 function toggleFocus() {
   settings.focus = !settings.focus;
   storage.saveSettings(settings);
   applyFocus();
 }
-
 function renderHome() {
   const resume = inProgress();
-  $('#home-resume').classList.toggle('hidden', !resume);
+  $("#home-resume").classList.toggle("hidden", !resume);
   if (resume) {
-    $('#home-resume-sub').textContent = `${game.white || 'White'} vs ${game.black || 'Black'}` +
-      (game.remote ? ` · live, code ${formatRoomCode(game.remote.room)}` : ` · ${Math.ceil(game.length / 2)} moves`);
+    $("#home-resume-sub").textContent = `${game.white || "White"} vs ${game.black || "Black"}` + (game.remote ? ` · live, code ${formatRoomCode(game.remote.room)}` : ` · ${Math.ceil(game.length / 2)} moves`);
   }
   const list = storage.loadArchive().slice(0, 5);
-  $('#home-games').innerHTML = list.length ? list.map((g) => {
-    const res = g.result ? g.result.replace(/1\/2/g, '½') : 'unfinished';
-    const cls = g.result === '1-0' ? 'w' : g.result === '0-1' ? 'b' : g.result ? 'd' : 'u';
+  $("#home-games").innerHTML = list.length ? list.map((g) => {
+    const res = g.result ? g.result.replace(/1\/2/g, "½") : "unfinished";
+    const cls = g.result === "1-0" ? "w" : g.result === "0-1" ? "b" : g.result ? "d" : "u";
     const d = new Date(g.endedAt || g.startedAt);
     return `<li data-id="${g.id}"><span class="res ${cls}">${res}</span>
-      <span class="who">${esc(g.white || '?')} vs ${esc(g.black || '?')}<small>${esc(g.termination || 'In progress')} · ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</small></span>
-      <span class="acts"><button class="btn small" data-act="review">Review</button>${g.result ? '<button class="btn small" data-act="analyse">Analyse</button>' : ''}</span></li>`;
-  }).join('') : '<li class="empty">Your finished games will appear here.</li>';
+      <span class="who">${esc(g.white || "?")} vs ${esc(g.black || "?")}<small>${esc(g.termination || "In progress")} · ${d.toLocaleDateString(void 0, { day: "numeric", month: "short" })}</small></span>
+      <span class="acts"><button class="btn small" data-act="review">Review</button>${g.result ? '<button class="btn small" data-act="analyse">Analyse</button>' : ""}</span></li>`;
+  }).join("") : '<li class="empty">Your finished games will appear here.</li>';
   renderOffice();
 }
-
-/** The office table: everyone who has played on this laptop, best score first. */
 function renderOffice() {
   const rows = standings(storage.loadArchive()).slice(0, 8);
-  $('#home-office').classList.toggle('hidden', !rows.length);
-  $('#office-table').innerHTML = rows.map((r, i) => `<tr><td class="rk">${i + 1}</td><td class="nm">${esc(r.name)}</td>` +
-    `<td>${r.played}</td><td>${r.won}</td><td>${r.drawn}</td><td>${r.lost}</td><td class="pts">${String(r.score).replace('.5', '½')}</td></tr>`).join('');
+  $("#home-office").classList.toggle("hidden", !rows.length);
+  $("#office-table").innerHTML = rows.map((r, i) => `<tr><td class="rk">${i + 1}</td><td class="nm">${esc(r.name)}</td><td>${r.played}</td><td>${r.won}</td><td>${r.drawn}</td><td>${r.lost}</td><td class="pts">${String(r.score).replace(".5", "½")}</td></tr>`).join("");
 }
-
-$('#home-games').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-act]');
+$("#home-games").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-act]");
   if (!btn) return;
-  const data = storage.loadArchive().find((g) => g.id === btn.closest('li').dataset.id);
+  const data = storage.loadArchive().find((g) => g.id === btn.closest("li").dataset.id);
   if (!data) return;
   openReview(data);
-  if (btn.dataset.act === 'analyse') startAnalysis();
+  if (btn.dataset.act === "analyse") startAnalysis();
 });
-$('#home-colleague').addEventListener('click', () => openRemote('create'));
-$('#home-join').addEventListener('click', () => openRemote('join'));
-$('#home-local').addEventListener('click', () => openNewGame());
-$('#home-resume').addEventListener('click', () => setView('game'));
-$('#home-ai').addEventListener('click', openComputer);
-
-const AI_TCS = ['none', '5+0', '10+5', '15+10'];
+$("#home-colleague").addEventListener("click", () => openRemote("create"));
+$("#home-join").addEventListener("click", () => openRemote("join"));
+$("#home-local").addEventListener("click", () => openNewGame());
+$("#home-resume").addEventListener("click", () => setView("game"));
+$("#home-ai").addEventListener("click", openComputer);
+var AI_TCS = ["none", "5+0", "10+5", "15+10"];
 function openComputer() {
-  $('#ai-name').value = settings.myName || '';
-  const tc = settings.aiTc || 'none';
-  $('#ai-tc').innerHTML = AI_TCS.map((id) => {
+  $("#ai-name").value = settings.myName || "";
+  const tc = settings.aiTc || "none";
+  $("#ai-tc").innerHTML = AI_TCS.map((id) => {
     const t = timeControl(id);
-    return `<label class="chip"><input type="radio" name="ai-tc" value="${id}"${id === tc ? ' checked' : ''} /><span>${t.base ? t.label : 'No clock'}</span></label>`;
-  }).join('');
-  const lv = $(`input[name="ai-level"][value="${settings.aiLevel || 'medium'}"]`);
+    return `<label class="chip"><input type="radio" name="ai-tc" value="${id}"${id === tc ? " checked" : ""} /><span>${t.base ? t.label : "No clock"}</span></label>`;
+  }).join("");
+  const lv = $(`input[name="ai-level"][value="${settings.aiLevel || "medium"}"]`);
   if (lv) lv.checked = true;
-  openDialog('#dlg-ai');
+  openDialog("#dlg-ai");
 }
-$('#form-ai').addEventListener('submit', () => {
-  const name = $('#ai-name').value.trim() || 'You';
-  const level = (document.querySelector('input[name="ai-level"]:checked') || {}).value || 'medium';
-  const tc = (document.querySelector('input[name="ai-tc"]:checked') || {}).value || 'none';
-  let me = (document.querySelector('input[name="ai-color"]:checked') || {}).value || 'w';
-  if (me === 'random') me = Math.random() < 0.5 ? 'w' : 'b';
-  Object.assign(settings, { aiLevel: level, aiTc: tc, ...(name !== 'You' ? { myName: name } : {}) });
+$("#form-ai").addEventListener("submit", () => {
+  const name = $("#ai-name").value.trim() || "You";
+  const level = document.querySelector('input[name="ai-level"]:checked')?.value || "medium";
+  const tc = document.querySelector('input[name="ai-tc"]:checked')?.value || "none";
+  let me = document.querySelector('input[name="ai-color"]:checked')?.value || "w";
+  if (me === "random") me = Math.random() < 0.5 ? "w" : "b";
+  Object.assign(settings, { aiLevel: level, aiTc: tc, ...name !== "You" ? { myName: name } : {} });
   const bot = aiName(level);
-  startGame({ white: me === 'w' ? name : bot, black: me === 'b' ? name : bot, tc, ai: { color: other(me), level } });
+  startGame({ white: me === "w" ? name : bot, black: me === "b" ? name : bot, tc, ai: { color: other(me), level } });
 });
-$('#home-all').addEventListener('click', () => { renderArchive(); openDialog('#dlg-archive'); });
-$('#sb-home').addEventListener('click', (e) => { e.preventDefault(); setSidebar(false); setView('home'); });
-$('#btn-focus').addEventListener('click', toggleFocus);
-
-/* ---------------- boot ---------------- */
-
+$("#home-all").addEventListener("click", () => {
+  renderArchive();
+  openDialog("#dlg-archive");
+});
+$("#sb-home").addEventListener("click", (e) => {
+  e.preventDefault();
+  setSidebar(false);
+  setView("home");
+});
+$("#btn-focus").addEventListener("click", toggleFocus);
 applyPrefs();
 board.setOrientation(homeOrientation());
-setView(inProgress() ? 'game' : 'home');
+setView(inProgress() ? "game" : "home");
 if (game.remote) connectRoom(game.remote.room);
-computerMove(); // a restored game against the computer, with the computer to move
-
-// a shared link (…/deskmate#K7QM2X) opens "Join with a code" with the code filled in
-const linkCode = parseRoomCode(location.hash);
-if (location.hash) history.replaceState(null, '', location.pathname + location.search);
-if (linkCode && linkCode !== game.remote?.room) openRemote('join', linkCode);
-else if (paused) toast('Game restored, clocks paused');
-
-// the single-file build (deskmate.html) has no sw.js next to it, wherever it is hosted
-const singleFile = document.documentElement.hasAttribute('data-single-file');
-if ('serviceWorker' in navigator && location.protocol !== 'file:' && !singleFile) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+computerMove();
+var linkCode = parseRoomCode(location.hash);
+if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+if (linkCode && linkCode !== game.remote?.room) openRemote("join", linkCode);
+else if (paused) toast("Game restored, clocks paused");
+var singleFile = document.documentElement.hasAttribute("data-single-file");
+if ("serviceWorker" in navigator && location.protocol !== "file:" && !singleFile) {
+  navigator.serviceWorker.register("sw.js").catch(() => {
+  });
 }

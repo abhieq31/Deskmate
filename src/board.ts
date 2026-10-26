@@ -1,25 +1,54 @@
 // Interactive chessboard: rendering, click & drag moves, legal-move hints,
 // last-move/check highlights, right-click arrows and an animated board flip.
-import { fenPieces } from './game.js';
+import { fenPieces, type Color } from './game.ts';
 
 const FILES = 'abcdefgh';
-const ROLE_NAMES = { K: 'king', Q: 'queen', R: 'rook', B: 'bishop', N: 'knight', P: 'pawn' };
+const ROLE_NAMES: Record<string, string> = { K: 'king', Q: 'queen', R: 'rook', B: 'bishop', N: 'knight', P: 'pawn' };
 
-const el = (tag, cls, parent) => {
+const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, parent?: Element): HTMLElementTagNameMap[K] => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
   if (parent) parent.appendChild(e);
   return e;
 };
 
-const reflow = (e) => void e.offsetWidth;
+const reflow = (e: HTMLElement) => void e.offsetWidth;
+
+/** What the app tells the board: position, highlights and who may move where. */
+export interface BoardState {
+  fen: string;
+  lastMove: [string, string] | null;
+  check: string | null;
+  dests: Map<string, string[]>;
+  movable: Color | null;
+}
+interface Shape { from: string; to: string }
+interface Drag {
+  from: string; el: HTMLElement; x: number; y: number; rect: DOMRect; moved: boolean; wasSelected: boolean;
+  over: string | null; px?: number; py?: number; raf?: number;
+}
 
 export class Board {
-  /**
-   * @param {HTMLElement} root
-   * @param {{ onMove: (from: string, to: string) => void }} opts
-   */
-  constructor(root, opts) {
+  root: HTMLElement;
+  onMove: (from: string, to: string) => void;
+  orientation: Color;
+  state: BoardState;
+  prefs: { showDests: boolean; coords: boolean };
+  pieces: Map<string, { el: HTMLElement; code: string }>;
+  selected: string | null;
+  drag: Drag | null;
+  shapes: Shape[];
+  autoShapes: Shape[];
+  drawing: { from: string } | null;
+  inner: HTMLDivElement;
+  squaresEl: HTMLDivElement;
+  squareEls: HTMLDivElement[];
+  piecesEl: HTMLDivElement;
+  svg: SVGSVGElement;
+  promoEl: HTMLDivElement;
+  _sqByName: Map<string, HTMLDivElement>;
+
+  constructor(root: HTMLElement, opts: { onMove: (from: string, to: string) => void }) {
     this.root = root;
     this.onMove = opts.onMove;
     this.orientation = 'w';
@@ -63,16 +92,16 @@ export class Board {
   /* ---------- geometry ---------- */
 
   /** Visual (col,row) for a square under the current orientation. */
-  _pos(sq) {
+  _pos(sq: string): [number, number] {
     const f = FILES.indexOf(sq[0]), r = +sq[1] - 1;
     return this.orientation === 'w' ? [f, 7 - r] : [7 - f, r];
   }
 
-  _squareAt(col, row) {
+  _squareAt(col: number, row: number): string {
     return this.orientation === 'w' ? FILES[col] + (8 - row) : FILES[7 - col] + (row + 1);
   }
 
-  _eventSquare(e) {
+  _eventSquare(e: { clientX: number; clientY: number }): string | null {
     const rect = this.inner.getBoundingClientRect();
     const col = Math.floor(((e.clientX - rect.left) / rect.width) * 8);
     const row = Math.floor(((e.clientY - rect.top) / rect.height) * 8);
@@ -94,21 +123,21 @@ export class Board {
     this._sqByName = new Map(this.squareEls.map((s) => [s.dataset.sq, s]));
   }
 
-  _place(pieceEl, sq) {
+  _place(pieceEl: HTMLElement, sq: string) {
     const [c, r] = this._pos(sq);
     pieceEl.style.transform = `translate(${c * 100}%, ${r * 100}%)`;
   }
 
   /* ---------- public API ---------- */
 
-  setPrefs(prefs) {
+  setPrefs(prefs: Partial<Board['prefs']>) {
     Object.assign(this.prefs, prefs);
     this.root.classList.toggle('no-coords', !this.prefs.coords);
     this._highlight();
   }
 
   /** Update position & highlights. Pieces that moved glide to their new square. */
-  set(state) {
+  set(state: Partial<BoardState>) {
     const posChanged = state.fen !== this.state.fen;
     this.state = { ...this.state, ...state };
     if (posChanged) {
@@ -120,7 +149,7 @@ export class Board {
     this._highlight();
   }
 
-  setOrientation(color) {
+  setOrientation(color: Color) {
     if (color === this.orientation) return;
     this.root.classList.add('no-anim');
     this.orientation = color;
@@ -142,13 +171,13 @@ export class Board {
   }
 
   /** Show the promotion picker over the target file; resolves to 'q'|'r'|'b'|'n' or null. */
-  askPromotion(to, color) {
+  askPromotion(to: string, color: Color): Promise<string | null> {
     return new Promise((resolve) => {
       const [col, row] = this._pos(to);
       const fromTop = row === 0;
       this.promoEl.innerHTML = '';
       this.promoEl.classList.remove('hidden');
-      const close = (v) => {
+      const close = (v: string | null) => {
         this.promoEl.classList.add('hidden');
         this.promoEl.innerHTML = '';
         resolve(v);
@@ -231,13 +260,13 @@ export class Board {
 
   /* ---------- input ---------- */
 
-  _canMoveFrom(sq) {
+  _canMoveFrom(sq: string): boolean {
     const { movable, dests } = this.state;
     const p = this.pieces.get(sq);
     return !!movable && !!p && p.code[0] === movable && dests.has(sq);
   }
 
-  _down(e) {
+  _down(e: PointerEvent) {
     const sq = this._eventSquare(e);
     if (!sq) return;
     if (e.button === 2) {
@@ -274,7 +303,7 @@ export class Board {
   }
 
   /** Put the dragged piece's centre at the pointer; batched to one update per frame. */
-  _follow(x, y) {
+  _follow(x: number, y: number) {
     const d = this.drag;
     d.px = x;
     d.py = y;
@@ -287,7 +316,7 @@ export class Board {
     });
   }
 
-  _move(e) {
+  _move(e: PointerEvent) {
     const d = this.drag;
     if (!d) return;
     // the button is already up but no pointerup reached us (seen with trackpad tap-to-drag):
@@ -299,7 +328,7 @@ export class Board {
     if (over !== d.over) { d.over = over; this._highlight(); }
   }
 
-  _up(e) {
+  _up(e: { clientX: number; clientY: number }) {
     if (this.drawing) {
       const to = this._eventSquare(e);
       if (to) this._toggleShape(this.drawing.from, to);
@@ -349,12 +378,12 @@ export class Board {
 
   /* ---------- arrows & circles ---------- */
 
-  setAutoShapes(shapes) {
+  setAutoShapes(shapes: Shape[]) {
     this.autoShapes = shapes;
     this._renderShapes();
   }
 
-  _toggleShape(from, to) {
+  _toggleShape(from: string, to: string) {
     const i = this.shapes.findIndex((s) => s.from === from && s.to === to);
     if (i >= 0) this.shapes.splice(i, 1);
     else this.shapes.push({ from, to });
@@ -365,11 +394,11 @@ export class Board {
     const g = this.svg.querySelector('g');
     g.innerHTML = '';
     const ns = 'http://www.w3.org/2000/svg';
-    for (const { from, to, auto } of [...this.autoShapes.map((x) => ({ ...x, auto: true })), ...this.shapes]) {
+    for (const { from, to, auto } of [...this.autoShapes.map((x) => ({ ...x, auto: true })), ...this.shapes.map((x) => ({ ...x, auto: false }))]) {
       const [c1, r1] = this._pos(from), [c2, r2] = this._pos(to);
       if (from === to) {
         const c = document.createElementNS(ns, 'circle');
-        c.setAttribute('cx', c1 + 0.5); c.setAttribute('cy', r1 + 0.5); c.setAttribute('r', 0.45);
+        c.setAttribute('cx', String(c1 + 0.5)); c.setAttribute('cy', String(r1 + 0.5)); c.setAttribute('r', '0.45');
         c.setAttribute('class', 'shape-circle');
         g.appendChild(c);
         continue;
@@ -378,9 +407,9 @@ export class Board {
       const len = Math.hypot(x2 - x1, y2 - y1);
       const shorten = 0.3; // leave room for the arrow head
       const line = document.createElementNS(ns, 'line');
-      line.setAttribute('x1', x1); line.setAttribute('y1', y1);
-      line.setAttribute('x2', x2 - ((x2 - x1) / len) * shorten);
-      line.setAttribute('y2', y2 - ((y2 - y1) / len) * shorten);
+      line.setAttribute('x1', String(x1)); line.setAttribute('y1', String(y1));
+      line.setAttribute('x2', String(x2 - ((x2 - x1) / len) * shorten));
+      line.setAttribute('y2', String(y2 - ((y2 - y1) / len) * shorten));
       line.setAttribute('class', auto ? 'shape-arrow auto' : 'shape-arrow');
       line.setAttribute('marker-end', auto ? 'url(#ah-auto)' : 'url(#ah)');
       g.appendChild(line);

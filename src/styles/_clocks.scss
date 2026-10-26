@@ -1,0 +1,18 @@
+/* ---------- clocks ---------- */
+.clock {
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  height: 42px; width: 150px; padding: 0 12px; border-radius: 5px;
+  font: 600 1.55rem/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+  background: #121213; color: #9a958e; border: 1px solid var(--line);
+  transition: background 0.25s, color 0.25s, box-shadow 0.25s;
+}
+.clock-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; opacity: 0; transition: opacity 0.2s; margin-right: auto; }
+.clock.active { background: #f4f2ee; color: #0e0e0f; box-shadow: 0 0 24px rgba(255, 255, 255, 0.12); }
+.clock.active .clock-ico { opacity: 1; }
+.clock.running .clock-ico { animation: tick 1s steps(2) infinite; }
+@keyframes tick { 50% { opacity: 0.55; } }
+.clock.unlimited span { font-size: 1.6rem; }
+.clock.low.active { background: #f7d4d4; color: #a51b1b; animation: lowPulse 1s ease-in-out infinite; }
+.clock.low:not(.active) { color: #e57373; }
+.clock.paused { outline: 2px dashed rgba(255, 255, 255, 0.3); outline-offset: 2px; }
+@keyframes lowPulse { 50% { box-shadow: 0 0 26px rgba(220, 75, 75, 0.7); } }

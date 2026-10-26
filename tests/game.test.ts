@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, fenPieces, checkSquare, material, captures } from '../js/game.js';
+import { Game, fenPieces, checkSquare, material, captures } from '../src/game.ts';
 
 test('plays legal moves and rejects illegal ones', () => {
   const g = new Game();

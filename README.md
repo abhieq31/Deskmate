@@ -140,18 +140,19 @@ it needs `script-src 'unsafe-inline'`, `img-src data:` and the relays in
 
 ## Run it locally
 
-No build step and no dependencies. Serve the folder over HTTP:
+The app is written in TypeScript (`src/*.ts`) and SCSS (`src/styles/`).
+The built files (`js/app.js`, `css/style.css`, `deskmate.html`) are
+committed, so serving the folder works without building:
 
 ```bash
 git clone https://github.com/abhieq31/Deskmate.git
 cd Deskmate
-python3 -m http.server 8080      # or: npx serve .
-# open http://localhost:8080
+npm install                       # TypeScript, esbuild, Sass (development only)
+npm run build                     # src/*.ts → js/app.js, src/styles → css/style.css, → deskmate.html
+python3 -m http.server 8080       # or: npx serve .   then open http://localhost:8080
+npm run typecheck                 # tsc, no emit
+npm test                          # node --test, straight on the .ts sources (Node 22.18+)
 ```
-
-ES modules don't load from `file://`, so opening `index.html` by double-click won't work.
-
-Run the tests with `npm test`. They need Node 18 or later and nothing else.
 
 ## Deploy your own copy
 
@@ -164,26 +165,32 @@ Run the tests with `npm test`. They need Node 18 or later and nothing else.
    push and pull request.
 
 Any static host works too (Netlify, Cloudflare Pages, an internal web
-server): copy the repository as it is. No build step is needed to serve it.
+server): copy the repository as it is. The built files are committed, so
+serving needs no build step.
 
 ## Project layout
 
 ```
 index.html            page shell & dialogs
-css/style.css         all styling (themes, board, animations, responsive layout)
-js/app.js             controller: UI wiring, clocks, persistence, dialogs
-js/board.js           interactive board: render, click/drag, hints, arrows, flip
-js/game.js            game model on top of chess.js: plies, results, PGN (pure, tested)
-js/live.js            live rooms: room codes, signed snapshots over Nostr relays (tested)
-js/remote.js          compact move encoding for snapshots, one byte per move (tested)
-js/engine.js          Stockfish in a Web Worker over UCI (contempt off for analysis)
-js/analysis.js        win chances, ??/?/?! classification, accuracy (tested)
-js/storage.js         localStorage wrapper
-js/sound.js           Web Audio synthesized sounds
-js/confetti.js        celebration effect
+src/app.ts            controller: UI wiring, clocks, persistence, dialogs, the computer opponent
+src/board.ts          interactive board: render, click/drag, hints, arrows, flip
+src/game.ts           game model on top of chess.js: plies, results, PGN (pure, tested)
+src/live.ts           live rooms: room codes, signed snapshots over Nostr relays (tested)
+src/remote.ts         compact move encoding for snapshots, one byte per move (tested)
+src/engine.ts         Stockfish in a Web Worker over UCI (analysis and play)
+src/analysis.ts       win chances, ??/?/?! classification, accuracy (tested)
+src/office.ts         the office table from saved games (tested)
+src/openings.ts       opening names from vendor/openings
+src/storage.ts        localStorage wrapper
+src/sound.ts          Web Audio synthesized sounds
+src/confetti.ts       celebration effect
+src/styles/*.scss     all styling, one partial per part of the page
+types/vendor.d.ts     types for the vendored chess.js and secp256k1
+js/app.js             built: one esbuild bundle of src/*.ts (committed)
+css/style.css         built: compiled SCSS (committed)
+deskmate.html         built: the single file abhieq31.com serves (committed)
 sw.js                 offline cache (service worker)
-scripts/build-single.mjs  bundles everything into deskmate.html (no deps)
-deskmate.html         generated single-file build for hosting (commit it after changes: `npm run build`)
+scripts/build-single.mjs  inlines the built CSS, JS and images into deskmate.html
 vendor/chess.js       chess rules engine (chess.js 1.4.0, BSD-2-Clause)
 vendor/secp256k1.js   Schnorr signatures for room snapshots (noble-secp256k1 3.2.0, MIT)
 vendor/stockfish/     Stockfish 11 (WebAssembly + plain-JS fallback), for analysis and the computer opponent (GPLv3)

@@ -3,7 +3,7 @@ const COLORS = ['#e5383b', '#ff4d4f', '#a8323e', '#ffffff', '#f3eee7', '#1d1d1f'
 
 export function confetti(count = 160) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const canvas = document.getElementById('confetti');
+  const canvas = document.getElementById('confetti') as HTMLCanvasElement;
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
   canvas.width = innerWidth * dpr;
@@ -22,7 +22,7 @@ export function confetti(count = 160) {
   }));
   const start = performance.now();
   canvas.classList.add('on');
-  const frame = (t) => {
+  const frame = (t: number) => {
     const age = t - start;
     ctx.clearRect(0, 0, innerWidth, innerHeight);
     ctx.globalAlpha = Math.max(0, 1 - age / 3200);
