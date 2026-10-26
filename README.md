@@ -9,8 +9,8 @@ Put the laptop between you and play, or send game codes through the chat tool yo
 
 [**▶ Play now**](https://abhieq31.com/deskmate) · [**⬇ Offline version**](https://abhieq31.github.io/Deskmate/deskmate.html) · [Report a bug](https://github.com/abhieq31/Deskmate/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/Deskmate/issues/new?template=feature_request.md)
 
-<img src="docs/screenshot.png" alt="Deskmate on a laptop: player rows with clocks above and below the board, move list with Draw, Resign and navigation on the right" width="760" />
-<img src="docs/phone.png" alt="Deskmate on a phone: each player row has its clock, toolbar at the bottom" width="190" />
+<img src="docs/screenshot.png" alt="Deskmate on a laptop: a large board, each player with a clock above and below it, and Draw, Resign and Menu beside it" width="760" />
+<img src="docs/phone.png" alt="Deskmate on a phone: players with clocks above and below the board, Draw, Resign and Menu underneath" width="190" />
 
 </div>
 
@@ -46,11 +46,12 @@ everything local; it is not designed to get around IT controls.
   Finished games go to **Saved games**, where you can review, resume or
   download them as PGN.
 - **PGN import and export**, plus copying the FEN of any position.
-- **chess.com-style layout.** Each player row has the avatar and name on
-  the left and the clock on the right, above and below the board. The panel
-  on the right holds the move list, Draw/Resign and the navigation buttons.
-  Settings and PGN tools live under the ⚙ Options button.
-- **Move list with replay.** Step with Back/Forward or ← →, or click any move under Options.
+- **The board is the page.** On screen there are only the two players
+  (profile and clock, above and below the board) and a slim rail with
+  **Draw**, **Resign** and **Menu**. Code and Pause show up only in games
+  that need them. New game, remote play, saved games, the move list,
+  settings and PGN tools are all in the menu.
+- **Move list with replay.** Use ← → ↑ ↓, or open the menu and click any move.
 - **Takeback, agreed draw, resign and rematch** (rematch swaps colours).
 - **Right-click arrows and circles** for explaining a line to your opponent.
 - **Five board themes**, synthesized move sounds, and the screen stays on

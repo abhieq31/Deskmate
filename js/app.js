@@ -152,7 +152,7 @@ const san = (s) => s.replace(/[KQRBN]/g, (c) => `<span class="fig">${FIG[c]}</sp
 function renderStatus() {
   const g = active();
   const tc = g.tcInfo;
-  $('#tc-badge').textContent = $('#panel-tc').textContent = tc.base ? `${tc.label} · ${tc.kind}` : 'Unlimited';
+  $('#tc-badge').textContent = tc.base ? `${tc.label} · ${tc.kind}` : 'Unlimited';
   $('#game-date').textContent = new Date(g.startedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   let title, sub;
   if (g.result) {
@@ -204,13 +204,11 @@ function renderControls() {
   const noActions = !liveGame || game.over || game.length === 0;
   const theyOffer = game.remote && !game.over && game.remote.offer === other(game.remote.me);
   const drawTitle = game.remote ? (theyOffer ? 'Accept the draw offer' : 'Offer a draw') : 'Agree to a draw';
-  // the right column has Draw/Resign; on phones the toolbar carries copies of them
-  for (const id of ['#btn-draw', '#tb-draw']) {
-    $(id).disabled = noActions;
-    $(id).classList.toggle('offer', !!theyOffer);
-    $(id).title = drawTitle;
-  }
-  $('#btn-resign').disabled = $('#tb-resign').disabled = noActions;
+  const drawBtn = $('#btn-draw');
+  drawBtn.disabled = noActions;
+  drawBtn.classList.toggle('offer', !!theyOffer);
+  drawBtn.title = drawTitle;
+  $('#btn-resign').disabled = noActions;
   renderRemoteCard();
   const pauseBtn = $('#btn-pause');
   pauseBtn.classList.toggle('hidden', !game.hasClock || !liveGame || !!game.remote);
@@ -220,31 +218,8 @@ function renderControls() {
   const codeBtn = $('#btn-code');
   codeBtn.classList.toggle('hidden', !game.remote || !liveGame);
   codeBtn.classList.toggle('attn', !!game.remote && !game.over && !myTurn());
-  syncMirrors();
 }
 
-// Buttons in the desktop panel stand in for controls that live in the phone toolbar or
-// the Options drawer: they copy their state and forward clicks.
-function syncMirrors() {
-  for (const b of $$('[data-mirror]')) {
-    const src = $(b.dataset.mirror);
-    b.disabled = src.disabled;
-    b.title = src.title;
-    b.classList.toggle('hidden', src.classList.contains('hidden'));
-    b.classList.toggle('attn', src.classList.contains('attn'));
-    if (b.hasAttribute('data-mirror-icon')) b.innerHTML = src.querySelector('svg').outerHTML;
-  }
-}
-$$('[data-mirror]').forEach((b) => b.addEventListener('click', () => $(b.dataset.mirror).click()));
-
-// The move list sits in the right panel on wide screens and inside Options on phones.
-const phoneLayout = matchMedia('(max-width: 760px)');
-const placeMoves = () => {
-  $(phoneLayout.matches ? '#moves-slot-drawer' : '#moves-slot-panel').appendChild($('#moves-block'));
-  $('#moves .active')?.scrollIntoView({ block: 'nearest' });
-};
-phoneLayout.addEventListener('change', placeMoves);
-placeMoves();
 
 /* ---------------- moves ---------------- */
 
@@ -412,6 +387,8 @@ function goto(ply) {
 
 function openDialog(sel) {
   const d = $(sel);
+  // anything opened from the menu replaces it, so the two never stack
+  if (sel !== '#dlg-options' && $('#dlg-options').open) $('#dlg-options').close();
   if (!d.open) d.showModal();
 }
 function closeDialogs() { $$('dialog[open]').forEach((d) => d.close()); }
@@ -587,8 +564,6 @@ $('#btn-options').addEventListener('click', () => {
   openDialog('#dlg-options');
   $('#moves .active')?.scrollIntoView({ block: 'nearest' });
 });
-$('#tb-draw').addEventListener('click', () => $('#btn-draw').click());
-$('#tb-resign').addEventListener('click', () => $('#btn-resign').click());
 $('#btn-flip').addEventListener('click', async () => { clearTimeout(flipTimer); await board.flip(); renderPlayers(); });
 $('#btn-undo').addEventListener('click', takeback);
 $('#btn-pause').addEventListener('click', togglePause);

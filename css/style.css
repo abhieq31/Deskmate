@@ -20,7 +20,8 @@
   --gold: #e8b64c;
   --radius: 10px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
-  --board: min(calc(100vh - 210px), calc(100vw - 440px), 820px);
+  /* everything but the board: 2 player rows + gaps + padding (height), rail + gap + padding (width) */
+  --board: min(calc(100vh - 136px), calc(100vw - 130px), 980px);
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', Ubuntu, sans-serif;
   --mono: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, Consolas, monospace;
   color-scheme: dark;
@@ -58,17 +59,12 @@ h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; colo
   100% { transform: translate(-6vmax, 9vmax) scale(0.95); }
 }
 
-/* ---------- top bar ---------- */
-.topbar {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 10px clamp(12px, 3vw, 28px); height: 58px;
-}
+/* ---------- brand (shown in the menu) ---------- */
 .brand { display: flex; align-items: center; gap: 10px; color: var(--text-strong); font-size: 1.3rem; letter-spacing: 0.02em; }
 .brand:hover { text-decoration: none; }
 .brand b { color: var(--accent-2); font-weight: 700; }
 .brand img { filter: drop-shadow(0 2px 8px rgba(155, 199, 0, 0.35)); transition: transform 0.4s cubic-bezier(.3, 1.6, .5, 1); }
 .brand:hover img { transform: rotate(-12deg) scale(1.08); }
-.top-actions { display: flex; gap: 8px; align-items: center; }
 
 /* ---------- buttons ---------- */
 .btn {
@@ -100,32 +96,53 @@ h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; colo
 .btn.small svg { width: 17px; height: 17px; }
 .half { font-size: 1.25rem; font-weight: 700; line-height: 1; }
 
-/* ---------- layout (chess.com-style) ----------
-   desktop:  [avatar name      clock]  [ moves panel ]        phone:  [avatar name   clock]
-             [        board         ]  [ draw  resign]                [       board       ]
-             [avatar name      clock]  [ |< < > >|   ]                [avatar name   clock]
-                                                                     [     toolbar       ]
-   Each clock shares its player's grid cell and sits at the right edge of the board. */
+/* ---------- layout: the board is the page ----------
+   desktop:  [avatar name        clock]          phone:  [avatar name   clock]
+             [                        ]  [½   ]           [       board       ]
+             [         board          ]  [⚑   ]           [avatar name   clock]
+             [                        ]  [☰   ]           [ ½ Draw ⚑ Resign ☰ ]
+             [avatar name        clock]
+   Each clock shares its player's grid cell, at the right edge of the board. */
 .game {
-  --card-h: 52px;
+  --card-h: 44px;
+  --rail-w: 76px;
   display: grid;
-  grid-template-columns: var(--board) minmax(300px, 360px);
+  grid-template-columns: var(--board) var(--rail-w);
   grid-template-areas:
-    "ptop  panel"
-    "board panel"
-    "pbot  panel";
-  gap: 8px 20px;
+    "ptop  ."
+    "board rail"
+    "pbot  .";
+  gap: 8px 14px;
   justify-content: center;
-  padding: 4px clamp(12px, 2vw, 24px) 20px;
+  align-content: center;
+  min-height: 100vh; min-height: 100dvh;
+  padding: 12px;
 }
 .player.top, .clock-top { grid-area: ptop; }
 .player.bottom, .clock-bottom { grid-area: pbot; }
-.player { justify-self: start; max-width: calc(100% - 190px); }
+.player { justify-self: start; max-width: calc(100% - 180px); }
 .clock { justify-self: end; }
 .board-area { grid-area: board; position: relative; }
-.panel { grid-area: panel; }
-.toolbar { grid-area: tools; display: none; }
-.mobile-only { display: none !important; }
+
+/* the rail: Draw, Resign, (Code / Pause when they apply) and the menu */
+.rail { grid-area: rail; display: flex; flex-direction: column; gap: 6px; }
+.rail-gap { flex: 1; }
+.rb {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  width: 100%; padding: 10px 4px; border: 1px solid var(--line); border-radius: 10px;
+  background: rgba(38, 36, 33, 0.6); color: var(--text); cursor: pointer;
+  font: 600 0.75rem var(--font); letter-spacing: 0.02em;
+  transition: background 0.15s, color 0.15s, transform 0.12s;
+}
+.rb svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.rb .half { font-size: 1.3rem; font-weight: 700; line-height: 22px; height: 22px; }
+.rb:hover:not(:disabled) { background: rgba(255, 255, 255, 0.09); color: var(--text-strong); }
+.rb:active:not(:disabled) { transform: scale(0.96); }
+.rb:disabled { opacity: 0.3; cursor: default; }
+.rb:focus-visible { outline: 2px solid var(--blue); }
+.rb.danger { color: #f08c8c; }
+.rb.attn { color: var(--blue); border-color: rgba(54, 146, 231, 0.5); }
+.rb.offer { color: var(--gold); border-color: rgba(232, 182, 76, 0.5); animation: offerPulse 1.4s ease-in-out infinite; }
 
 .card {
   background: var(--panel);
@@ -137,7 +154,11 @@ h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; colo
   -webkit-backdrop-filter: blur(14px);
 }
 
-/* ---------- options drawer ---------- */
+/* ---------- menu drawer ---------- */
+.menu-main { display: grid; gap: 8px; }
+.menu-main .btn { justify-content: flex-start; min-height: 42px; }
+.menu-foot { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 12px; }
+.menu-foot .btn svg { width: 17px; height: 17px; }
 .drawer {
   margin: 0 0 0 auto; height: 100vh; max-height: 100vh; width: min(400px, 100vw);
   padding: 18px 20px 28px; border: 0; border-left: 1px solid rgba(255, 255, 255, 0.08);
@@ -342,11 +363,11 @@ h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; colo
 .material .pc { width: 1.15em; height: 1.15em; margin-right: -0.35em; opacity: 0.85; }
 .material b { margin-left: 0.6em; font-weight: 600; }
 
-/* ---------- clocks (right column on desktop) ---------- */
+/* ---------- clocks ---------- */
 .clock {
   display: flex; align-items: center; justify-content: flex-end; gap: 10px;
-  height: var(--card-h); min-width: 170px; padding: 0 16px; border-radius: 6px;
-  font: 600 1.9rem/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+  height: var(--card-h); min-width: 160px; padding: 0 14px; border-radius: 6px;
+  font: 600 1.75rem/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
   background: #1b1a17; color: #9a958e; border: 1px solid var(--line);
   transition: background 0.25s, color 0.25s, box-shadow 0.25s;
 }
@@ -360,58 +381,6 @@ h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; colo
 .clock.low:not(.active) { color: #e57373; }
 .clock.paused { outline: 2px dashed rgba(255, 255, 255, 0.3); outline-offset: 2px; }
 @keyframes lowPulse { 50% { box-shadow: 0 0 26px rgba(220, 75, 75, 0.7); } }
-
-/* ---------- right panel ---------- */
-.panel {
-  display: flex; flex-direction: column; min-height: 0;
-  height: 0; min-height: 100%; /* follow the board column's height instead of setting it */
-  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: var(--shadow); overflow: hidden; backdrop-filter: blur(14px);
-}
-.panel-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 0 12px 0 0; border-bottom: 1px solid var(--line); background: rgba(0, 0, 0, 0.18);
-}
-.panel-tab {
-  display: flex; align-items: center; gap: 8px; padding: 12px 16px; font-weight: 700; color: var(--text-strong);
-  border-bottom: 2px solid var(--accent-2);
-}
-.panel-tab svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
-.panel .moves-slot { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
-.panel #moves-block { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; padding: 0; border: 0; }
-.panel #moves-block .sec-head { display: none; }
-.panel .moves { flex: 1 1 0; max-height: none; margin: 0; border: 0; border-radius: 0; background: transparent; }
-.panel .result-line { padding: 10px; border-top: 1px solid var(--line); }
-.panel-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; border-top: 1px solid var(--line); }
-.btn.action { justify-content: center; min-height: 42px; font-size: 0.95rem; gap: 10px; }
-.btn.action .half { font-size: 1.15rem; }
-.panel-nav { display: flex; align-items: center; gap: 2px; padding: 6px 8px; border-top: 1px solid var(--line); background: rgba(0, 0, 0, 0.18); }
-.pn-gap { flex: 1; }
-.pn {
-  display: grid; place-items: center; width: 40px; height: 38px; border: 0; border-radius: 6px;
-  background: transparent; color: var(--text); cursor: pointer; transition: background 0.15s, color 0.15s;
-}
-.pn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.pn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); color: var(--text-strong); }
-.pn:disabled { opacity: 0.3; cursor: default; }
-.pn:focus-visible { outline: 2px solid var(--blue); }
-.pn.attn { color: var(--blue); }
-
-/* ---------- toolbar (chess.com-style) ---------- */
-.toolbar { justify-content: space-around; gap: 4px; padding: 0; } /* shown on phones only */
-.tb {
-  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px;
-  border: 0; border-radius: 8px; background: transparent; color: var(--text); cursor: pointer;
-  font: 500 0.8rem var(--font); transition: background 0.15s, color 0.15s;
-}
-.tb svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.tb svg .dot { fill: currentColor; stroke: none; }
-.tb .half { font-size: 1.4rem; font-weight: 700; line-height: 24px; height: 24px; }
-.tb:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); color: var(--text-strong); }
-.tb:disabled { opacity: 0.35; cursor: default; }
-.tb:focus-visible { outline: 2px solid var(--blue); }
-.tb.danger { color: #f08c8c; }
-.tb.attn { color: var(--blue); }
 
 /* ---------- moves list (inside Options) ---------- */
 .moves {
@@ -550,8 +519,8 @@ kbd {
 
 /* toast & confetti */
 .toast {
-  /* top of the screen so it never covers the toolbar or the board's bottom rank */
-  position: fixed; left: 50%; top: 66px; transform: translate(-50%, -20px); z-index: 50;
+  /* top of the screen so it never covers the controls or the board's bottom rank */
+  position: fixed; left: 50%; top: 14px; transform: translate(-50%, -20px); z-index: 50;
   padding: 10px 18px; border-radius: 99px; background: rgba(20, 19, 17, 0.92); color: var(--text-strong);
   border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: var(--shadow);
   opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.3s cubic-bezier(.2, 1.4, .4, 1);
@@ -562,33 +531,25 @@ kbd {
 
 /* ---------- responsive ---------- */
 @media (max-width: 760px) {
-  :root { --board: min(100vw, calc(100vh - 250px)); }
+  /* 2 player rows + rail + gaps + padding */
+  :root { --board: min(100vw, calc(100vh - 190px)); --board: min(100vw, calc(100dvh - 190px)); }
   body { font-size: 14px; }
-  .topbar { height: 52px; padding: 6px 10px; }
-  .top-actions .btn span { display: none; }
-  .top-actions .btn { padding: 0; width: 38px; }
-  .brand { font-size: 1.1rem; }
   .game {
-    --card-h: 46px;
+    --card-h: 44px;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "ptop" "board" "pbot" "tools";
-    gap: 10px 10px;
-    padding: 4px 0 calc(8px + env(safe-area-inset-bottom));
+    grid-template-areas: "ptop" "board" "pbot" "rail";
+    gap: 8px;
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
     justify-content: stretch;
-    min-height: calc(100vh - 52px); min-height: calc(100dvh - 52px);
-    align-content: center;
   }
-  .player { padding-left: 10px; }
-  .clock { margin-right: 10px; min-width: 116px; font-size: 1.55rem; padding: 0 12px; }
-  .player { max-width: calc(100% - 140px); }
-  .panel { display: none; }
-  .toolbar { display: flex; }
+  .player { padding-left: 10px; max-width: calc(100% - 140px); }
+  .clock { margin-right: 10px; min-width: 116px; font-size: 1.5rem; padding: 0 12px; }
   .clock-ico { width: 20px; height: 20px; }
   .board-area { justify-self: center; width: var(--board); }
   .board-frame { border-radius: 0; }
-  .mobile-only { display: flex !important; }
-  .toolbar { margin-top: 4px; padding: 4px 4px 0; border-top: 1px solid var(--line); }
-  .tb { padding: 6px 2px; font-size: 0.72rem; }
+  .rail { flex-direction: row; padding: 0 10px; }
+  .rail-gap { display: none; }
+  .rb { flex: 1; flex-direction: row; gap: 8px; padding: 10px 6px; font-size: 0.85rem; }
   .drawer {
     margin: auto 0 0; width: 100vw; max-width: 100vw; height: auto; max-height: 88vh;
     border-left: 0; border-top: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px 16px 0 0;
