@@ -3087,6 +3087,9 @@ kbd {
     transform: none;
     pointer-events: auto;
   }
+  #btn-flip3, #btn-sound {
+    display: none;
+  } /* phones: ⚙ and focus only; flip and sound live in Settings */
   .board-resize {
     display: none;
   }

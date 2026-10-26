@@ -1,5 +1,5 @@
 // Offline support: cache the app shell, serve cache-first, refresh in the background.
-const CACHE = 'deskmate-v12';
+const CACHE = 'deskmate-v13';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'assets/icon.svg',
   'js/app.js', // one bundle of src/*.ts (npm run build:js)

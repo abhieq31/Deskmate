@@ -5108,7 +5108,10 @@ var Engine = class {
   worker = null;
   flavor = null;
   ready = null;
-  constructor(candidates = engineCandidates()) {
+  hash;
+  /** `hash`: Stockfish's table size in MB; small for the always-on engines, so three can run at once. */
+  constructor(candidates = engineCandidates(), hash = 32) {
+    this.hash = hash;
     this.candidates = candidates;
     this.listeners = /* @__PURE__ */ new Set();
     this.busy = Promise.resolve();
@@ -5155,7 +5158,7 @@ var Engine = class {
       };
       this._waitFor("uciok").then(() => {
         clearTimeout(timer);
-        this._send("setoption name Hash value 32");
+        this._send(`setoption name Hash value ${this.hash}`);
         this._send("setoption name Contempt value 0");
         this._send("setoption name Analysis Contempt value Off");
         this._send("isready");
@@ -5573,7 +5576,7 @@ function renderControls() {
   $("#btn-sound").classList.toggle("off", !settings.sound);
   $(".game").classList.toggle("analysing", !!an);
   for (const b of $$(".act-pause")) {
-    b.classList.toggle("hidden", !game.hasClock || !liveGame || !!game.remote);
+    b.classList.toggle("hidden", !game.hasClock || !liveGame || !!game.remote || game.over);
     b.disabled = game.over || game.length === 0;
     b.innerHTML = paused ? ICON_RESUME : ICON_PAUSE;
     b.title = paused ? "Resume clocks (Space)" : "Pause clocks (Space)";
@@ -5648,7 +5651,7 @@ async function scheduleWinBar() {
   if (liveEvals.has(fen)) return renderWinBar();
   const turn = ++liveTurn;
   try {
-    liveEngine = liveEngine || new Engine();
+    liveEngine = liveEngine || new Engine(void 0, 8);
     const flavor = await liveEngine.start();
     if (turn !== liveTurn) return;
     const ev = terminalEval(fen) || await liveEngine.analyse(fen, WIN_LIMITS[flavor]);
@@ -5686,7 +5689,7 @@ async function computerMove() {
   const started = Date.now();
   let uci = null;
   try {
-    aiEngine = aiEngine || new Engine();
+    aiEngine = aiEngine || new Engine(void 0, 16);
     uci = await aiEngine.play(fen, AI_LEVELS[g.ai.level] || AI_LEVELS.medium);
   } catch {
     if (turn === aiTurn) toast("Stockfish could not start in this browser. Try reloading the page.");
@@ -6337,6 +6340,7 @@ $("#archive-list").addEventListener("click", (e) => {
     storage.removeFromArchive(id);
     renderArchive();
   } else if (act === "resume") {
+    stopAnalysis();
     if (game.length && !game.over && game.id !== id) storage.archive(game.toJSON());
     storage.removeFromArchive(id);
     game = new Game(data);
@@ -6349,6 +6353,7 @@ $("#archive-list").addEventListener("click", (e) => {
     closeDialogs();
     board.setOrientation(homeOrientation());
     setView("game");
+    computerMove();
   }
 });
 $("#archive-clear").addEventListener("click", () => {
@@ -6645,6 +6650,10 @@ $("#sb-backdrop").addEventListener("click", () => setSidebar(false));
 $$("#sidebar .sb-item:not(.sb-toggle)").forEach((b) => b.addEventListener("click", () => setSidebar(false)));
 var inProgress = () => !game.over && (game.length > 0 || !!game.remote);
 function setView(v) {
+  if (v === "home" && view === "game" && clockRunning() && !game.remote) {
+    paused = true;
+    persist();
+  }
   view = v;
   document.body.dataset.view = v;
   if (v === "home") renderHome();

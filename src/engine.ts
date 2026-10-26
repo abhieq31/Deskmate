@@ -40,7 +40,11 @@ export class Engine {
   flavor: Candidate['flavor'] | null = null;
   ready: Promise<Candidate['flavor']> | null = null;
 
-  constructor(candidates: Candidate[] = engineCandidates()) {
+  hash: number;
+
+  /** `hash`: Stockfish's table size in MB; small for the always-on engines, so three can run at once. */
+  constructor(candidates: Candidate[] = engineCandidates(), hash = 32) {
+    this.hash = hash;
     this.candidates = candidates;
     this.listeners = new Set();
     this.busy = Promise.resolve();
@@ -68,7 +72,7 @@ export class Engine {
       worker.onerror = (e) => { e.preventDefault?.(); fail(e.message || `${flavor} engine failed to load`); };
       this._waitFor('uciok').then(() => {
         clearTimeout(timer);
-        this._send('setoption name Hash value 32');
+        this._send(`setoption name Hash value ${this.hash}`);
         // Stockfish 11 "contempt" makes it rate positions in favour of the side it analyses for
         // (to avoid draws when it plays); for an even-handed analysis it must be off
         this._send('setoption name Contempt value 0');
