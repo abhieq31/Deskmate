@@ -7,11 +7,26 @@ function appBase() {
   const last = p.slice(p.lastIndexOf('/') + 1);
   return last.includes('.') ? p.slice(0, p.lastIndexOf('/') + 1) : `${p}/`;
 }
-export const engineUrl = () => new URL(`${appBase()}vendor/stockfish/stockfish.js`, location.href).href;
+const engineFile = (file) => new URL(`${appBase()}vendor/stockfish/${file}`, location.href).href;
+export const engineUrl = () => engineFile('stockfish.js');
+
+/**
+ * Engine builds to try, fastest first. The WebAssembly build is ~25x faster, but some company
+ * laptops run Chrome with the JIT switched off by policy, which removes WebAssembly entirely;
+ * the asm.js build is plain JavaScript and runs anywhere.
+ */
+export function engineCandidates() {
+  let wasm = false;
+  try { wasm = typeof WebAssembly === 'object' && WebAssembly.validate(Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0)); } catch { /* no wasm */ }
+  return [...(wasm ? [{ url: engineFile('stockfish.js'), flavor: 'wasm' }] : []), { url: engineFile('stockfish.asm.js'), flavor: 'asm' }];
+}
+
+// a build that has not said "uciok" by then is treated as broken (blocked download, no wasm…)
+const LOAD_TIMEOUT = 25000;
 
 export class Engine {
-  constructor(url = engineUrl()) {
-    this.url = url;
+  constructor(candidates = engineCandidates()) {
+    this.candidates = candidates;
     this.listeners = new Set();
     this.busy = Promise.resolve();
   }
@@ -25,34 +40,53 @@ export class Engine {
     });
   }
 
-  /** Starts the worker once; rejects if the browser can't run it (e.g. opened from a file). */
+  /** Boots one build; rejects on a worker error or if it never answers. */
+  _boot({ url, flavor }) {
+    return new Promise((resolve, reject) => {
+      let worker;
+      try { worker = new Worker(url); } catch (e) { reject(e); return; }
+      this.worker = worker;
+      this.flavor = flavor;
+      const fail = (msg) => { clearTimeout(timer); worker.terminate(); this.listeners.clear(); reject(new Error(msg)); };
+      const timer = setTimeout(() => fail(`${flavor} engine did not start`), LOAD_TIMEOUT);
+      worker.onmessage = (e) => { for (const l of [...this.listeners]) l(String(e.data)); };
+      worker.onerror = (e) => { e.preventDefault?.(); fail(e.message || `${flavor} engine failed to load`); };
+      this._waitFor('uciok').then(() => {
+        clearTimeout(timer);
+        this._send('setoption name Hash value 32');
+        // Stockfish 11 "contempt" makes it rate positions in favour of the side it analyses for
+        // (to avoid draws when it plays); for an even-handed analysis it must be off
+        this._send('setoption name Contempt value 0');
+        this._send('setoption name Analysis Contempt value Off');
+        this._send('isready');
+        return this._waitFor('readyok');
+      }).then(resolve);
+      this._send('uci');
+    });
+  }
+
+  /** Starts the first build that works; rejects if none does (e.g. the page was opened from a file). */
   start() {
     if (!this.ready) {
-      this.ready = new Promise((resolve, reject) => {
-        try { this.worker = new Worker(this.url); } catch (e) { reject(e); return; }
-        this.worker.onmessage = (e) => { for (const l of [...this.listeners]) l(String(e.data)); };
-        this.worker.onerror = (e) => reject(new Error(e.message || 'engine failed to load'));
-        const ok = this._waitFor('uciok').then(() => {
-          this._send('setoption name Hash value 32');
-          // Stockfish 11 "contempt" makes it rate positions in favour of the side it analyses for
-          // (to avoid draws when it plays); for an even-handed analysis it must be off
-          this._send('setoption name Contempt value 0');
-          this._send('setoption name Analysis Contempt value Off');
-          this._send('isready');
-          return this._waitFor('readyok');
-        });
-        this._send('uci');
-        ok.then(resolve, reject);
-      });
+      this.ready = (async () => {
+        let err;
+        for (const c of this.candidates) {
+          try { await this._boot(c); return this.flavor; } catch (e) { err = e; }
+        }
+        this.worker = null;
+        throw err || new Error('no engine');
+      })();
+      this.ready.catch(() => { this.ready = null; });
     }
     return this.ready;
   }
 
   /**
    * Evaluate a position. Resolves to { cp | mate, pv: ['e2e4', …], depth }, scored from White's
-   * side. Calls are queued, one search at a time.
+   * side. Calls are queued, one search at a time. The search ends at `depth` or after `movetime`
+   * ms, whichever comes first, so a slow laptop still finishes a whole game in reasonable time.
    */
-  analyse(fen, depth, onInfo) {
+  analyse(fen, { depth, movetime }, onInfo) {
     const run = async () => {
       await this.start();
       const whiteToMove = fen.split(' ')[1] === 'w';
@@ -71,13 +105,19 @@ export class Engine {
             }
           } else if (line.startsWith('bestmove')) {
             this.listeners.delete(l);
+            clearTimeout(watchdog);
             resolve(best);
           }
         };
         this.listeners.add(l);
+        // never wait forever: ask it to stop, then take what it has
+        const watchdog = setTimeout(() => {
+          this._send('stop');
+          setTimeout(() => { if (this.listeners.delete(l)) resolve(best); }, 3000);
+        }, movetime + 4000);
       });
       this._send(`position fen ${fen}`);
-      this._send(`go depth ${depth}`);
+      this._send(`go depth ${depth} movetime ${movetime}`);
       return done;
     };
     const result = this.busy.then(run, run);

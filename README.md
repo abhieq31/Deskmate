@@ -168,7 +168,7 @@ scripts/build-single.mjs  bundles everything into deskmate.html (no deps)
 deskmate.html         generated offline build (commit it after changes: `npm run build`)
 vendor/chess.js       chess rules engine (chess.js 1.4.0, BSD-2-Clause)
 vendor/secp256k1.js   Schnorr signatures for room snapshots (noble-secp256k1 3.2.0, MIT)
-vendor/stockfish/     Stockfish 11 WebAssembly build, loaded only for analysis (GPLv3)
+vendor/stockfish/     Stockfish 11 (WebAssembly + plain-JS fallback), loaded only for analysis (GPLv3)
 tests/                node:test unit tests for the game model, move encoding and live rooms
 ```
 

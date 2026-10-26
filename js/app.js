@@ -623,7 +623,9 @@ $('#btn-remote').addEventListener('click', () => (game.remote && !game.over && !
 
 /* ---------------- post-game analysis (Stockfish) ---------------- */
 
-const AN_DEPTH = 16;
+// depth 16 or one second per position on WebAssembly; the plain-JS fallback is ~25x slower,
+// so it gets less depth and less time (a 40-move game then takes about a minute)
+const AN_LIMITS = { wasm: { depth: 16, movetime: 1000 }, asm: { depth: 12, movetime: 700 } };
 
 /** A finished position needs no engine: mate or draw on the board. */
 function terminalEval(fen) {
@@ -660,19 +662,24 @@ async function startAnalysis() {
   const run = { game: g, evals: [], summary: null, done: false };
   an = run;
   render();
+  let limits;
   try {
     engine = engine || new Engine();
-    await engine.start();
+    limits = AN_LIMITS[await engine.start()];
   } catch {
     if (an === run) { an = null; render(); }
-    return toast('Analysis needs the hosted page (e.g. abhieq31.com/deskmate), not a downloaded file.');
+    return toast(location.protocol === 'file:'
+      ? 'Analysis needs the hosted page (e.g. abhieq31.com/deskmate), not a downloaded file.'
+      : 'Stockfish could not start in this browser (blocked download?). Try reloading the page.');
   }
+  if (an !== run) return;
+  run.flavor = engine.flavor;
   // the position on screen first, then the whole game from the start
   const order = [viewPly, ...Array.from({ length: g.length + 1 }, (_, i) => i).filter((i) => i !== viewPly)];
   for (const i of order) {
     if (an !== run) return;
     const fen = g.fenAt(i);
-    run.evals[i] = terminalEval(fen) || await engine.analyse(fen, AN_DEPTH);
+    run.evals[i] = terminalEval(fen) || await engine.analyse(fen, limits) || { cp: 0, pv: [], depth: 0 };
     if (an !== run) return;
     run.summary = summarize(run.evals, g.length);
     renderMoves();
@@ -710,7 +717,8 @@ function renderAnalysis() {
   evEl.textContent = formatEval(ev);
   evEl.classList.toggle('black', !!ev && white < 50);
   const fen = g.fenAt(viewPly);
-  $('#an-line').textContent = !ev ? 'Stockfish is thinking…' : ev.pv?.length ? pvSan(fen, ev.pv) : g.result && viewPly === g.length ? g.termination : '';
+  const evalsDone = an.evals.filter(Boolean).length;
+  $('#an-line').textContent = !ev ? `Stockfish is thinking… ${evalsDone}/${g.length + 1}` : ev.pv?.length ? pvSan(fen, ev.pv) : g.result && viewPly === g.length ? g.termination : '';
   const best = ev?.pv?.[0];
   board.setAutoShapes(best ? [{ from: best.slice(0, 2), to: best.slice(2, 4) }] : []);
 
@@ -752,11 +760,51 @@ function renderAnalysis() {
   const card = (c) => {
     const s = sum?.[c];
     const acc = s?.accuracy == null ? '…' : `${s.accuracy.toFixed(1)}%`;
-    const tally = s ? [['blunder', '??'], ['mistake', '?'], ['inaccuracy', '?!']].map(([k, m]) => `${s[k]}${m}`).join(' · ') : '';
+    // each count jumps to that player's next move of that kind
+    const tally = s ? [['blunder', '??'], ['mistake', '?'], ['inaccuracy', '?!']].map(([k, m]) =>
+      `<button class="tk k-${k}" data-color="${c}" data-kind="${k}" ${s[k] ? '' : 'disabled'} title="Next ${k}">${s[k]}${m}</button>`).join('') : '';
     return `<div><small>${esc(g.nameOf(c) || colorName(c))}</small><b>${acc}</b><span class="tally">${tally}</span></div>`;
   };
   $('#an-acc').innerHTML = card('w') + card('b');
+  renderAnMoves();
 }
+
+/** The whole game under the graph, two moves a row, with the analysis marks. */
+function renderAnMoves() {
+  const g = active();
+  const marks = an?.summary?.moves || [];
+  const rows = [];
+  for (let i = 0; i < g.length; i += 2) {
+    const cell = (j) => {
+      const p = g.plies[j];
+      if (!p) return '<span></span>';
+      const k = marks[j]?.kind;
+      return `<button class="mv${viewPly === j + 1 ? ' active' : ''}${k ? ` ${k}` : ''}" data-ply="${j + 1}">${san(p.san)}${k ? `<span class="mark">${MARKS[k]}</span>` : ''}</button>`;
+    };
+    rows.push(`<span class="an-num">${i / 2 + 1}.</span>${cell(i)}${cell(i + 1)}`);
+  }
+  const list = $('#an-moves');
+  list.innerHTML = rows.join('');
+  // keep the current move in view by scrolling the list itself (never the page)
+  const act = list.querySelector('.active');
+  if (act) {
+    const t = act.offsetTop - list.offsetTop;
+    if (t < list.scrollTop + 8) list.scrollTop = t - 40;
+    else if (t + act.offsetHeight > list.scrollTop + list.clientHeight - 8) list.scrollTop = t - list.clientHeight + 60;
+  }
+}
+
+$('#an-moves').addEventListener('click', (e) => { const b = e.target.closest('[data-ply]'); if (b) goto(+b.dataset.ply); });
+$('#an-acc').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-kind]');
+  if (!b || !an?.summary) return;
+  const moves = an.summary.moves;
+  const mine = (j) => moves[j]?.kind === b.dataset.kind && (j % 2 === 0 ? 'w' : 'b') === b.dataset.color;
+  // next one after the move on screen, wrapping round to the first
+  let j = moves.findIndex((_, k) => k >= viewPly && mine(k));
+  if (j < 0) j = moves.findIndex((_, k) => mine(k));
+  if (j >= 0) goto(j + 1);
+});
 
 $('#an-graph').addEventListener('click', (e) => {
   const r = e.currentTarget.getBoundingClientRect();

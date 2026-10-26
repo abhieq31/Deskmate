@@ -130,13 +130,14 @@
       </div>
     </div>
 
-    <!-- left column, between the players: the result, and the analysis after a game -->
+    <!-- the result (left, between the players); after a game the analysis, on the right between the clocks -->
     <aside class="panel" id="panel" aria-label="Game">
       <div class="analysis hidden" id="analysis">
         <p class="an-verdict" id="an-verdict"></p>
         <div class="an-head"><span class="an-eval" id="an-eval">0.0</span><span class="an-line" id="an-line"></span></div>
         <svg class="an-graph" id="an-graph" viewBox="0 0 100 40" preserveAspectRatio="none" aria-label="Evaluation graph"></svg>
         <div class="an-progress" id="an-progress"><span></span></div>
+        <div class="an-moves" id="an-moves" aria-label="Moves"></div>
         <div class="an-acc" id="an-acc"></div>
         <div class="an-nav">
           <button class="pn" id="nav-first" title="First move (↑)" aria-label="First move"><svg viewBox="0 0 24 24"><path d="M6 5v14M18 6l-8 6 8 6z"/></svg></button>

@@ -103,7 +103,9 @@ body { padding-left: var(--sb-w); }
   /* centred by padding, not min-height: a min-height would stretch the 1fr row past the board */
   padding: max(24px, calc((100vh - var(--board)) / 2)) 64px 0 50px; /* left: eval bar; right: corner buttons */
 }
-.game.analysing { --lw: 250px; }
+/* analysing: the review takes the right column, between the clocks */
+.game.analysing { --lw: 200px; --rw: 320px; }
+.game.analysing .side { display: none; }
 .player.top { grid-area: ptop; align-self: start; }
 .player.bottom { grid-area: pbot; align-self: end; }
 .clock-top { grid-area: ctop; align-self: start; }
@@ -134,7 +136,7 @@ body[data-view="home"] #btn-focus { display: none; }
 .panel { align-self: center; display: flex; flex-direction: column; min-height: 0; max-height: 100%; }
 /* taken out of flow so it fills the space between the players without ever stretching the grid */
 .game { position: relative; }
-.game.analysing .panel { position: absolute; inset: 0; align-self: stretch; justify-self: stretch; background: #262522; border-radius: 8px; overflow: hidden; }
+.game.analysing .panel { grid-area: side; position: absolute; inset: 0; align-self: stretch; justify-self: stretch; background: #262522; border-radius: 8px; overflow: hidden; }
 .icon-btn {
   display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 6px; flex: none;
   background: transparent; color: var(--text); cursor: pointer; transition: background 0.15s, color 0.15s;
@@ -216,6 +218,17 @@ body[data-view="home"] #btn-focus { display: none; }
 .an-progress { height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .an-progress span { display: block; height: 100%; width: 0; background: var(--accent-2); transition: width 0.2s; }
 .an-progress.done { visibility: hidden; }
+.an-moves {
+  flex: 1 1 120px; min-height: 90px; overflow-y: auto; display: grid; grid-template-columns: 30px 1fr 1fr;
+  align-content: start; gap: 1px 2px; padding: 4px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  scrollbar-width: thin;
+}
+.an-num { color: var(--muted); font-size: 0.85rem; padding: 4px 0 0 2px; }
+.an-moves .mv { text-align: left; }
+.tk { border: 0; background: none; padding: 1px 3px; border-radius: 3px; font: inherit; color: var(--muted); cursor: pointer; }
+.tk:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+.tk:disabled { cursor: default; opacity: 0.6; }
+.tk.k-blunder:not(:disabled) { color: #e35b58; } .tk.k-mistake:not(:disabled) { color: #e58f2a; } .tk.k-inaccuracy:not(:disabled) { color: #f7c045; }
 .an-acc { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85rem; }
 .an-acc div { display: flex; flex-direction: column; align-items: center; padding: 8px; border-radius: 6px; background: #1f1e1c; }
 .an-acc b { font-size: 1.35rem; color: var(--text-strong); }
