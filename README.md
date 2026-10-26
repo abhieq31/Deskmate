@@ -29,6 +29,9 @@ Please use it in line with your employer's policies.
   gets a 6-character code like `K7Q-M2X`. The other types it in once, and
   moves appear on both screens within moments. Clocks, draw offers,
   resignations and rematches sync too. ([How it works](#play-a-colleague))
+- **Play the computer** when you're alone at your desk: Easy, Medium or
+  Hard (Stockfish with its skill level turned down), any colour, with or
+  without a clock. Takeback undoes your move and its reply.
 - **The office table.** The home page keeps a league table of everyone who
   has played on that laptop: played, won, drawn, lost, points. Settle who
   is actually best on the floor.
@@ -45,8 +48,9 @@ Please use it in line with your employer's policies.
   the menu and the line of moves.
 - **Replay with clocks.** Stepping back through a game shows each clock as
   it stood at that move, and exported PGNs carry `[%clk]` times.
-- **Ink and ember.** Black, white and one red. Two boards: Ember (ivory and
-  crimson, the default) and Stone (grey with a fine grain).
+- **Ink and ember.** Black, white and one red. Three boards: Ember (ivory
+  and crimson, the default), Stone (grey with a fine grain) and Green.
+- **No clock, no clock face.** Untimed games show no timers at all.
 - **Pieces you can pick up.** Press a piece and it lifts into your hand,
   a little bigger with a deeper shadow, and follows the pointer once per
   screen frame. Drop it on any square; the target is outlined while you

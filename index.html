@@ -47,6 +47,10 @@
           <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
           <span><strong>Play on this laptop</strong><small>Pass and play; the board turns for each player</small></span>
         </button>
+        <button class="home-tile" id="home-ai">
+          <svg viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="12" rx="3"/><path d="M12 7V4M9 12h.01M15 12h.01M9.5 16h5"/></svg>
+          <span><strong>Play the computer</strong><small>Alone at your desk? Easy, medium or hard</small></span>
+        </button>
         <button class="home-tile hidden" id="home-resume">
           <svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>
           <span><strong>Resume game</strong><small id="home-resume-sub"></small></span>
@@ -89,6 +93,7 @@
       <div class="pmeta">
         <div class="pline"><span class="pname" data-name></span><span class="material" data-material></span></div>
         <div class="pstatus" data-status></div>
+        <span class="pclock hidden" data-pclock></span>
       </div>
     </section>
     <div class="clock-wrap clock-top">
@@ -111,6 +116,7 @@
       <div class="pmeta">
         <div class="pline"><span class="pname" data-name></span><span class="material" data-material></span></div>
         <div class="pstatus" data-status></div>
+        <span class="pclock hidden" data-pclock></span>
       </div>
     </section>
     <div class="clock-wrap clock-bottom">
@@ -171,6 +177,7 @@
     <div class="themes" role="radiogroup" aria-label="Board theme">
       <button class="swatch" data-theme="ember" title="Ember" aria-label="Ember board (ivory and crimson)"></button>
       <button class="swatch" data-theme="stone" title="Stone" aria-label="Stone board"></button>
+      <button class="swatch" data-theme="green" title="Green" aria-label="Green board"></button>
     </div>
     <h3>Game</h3>
     <div class="tools">
@@ -198,6 +205,34 @@
       <div class="modal-actions">
         <button type="button" class="btn" value="cancel" data-close>Cancel</button>
         <button type="submit" class="btn primary">Start game</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Play the computer -->
+  <dialog id="dlg-ai" class="modal">
+    <form method="dialog" id="form-ai">
+      <div class="modal-head">
+        <h2>Play the computer</h2>
+        <button type="button" class="btn icon-only ghost" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <label class="field"><span>Your name</span><input id="ai-name" maxlength="24" autocomplete="off" placeholder="Your name" /></label>
+      <h3>Level</h3>
+      <div class="levels" role="radiogroup">
+        <label><input type="radio" name="ai-level" value="easy" /><span><b>Easy</b><small>Makes mistakes. Good for a first game.</small></span></label>
+        <label><input type="radio" name="ai-level" value="medium" checked /><span><b>Medium</b><small>Punishes loose pieces.</small></span></label>
+        <label><input type="radio" name="ai-level" value="hard" /><span><b>Hard</b><small>Strong club player. Good luck.</small></span></label>
+      </div>
+      <h3>You play</h3>
+      <div class="color-pick">
+        <label><input type="radio" name="ai-color" value="w" checked /><span><i class="pc wK"></i>White</span></label>
+        <label><input type="radio" name="ai-color" value="random" /><span><b class="duo"><i class="pc wK"></i><i class="pc bK"></i></b>Random</span></label>
+        <label><input type="radio" name="ai-color" value="b" /><span><i class="pc bK"></i>Black</span></label>
+      </div>
+      <h3>Clock</h3>
+      <div class="chips" id="ai-tc"></div>
+      <div class="modal-actions">
+        <button type="submit" class="btn primary wide-btn">Play</button>
       </div>
     </form>
   </dialog>

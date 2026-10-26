@@ -117,6 +117,8 @@ export class Game {
     // live remote games: room code, the colour this browser plays, the player id in each
     // colour's seat (empty until someone sits there) and a pending draw offer
     this.remote = data.remote ? { offer: null, ...data.remote } : null;
+    // games against the computer: the colour it plays and how strong ('easy' | 'medium' | 'hard')
+    this.ai = data.ai ? { color: data.ai.color, level: data.ai.level } : null;
     this.chess = new Chess();
     this.plies = [];
     for (const san of data.moves || []) this._push(this.chess.move(san));
@@ -235,6 +237,7 @@ export class Game {
       termination: this.termination, clocks: this.clocks, moves: this.plies.map((p) => p.san),
       clk: this.plies.some((p) => p.clock != null) ? this.plies.map((p) => (p.clock == null ? null : Math.round(p.clock))) : undefined,
       remote: this.remote,
+      ai: this.ai || undefined,
     };
   }
 
@@ -245,7 +248,7 @@ export class Game {
     // chess.js's PGN parser does not accept escaped quotes, so swap them for apostrophes
     const esc = (s) => String(s).replace(/[\\"]/g, "'");
     const headers = [
-      ['Event', this.remote ? 'Casual remote game' : 'Casual over-the-board game'], ['Site', 'Deskmate'], ['Date', date],
+      ['Event', this.remote ? 'Casual remote game' : this.ai ? 'Casual game against Stockfish' : 'Casual over-the-board game'], ['Site', 'Deskmate'], ['Date', date],
       ['White', this.white], ['Black', this.black], ['Result', this.result || '*'],
       ['TimeControl', tc.base ? `${tc.base * 60}+${tc.inc}` : '-'],
     ];

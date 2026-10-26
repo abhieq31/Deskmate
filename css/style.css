@@ -105,7 +105,9 @@ body { padding-left: var(--sb-w); }
 }
 /* analysing: the review takes the right column, between the clocks */
 .game.analysing { --lw: 200px; --rw: 320px; }
-.game.analysing .side { display: none; }
+.game.analysing .side, .game.analysing .clock-wrap { display: none; }
+.pclock { display: none; font: 600 0.95rem var(--mono); color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.game.analysing .pclock:not(.hidden) { display: block; }
 .player.top { grid-area: ptop; align-self: start; }
 .player.bottom { grid-area: pbot; align-self: end; }
 .clock-top { grid-area: ctop; align-self: start; }
@@ -136,7 +138,7 @@ body[data-view="home"] #btn-focus { display: none; }
 .panel { align-self: center; display: flex; flex-direction: column; min-height: 0; max-height: 100%; }
 /* taken out of flow so it fills the space between the players without ever stretching the grid */
 .game { position: relative; }
-.game.analysing .panel { grid-area: side; position: absolute; inset: 0; align-self: stretch; justify-self: stretch; background: #161617; border-radius: 8px; overflow: hidden; }
+.game.analysing .panel { grid-area: 1 / 3 / 4 / 4; position: absolute; inset: 0; align-self: stretch; justify-self: stretch; background: #161617; border-radius: 8px; overflow: hidden; }
 .icon-btn {
   display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 6px; flex: none;
   background: transparent; color: var(--text); cursor: pointer; transition: background 0.15s, color 0.15s;
@@ -209,7 +211,7 @@ body[data-view="home"] #btn-focus { display: none; }
   font: 700 0.95rem var(--mono); background: #f2f2f2; color: #222;
 }
 .an-eval.black { background: #2a2a2c; color: #eee; }
-.an-line { color: var(--text); font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.an-line { color: var(--text); font-size: 0.88rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .an-graph { width: 100%; height: 76px; border-radius: 4px; background: #2a2a2c; cursor: pointer; display: block; }
 .an-graph .area { fill: #f2f2f2; }
 .an-graph .mid { stroke: rgba(128, 128, 128, 0.6); stroke-width: 0.15; }
@@ -219,7 +221,7 @@ body[data-view="home"] #btn-focus { display: none; }
 .an-progress span { display: block; height: 100%; width: 0; background: var(--accent-2); transition: width 0.2s; }
 .an-progress.done { visibility: hidden; }
 .an-moves {
-  flex: 1 1 120px; min-height: 90px; overflow-y: auto; display: grid; grid-template-columns: 30px 1fr 1fr;
+  flex: 1 1 200px; min-height: 140px; overflow-y: auto; display: grid; grid-template-columns: 30px 1fr 1fr;
   align-content: start; gap: 1px 2px; padding: 4px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
   scrollbar-width: thin;
 }
@@ -278,7 +280,7 @@ body[data-view="home"] .game, body[data-view="game"] .home { display: none; }
 .home-hero h1 { margin: 0; font-size: 2.4rem; color: var(--text-strong); letter-spacing: 0.01em; }
 .home-hero h1 b { color: var(--accent-2); }
 .home-hero p { margin: 4px 0 0; color: var(--muted); font-size: 1.05rem; }
-.home-play { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.home-play { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
 .home-tile {
   display: flex; align-items: center; gap: 16px; padding: 18px 20px; border: 0; border-radius: 10px; text-align: left;
   background: #161617; color: var(--text-strong); cursor: pointer; font: inherit;
@@ -357,6 +359,7 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .side .moveline-slot { d
 .swatch[data-theme="blue"], [data-theme="blue"] { --l: #dee3e6; --d: #8ca2ad; }
 /* ember: ivory and crimson, dark marks; the default */
 .swatch[data-theme="ember"], [data-theme="ember"] { --l: #f2ede6; --d: #9c3440; --hl: rgba(12, 12, 12, 0.24); --sel: rgba(12, 12, 12, 0.4); --dot: rgba(12, 12, 12, 0.34); }
+.swatch[data-theme="green"], [data-theme="green"] { --l: #ebecd0; --d: #739552; --hl: rgba(255, 255, 51, 0.42); --sel: rgba(20, 85, 30, 0.5); --dot: rgba(20, 85, 30, 0.5); }
 .swatch[data-theme="stone"], [data-theme="stone"] { --l: #c8c6c2; --d: #8b8985; --hl: rgba(229, 56, 59, 0.36); --sel: rgba(229, 56, 59, 0.52); --dot: rgba(20, 20, 20, 0.36); }
 /* stone: a fine grain over the squares, drawn with SVG noise (no image files) */
 .board[data-theme="stone"] .squares::after {
@@ -514,6 +517,7 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .side .moveline-slot { d
 .material .cap { display: inline-flex; margin-right: 4px; }
 .material .pc { width: 1.45em; height: 1.45em; margin-right: -0.6em; }
 .material .cap .pc:last-child { margin-right: 0; }
+.material .pc[class*=" b"] { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.6)); }
 .material b { margin-left: 0.6em; font-weight: 600; }
 
 /* ---------- clocks ---------- */
@@ -729,3 +733,24 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* the analysis mark on the square the move landed on, like an annotation in the margin */
+.sq-glyph {
+  position: absolute; top: 3%; right: 3%; z-index: 6; min-width: 30%; height: 30%; padding: 0 3%;
+  display: grid; place-items: center; border-radius: 99px; pointer-events: none;
+  font: 800 clamp(9px, calc(var(--board) / 48), 15px)/1 var(--font); color: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.sq-glyph.k-blunder { background: #ca3431; }
+.sq-glyph.k-mistake { background: #e58f2a; }
+.sq-glyph.k-inaccuracy { background: #d9a714; }
+
+/* play the computer: three levels */
+.levels { display: grid; gap: 6px; }
+.levels label { display: block; cursor: pointer; }
+.levels input { position: absolute; opacity: 0; pointer-events: none; }
+.levels span { display: flex; align-items: baseline; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); }
+.levels b { color: var(--text-strong); min-width: 4.5em; }
+.levels small { color: var(--muted); }
+.levels input:checked + span { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.levels input:focus-visible + span { outline: 2px solid var(--blue); }

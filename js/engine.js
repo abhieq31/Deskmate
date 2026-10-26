@@ -125,6 +125,38 @@ export class Engine {
     return result;
   }
 
+  /**
+   * Choose a move to play, for games against the computer. `skill` is Stockfish's Skill Level
+   * (0–20): below 20 it deliberately picks weaker moves now and then, which is what makes the
+   * easy levels beatable. Resolves to a UCI move ("e2e4", "e7e8q") or null.
+   */
+  play(fen, { skill, depth, movetime }) {
+    const run = async () => {
+      await this.start();
+      const done = new Promise((resolve) => {
+        const l = (line) => {
+          if (!line.startsWith('bestmove')) return;
+          this.listeners.delete(l);
+          clearTimeout(watchdog);
+          const m = /^bestmove ([a-h][1-8][a-h][1-8][qrbn]?)/.exec(line);
+          resolve(m ? m[1] : null);
+        };
+        this.listeners.add(l);
+        const watchdog = setTimeout(() => {
+          this._send('stop');
+          setTimeout(() => { if (this.listeners.delete(l)) resolve(null); }, 3000);
+        }, movetime + 4000);
+      });
+      this._send(`setoption name Skill Level value ${skill}`);
+      this._send(`position fen ${fen}`);
+      this._send(`go depth ${depth} movetime ${movetime}`);
+      return done;
+    };
+    const result = this.busy.then(run, run);
+    this.busy = result.catch(() => {});
+    return result;
+  }
+
   stop() { this.worker?.postMessage('stop'); }
 
   terminate() {

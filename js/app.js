@@ -17,7 +17,7 @@ const other = (c) => (c === 'w' ? 'b' : 'w');
 const colorName = (c) => (c === 'w' ? 'White' : 'Black');
 
 const settings = storage.loadSettings();
-if (!['ember', 'stone'].includes(settings.theme)) settings.theme = 'ember'; // the only two boards now
+if (!['ember', 'stone', 'green'].includes(settings.theme)) settings.theme = 'ember';
 if (!settings.pid) {
   settings.pid = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(36).padStart(2, '0')).join('');
   storage.saveSettings(settings);
@@ -36,6 +36,8 @@ let joining = null; // { code, name, timer } while waiting for a room's first sn
 let an = null; // post-game analysis: { game, evals[], summary, done }
 let view = 'game'; // 'home' | 'game'
 let engine = null;
+let aiEngine = null; // Stockfish as an opponent; a separate worker from the analysis one
+let aiTurn = 0; // bumped whenever a pending computer move must be thrown away
 
 const board = new Board($('#board'), { onMove });
 
@@ -53,8 +55,8 @@ const clockRunning = () => !review && game.hasClock && !game.over && game.length
 const seated = (color) => !game.remote || !!(color === 'w' ? game.remote.pw : game.remote.pb);
 // a live game starts once both seats are taken; this browser moves only its own colour
 const bothSeated = () => seated('w') && seated('b');
-const myTurn = () => !game.remote || (game.turn === game.remote.me && bothSeated());
-const homeOrientation = () => (game.remote ? game.remote.me || 'w' : settings.autoFlip ? game.turn : 'w');
+const myTurn = () => (game.ai ? game.turn !== game.ai.color : !game.remote || (game.turn === game.remote.me && bothSeated()));
+const homeOrientation = () => (game.ai ? other(game.ai.color) : game.remote ? game.remote.me || 'w' : settings.autoFlip ? game.turn : 'w');
 
 /* ---------------- rendering ---------------- */
 
@@ -112,13 +114,14 @@ function renderPlayers() {
 
 /** One short line under a player's name. */
 function playerStatus(g, color, { here, toMove, won, offers, inCheck }) {
-  if (g.result) return won ? `♛ Won · ${g.termination}` : g.result === '1/2-1/2' ? `½ Draw · ${g.termination}` : '';
+  if (g.result) return won ? '♛ Won' : g.result === '1/2-1/2' ? '½ Draw' : '';
   const r = !review && g.remote;
   if (r && !here) return `Waiting to join · code ${formatRoomCode(r.room)}`;
   if (r && color !== r.me && relaysUp === 0) return 'Reconnecting…';
   if (offers) return 'Offers a draw';
   if (inCheck && toMove) return 'Check!';
   if (!toMove) return '';
+  if (!review && g.ai) return color === g.ai.color ? 'Thinking…' : 'Your move';
   if (!r) return 'To move';
   return color === r.me ? 'Your move' : 'Thinking…';
 }
@@ -134,8 +137,11 @@ function fmtClock(ms) {
 function renderClocks() {
   const g = active();
   const bottom = board.orientation;
-  for (const [sel, color] of [['#clock-top', other(bottom)], ['#clock-bottom', bottom]]) {
+  for (const [sel, color, card] of [['#clock-top', other(bottom), '#player-top'], ['#clock-bottom', bottom, '#player-bottom']]) {
     const clock = $(sel);
+    clock.parentElement.classList.toggle('hidden', !g.hasClock);
+    const pclock = $(`${card} [data-pclock]`);
+    pclock.classList.toggle('hidden', !g.hasClock);
     const time = clock.querySelector('[data-time]');
     clock.classList.toggle('active', !g.over && !review && viewPly === g.length && g.turn === color && bothSeated());
     clock.classList.toggle('unlimited', !g.hasClock);
@@ -149,6 +155,7 @@ function renderClocks() {
     const past = review || viewPly < g.length;
     const ms = past ? g.clocksAt(viewPly)[color] : g.clocks[color];
     time.textContent = fmtClock(ms);
+    pclock.textContent = fmtClock(ms);
     clock.classList.toggle('running', !past && clockRunning() && game.turn === color);
     clock.classList.toggle('low', ms < 20000 && !past);
     clock.classList.toggle('paused', !review && paused && game.turn === color && game.length > 0 && !game.over);
@@ -221,6 +228,7 @@ function renderControls() {
   // while a game is on: Draw / Resign. Once it is over: Analyse.
   const finished = !!g.result || (!!review && g.length > 0);
   for (const b of $$('.act-draw, .act-resign')) b.classList.toggle('hidden', finished);
+  for (const b of $$('.act-draw')) if (game.ai && !review) b.classList.add('hidden'); // the computer plays on
   for (const b of $$('.act-analyse')) b.classList.toggle('hidden', !finished || !!an);
   $('.game').classList.toggle('analysing', !!an);
   for (const b of $$('.act-pause')) {
@@ -240,10 +248,15 @@ async function onMove(from, to) {
     promotion = await board.askPromotion(to, game.turn);
     if (!promotion) { render(); return; }
   }
+  if (!applyMove(from, to, promotion)) render();
+}
+
+/** Plays a move on the live game (from either player or the computer): clocks, sound, save, sync. */
+function applyMove(from, to, promotion) {
   const mover = game.turn;
   const now = Date.now();
   const ply = game.move(from, to, promotion);
-  if (!ply) { render(); return; }
+  if (!ply) return null;
 
   if (game.remote) game.remote.offer = null; // moving declines a pending offer
   if (game.hasClock) {
@@ -260,13 +273,47 @@ async function onMove(from, to) {
   publish();
   render();
   if (game.over) onGameOver();
-  else scheduleFlip();
+  else { scheduleFlip(); computerMove(); }
+  return ply;
+}
+
+/* ---------------- playing the computer ---------------- */
+
+// Stockfish 11 Skill Level 0–20 plus a search limit per level; lower skill makes it pick
+// weaker moves on purpose. Roughly: Easy loses to a beginner who is careful, Hard is club strength+.
+const AI_LEVELS = {
+  easy: { label: 'Easy', skill: 0, depth: 2, movetime: 150 },
+  medium: { label: 'Medium', skill: 7, depth: 7, movetime: 400 },
+  hard: { label: 'Hard', skill: 16, depth: 14, movetime: 1200 },
+};
+const aiName = (level) => `Stockfish · ${AI_LEVELS[level]?.label || 'Medium'}`;
+
+/** If it's the computer's turn in the live game, think and play. */
+async function computerMove() {
+  if (!game.ai || game.over || review || game.turn !== game.ai.color) return;
+  const g = game, turn = ++aiTurn, fen = game.fenAt(game.length);
+  const started = Date.now();
+  let uci = null;
+  try {
+    aiEngine = aiEngine || new Engine();
+    uci = await aiEngine.play(fen, AI_LEVELS[g.ai.level] || AI_LEVELS.medium);
+  } catch {
+    if (turn === aiTurn) toast('Stockfish could not start in this browser. Try reloading the page.');
+    return;
+  }
+  // never instant: a short beat makes the reply readable
+  const wait = 350 - (Date.now() - started);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  if (turn !== aiTurn || game !== g || g.over || review || g.fenAt(g.length) !== fen || !uci) return;
+  if (paused) { paused = false; lastTick = Date.now(); }
+  viewPly = g.length;
+  applyMove(uci.slice(0, 2), uci.slice(2, 4), uci[4]);
 }
 
 /** Same-laptop games: after a move, show the board from the side of whoever moves next. */
 function scheduleFlip(delay = 300) {
   clearTimeout(flipTimer);
-  if (!settings.autoFlip || review || game.remote) return;
+  if (!settings.autoFlip || review || game.remote || game.ai) return;
   flipTimer = setTimeout(() => {
     if (review || game.remote || !settings.autoFlip || !isLive() || board.orientation === game.turn) return;
     board.flip();
@@ -328,29 +375,34 @@ function togglePause() {
 
 /* ---------------- game lifecycle ---------------- */
 
-function startGame({ white, black, tc, remote = null, id, startedAt }) {
+function startGame({ white, black, tc, remote = null, ai = null, id, startedAt }) {
   if (game.length && !game.over) storage.archive(game.toJSON()); // keep unfinished games too
   clearTimeout(flipTimer);
   if (!remote || remote.room !== room?.code) leaveRoom();
   stopAnalysis();
-  game = new Game({ white, black, tc, remote, id, startedAt });
+  aiTurn++;
+  game = new Game({ white, black, tc, remote, ai, id, startedAt });
   if (remote) { game.white = white; game.black = black; } // an empty seat keeps an empty name
   review = null;
   viewPly = 0;
   paused = false;
   lastTick = Date.now();
-  if (!remote) Object.assign(settings, { white, black, tc });
+  if (!remote && !ai) Object.assign(settings, { white, black, tc });
   storage.saveSettings(settings);
   persist();
   board.setOrientation(homeOrientation());
   setView('game');
   requestWakeLock();
+  computerMove();
 }
 
 function takeback() {
   if (review || !game.length || game.remote) return;
   clearTimeout(flipTimer);
+  aiTurn++;
   game.undo();
+  // against the computer, take back its reply too, so it's your move again
+  if (game.ai && game.length && game.turn === game.ai.color) game.undo();
   viewPly = game.length;
   lastTick = Date.now();
   persist();
@@ -375,6 +427,7 @@ function exitReview() {
   viewPly = game.length;
   board.setOrientation(homeOrientation());
   render();
+  computerMove();
 }
 
 function goto(ply) {
@@ -703,6 +756,7 @@ function renderAnalysis() {
   const on = !!an && an.game === g;
   $('#analysis').classList.toggle('hidden', !on);
   $('#evalbar').classList.toggle('hidden', !on);
+  $$('#board .sq-glyph').forEach((e) => e.remove());
   if (!on) { board.setAutoShapes([]); return; }
   const ev = an.evals[viewPly];
   const white = winPct(ev);
@@ -739,6 +793,10 @@ function renderAnalysis() {
     else verdict = `<b>${name}</b> is a good move.${bestSan ? ` The engine prefers <b>${esc(bestSan)}</b>.` : ''}`;
   }
   $('#an-verdict').innerHTML = verdict;
+  if (played && kind) {
+    const sq = $(`#board .sq[data-sq="${played.to}"]`);
+    sq?.insertAdjacentHTML('beforeend', `<span class="sq-glyph k-${kind}">${MARKS[kind]}</span>`);
+  }
 
   // graph: White's winning chances over the game
   const n = g.length;
@@ -1028,9 +1086,10 @@ $('#draw-confirm').addEventListener('click', () => {
 $$('.act-resign').forEach((b) => b.addEventListener('click', () => {
   $('#resign-w span').textContent = `${game.white || 'White'} resigns`;
   $('#resign-b span').textContent = `${game.black || 'Black'} resigns`;
-  // in a remote game you can only resign for yourself
-  $('#resign-w').classList.toggle('hidden', game.remote?.me === 'b');
-  $('#resign-b').classList.toggle('hidden', game.remote?.me === 'w');
+  // in a remote game, or against the computer, you can only resign for yourself
+  const me = game.remote?.me || (game.ai && other(game.ai.color));
+  $('#resign-w').classList.toggle('hidden', me === 'b');
+  $('#resign-b').classList.toggle('hidden', me === 'w');
   openDialog('#dlg-resign');
 }));
 for (const c of ['w', 'b']) {
@@ -1053,10 +1112,11 @@ $('#over-rematch').addEventListener('click', () => {
     toast(`Rematch: you play ${colorName(game.remote.me).toLowerCase()}`);
     return;
   }
-  startGame({ white: game.black, black: game.white, tc: game.tc });
+  const ai = game.ai && { color: other(game.ai.color), level: game.ai.level };
+  startGame({ white: game.black, black: game.white, tc: game.tc, ai });
   toast('Colours swapped. Good luck!');
 });
-$('#over-new').addEventListener('click', () => { $('#dlg-over').close(); openNewGame(); });
+$('#over-new').addEventListener('click', () => { $('#dlg-over').close(); game.ai ? openComputer() : openNewGame(); });
 $('#over-review').addEventListener('click', () => { $('#dlg-over').close(); goto(0); toast('Use ← → to step through the game'); });
 $('#over-pgn').addEventListener('click', () => download(game));
 
@@ -1208,6 +1268,30 @@ $('#home-colleague').addEventListener('click', () => openRemote('create'));
 $('#home-join').addEventListener('click', () => openRemote('join'));
 $('#home-local').addEventListener('click', () => openNewGame());
 $('#home-resume').addEventListener('click', () => setView('game'));
+$('#home-ai').addEventListener('click', openComputer);
+
+const AI_TCS = ['none', '5+0', '10+5', '15+10'];
+function openComputer() {
+  $('#ai-name').value = settings.myName || '';
+  const tc = settings.aiTc || 'none';
+  $('#ai-tc').innerHTML = AI_TCS.map((id) => {
+    const t = timeControl(id);
+    return `<label class="chip"><input type="radio" name="ai-tc" value="${id}"${id === tc ? ' checked' : ''} /><span>${t.base ? t.label : 'No clock'}</span></label>`;
+  }).join('');
+  const lv = $(`input[name="ai-level"][value="${settings.aiLevel || 'medium'}"]`);
+  if (lv) lv.checked = true;
+  openDialog('#dlg-ai');
+}
+$('#form-ai').addEventListener('submit', () => {
+  const name = $('#ai-name').value.trim() || 'You';
+  const level = (document.querySelector('input[name="ai-level"]:checked') || {}).value || 'medium';
+  const tc = (document.querySelector('input[name="ai-tc"]:checked') || {}).value || 'none';
+  let me = (document.querySelector('input[name="ai-color"]:checked') || {}).value || 'w';
+  if (me === 'random') me = Math.random() < 0.5 ? 'w' : 'b';
+  Object.assign(settings, { aiLevel: level, aiTc: tc, ...(name !== 'You' ? { myName: name } : {}) });
+  const bot = aiName(level);
+  startGame({ white: me === 'w' ? name : bot, black: me === 'b' ? name : bot, tc, ai: { color: other(me), level } });
+});
 $('#home-all').addEventListener('click', () => { renderArchive(); openDialog('#dlg-archive'); });
 $('#home-import').addEventListener('click', () => { $('#import-error').classList.add('hidden'); openDialog('#dlg-import'); });
 $('#sb-home').addEventListener('click', (e) => { e.preventDefault(); setSidebar(false); setView('home'); });
@@ -1222,6 +1306,7 @@ if (!/^https?:$/.test(location.protocol)) $('.offline-dl')?.remove();
 board.setOrientation(homeOrientation());
 setView(inProgress() ? 'game' : 'home');
 if (game.remote) connectRoom(game.remote.room);
+computerMove(); // a restored game against the computer, with the computer to move
 
 // a shared link (…/deskmate#K7QM2X) opens "Join with a code" with the code filled in
 const linkCode = parseRoomCode(location.hash);
