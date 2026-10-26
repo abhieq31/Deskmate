@@ -18,7 +18,7 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .panel { display: none; 
 @media (min-width: $phone + 1px) {
   body.focus .game {
     --lw: 150px; --rw: 96px;
-    --board: min(calc(100vh - 28px), calc(100vw - var(--lw) - var(--rw) - 88px), 1400px); /* gaps 40 + padding 48 */
+    --board: min(calc(100vh - 28px), calc(100vw - var(--lw) - var(--rw) - 88px), 1400px, var(--board-user, 4000px)); /* gaps 40 + padding 48 */
     grid-template-columns: var(--lw) var(--board) var(--rw);
     grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, 1fr) auto;
     grid-template-areas:
@@ -47,6 +47,9 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .panel { display: none; 
   body.focus .board-tools { grid-area: tools; flex-direction: row; justify-self: start; align-self: start; }
   body.focus .focus-acts { grid-area: acts; display: flex; flex-direction: column; gap: 10px; align-self: center; justify-self: start; }
   body.focus .focus-nav { grid-area: nav; display: flex; gap: 4px; align-self: end; justify-self: start; }
+  /* × in the top-left corner leaves focus mode, like chess.com */
+  body.focus .game > .focus-close { display: grid; position: fixed; top: 10px; left: 12px; color: #9a958e; }
+  body.focus .focus-acts .sq-btn.wide { width: var(--rw); }
 }
 .focus-nav .icon-btn { color: #9a958e; }
 .sq-btn {

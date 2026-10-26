@@ -58,7 +58,7 @@
 .piece {
   position: absolute; top: 0; left: 0; width: 12.5%; height: 12.5%;
   will-change: transform; z-index: 2;
-  transition: transform 0.15s cubic-bezier(.25, .8, .35, 1), opacity 0.15s;
+  transition: transform var(--piece-ms, 150ms) cubic-bezier(.25, .8, .35, 1), opacity 0.15s;
 }
 .board.no-anim .piece, .board.no-anim .board-inner { transition: none !important; }
 .piece.moving { z-index: 4; }

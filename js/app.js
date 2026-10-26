@@ -3824,7 +3824,7 @@ var Board = class {
     this.onMove = opts.onMove;
     this.orientation = "w";
     this.state = { fen: "8/8/8/8/8/8/8/8", lastMove: null, check: null, dests: /* @__PURE__ */ new Map(), movable: null };
-    this.prefs = { showDests: true, coords: true };
+    this.prefs = { showDests: true, coords: true, highlightLast: true, moveMethod: "both" };
     this.pieces = /* @__PURE__ */ new Map();
     this.selected = null;
     this.drag = null;
@@ -4008,7 +4008,7 @@ var Board = class {
     const occupied = fenPieces(this.state.fen);
     for (const s of this.squareEls) {
       const sq = s.dataset.sq;
-      s.classList.toggle("last-move", !!lastMove && lastMove.includes(sq));
+      s.classList.toggle("last-move", this.prefs.highlightLast && !!lastMove && lastMove.includes(sq));
       s.classList.toggle("selected", sel === sq);
       s.classList.toggle("check", check === sq);
       const isDest = this.prefs.showDests && targets.includes(sq);
@@ -4054,14 +4054,18 @@ var Board = class {
       this._putBack(d, false);
     }
     const targets = this.selected ? this.state.dests.get(this.selected) || [] : [];
-    if (this.selected && targets.includes(sq)) {
+    if (this.selected && targets.includes(sq) && this.prefs.moveMethod !== "drag") {
       const from = this.selected;
       this.selected = null;
       this._highlight();
       this.onMove(from, sq);
       return;
     }
-    if (this._canMoveFrom(sq)) {
+    if (this._canMoveFrom(sq) && this.prefs.moveMethod === "click") {
+      e.preventDefault();
+      this.selected = this.selected === sq ? null : sq;
+      this._highlight();
+    } else if (this._canMoveFrom(sq)) {
       e.preventDefault();
       this._capture(e);
       const wasSelected = this.selected === sq;
@@ -4140,7 +4144,7 @@ var Board = class {
       this._putBack(d, true);
       return;
     }
-    if (d.retap || d.wasSelected) this._putBack(d, false);
+    if (d.retap || d.wasSelected || this.prefs.moveMethod === "drag") this._putBack(d, false);
     else if (e.pointerType === "mouse") {
       d.held = true;
       this._highlight();
@@ -4267,6 +4271,25 @@ var DEFAULT_SETTINGS = {
   // during a game: only the board, the players and the clocks
   winBar: true,
   // a slim bar by the board with each side's winning chances
+  notation: "figurine",
+  // moves as ♘f3, or Nf3 with 'letter'
+  animation: "medium",
+  // piece slides: 'none' | 'fast' | 'medium' | 'slow'
+  celebration: "confetti",
+  // or 'none'
+  moveMethod: "both",
+  // 'both' | 'drag' | 'click'
+  highlightLast: true,
+  autoQueen: false,
+  // promote without asking
+  anDepth: "balanced",
+  // analysis: 'fast' | 'balanced' | 'deep'
+  bestArrow: true,
+  // analysis: the engine's move as an arrow
+  evalBar: true,
+  // analysis: the bar beside the board
+  boardSize: 0,
+  // px the player dragged the board to with the corner handle; 0 = as large as fits
   white: "White",
   black: "Black",
   tc: "none",
@@ -5321,7 +5344,7 @@ function classify(before, after, color) {
 }
 var MARKS = { blunder: "??", mistake: "?", inaccuracy: "?!" };
 var moveAccuracy = (loss) => clamp(103.1668 * Math.exp(-0.04354 * loss) - 3.1669, 0, 100);
-function summarize(evals, plyCount) {
+function summarize(evals, plyCount, played = []) {
   const moves = [];
   const side = { w: { losses: [], blunder: 0, mistake: 0, inaccuracy: 0 }, b: { losses: [], blunder: 0, mistake: 0, inaccuracy: 0 } };
   for (let i = 1; i <= plyCount; i++) {
@@ -5331,6 +5354,10 @@ function summarize(evals, plyCount) {
     }
     const color = i % 2 === 1 ? "w" : "b";
     const c = classify(evals[i - 1], evals[i], color);
+    if (played[i - 1] && evals[i - 1].pv?.[0] === played[i - 1]) {
+      c.kind = null;
+      c.loss = Math.min(c.loss, 2);
+    }
     moves.push(c);
     side[color].losses.push(c.loss);
     if (c.kind) side[color][c.kind]++;
@@ -5508,7 +5535,7 @@ function renderMoves() {
   if (g.result) rl.innerHTML = `<strong>${g.result.replace(/1\/2/g, "½")}</strong><span>${g.termination} · ${g.winnerText()}</span>`;
 }
 var FIG = { K: "♔", Q: "♕", R: "♖", B: "♗", N: "♘" };
-var san = (s) => s.replace(/[KQRBN]/g, (c) => `<span class="fig">${FIG[c]}</span>`);
+var san = (s) => settings.notation === "letter" ? s : s.replace(/[KQRBN]/g, (c) => `<span class="fig">${FIG[c]}</span>`);
 var tcText = (tc) => tc.base ? `${tc.label} · ${tc.kind}` : "Unlimited";
 function renderStatus() {
   const g = active();
@@ -5541,6 +5568,9 @@ function renderControls() {
   for (const b of $$(".act-draw, .act-resign")) b.classList.toggle("hidden", finished);
   for (const b of $$(".act-draw")) if (game.ai && !review) b.classList.add("hidden");
   for (const b of $$(".act-analyse")) b.classList.toggle("hidden", !finished || !!an);
+  for (const b of $$(".act-newgame")) b.classList.toggle("hidden", !finished);
+  for (const b of $$(".act-rematch")) b.classList.toggle("hidden", !finished || !!review);
+  $("#btn-sound").classList.toggle("off", !settings.sound);
   $(".game").classList.toggle("analysing", !!an);
   for (const b of $$(".act-pause")) {
     b.classList.toggle("hidden", !game.hasClock || !liveGame || !!game.remote);
@@ -5572,7 +5602,7 @@ async function onMove(from, to) {
   if (!isLive() || game.over || !myTurn()) return;
   let promotion;
   if (game.isPromotion(from, to)) {
-    promotion = await board.askPromotion(to, game.turn);
+    promotion = settings.autoQueen ? "q" : await board.askPromotion(to, game.turn);
     if (!promotion) {
       render();
       return;
@@ -5694,7 +5724,7 @@ function onGameOver() {
   setTimeout(() => {
     if (game !== g || !g.over) return;
     openDialog("#dlg-over");
-    if (g.result !== "1/2-1/2") confetti();
+    if (g.result !== "1/2-1/2" && settings.celebration !== "none") confetti();
   }, 650);
 }
 function persist() {
@@ -6028,7 +6058,11 @@ function joinFailed(msg) {
 $("#room-copy").addEventListener("click", () => copy(formatRoomCode(game.remote.room), "Code"));
 $("#room-copy-link").addEventListener("click", () => copy(shareLink(game.remote.room), "Link"));
 $("#btn-remote").addEventListener("click", () => game.remote && !game.over && !bothSeated() ? showInvite() : openRemote());
-var AN_LIMITS = { wasm: { depth: 16, movetime: 1e3 }, asm: { depth: 12, movetime: 700 } };
+var AN_LIMITS = {
+  fast: { wasm: { depth: 12, movetime: 400 }, asm: { depth: 9, movetime: 350 } },
+  balanced: { wasm: { depth: 16, movetime: 1e3 }, asm: { depth: 12, movetime: 700 } },
+  deep: { wasm: { depth: 20, movetime: 2500 }, asm: { depth: 14, movetime: 1500 } }
+};
 function terminalEval(fen) {
   const c = new Chess(fen);
   if (c.isCheckmate()) return { mate: 0, winner: c.turn() === "w" ? "b" : "w", pv: [] };
@@ -6066,7 +6100,7 @@ async function startAnalysis() {
   let limits;
   try {
     engine = engine || new Engine();
-    limits = AN_LIMITS[await engine.start()];
+    limits = (AN_LIMITS[settings.anDepth] || AN_LIMITS.balanced)[await engine.start()];
   } catch {
     if (an === run) {
       an = null;
@@ -6082,7 +6116,7 @@ async function startAnalysis() {
     const fen = g.fenAt(i);
     run.evals[i] = terminalEval(fen) || await engine.analyse(fen, limits) || { cp: 0, pv: [], depth: 0 };
     if (an !== run) return;
-    run.summary = summarize(run.evals, g.length);
+    run.summary = summarize(run.evals, g.length, g.plies.map((p) => p.from + p.to + (p.promotion || "")));
     renderMoves();
     renderAnalysis();
   }
@@ -6108,7 +6142,7 @@ function renderAnalysis() {
     renderWinBar();
     return;
   }
-  $("#evalbar").classList.remove("hidden");
+  $("#evalbar").classList.toggle("hidden", !settings.evalBar);
   const ev = an.evals[viewPly];
   const white = winPct(ev);
   const bar = $("#evalbar");
@@ -6123,7 +6157,7 @@ function renderAnalysis() {
   const evalsDone = an.evals.filter(Boolean).length;
   $("#an-line").textContent = !ev ? `Stockfish is thinking… ${evalsDone}/${g.length + 1}` : ev.pv?.length ? pvSan(fen, ev.pv) : g.result && viewPly === g.length ? g.termination : "";
   const best = ev?.pv?.[0];
-  board.setAutoShapes(best ? [{ from: best.slice(0, 2), to: best.slice(2, 4) }] : []);
+  board.setAutoShapes(best && settings.bestArrow ? [{ from: best.slice(0, 2), to: best.slice(2, 4) }] : []);
   const played = g.plies[viewPly - 1];
   const before = an.evals[viewPly - 1];
   const kind = an.summary?.moves[viewPly - 1]?.kind;
@@ -6143,15 +6177,10 @@ function renderAnalysis() {
     const sq = $(`#board .sq[data-sq="${played.to}"]`);
     sq?.insertAdjacentHTML("beforeend", `<span class="sq-glyph k-${kind}">${MARKS[kind]}</span>`);
   }
-  const n = g.length;
-  const pts = [];
-  for (let i = 0; i <= n; i++) if (an.evals[i]) pts.push([i / n * 100, 40 - winPct(an.evals[i]) / 100 * 40, i]);
-  const marks = an.summary?.moves || [];
-  const color = { blunder: "#ca3431", mistake: "#e58f2a", inaccuracy: "#f7c045" };
-  $("#an-graph").innerHTML = (pts.length > 1 ? `<path class="area" d="M0,40 ${pts.map(([x, y]) => `L${x.toFixed(2)},${y.toFixed(2)}`).join(" ")} L100,40 Z"/>` : "") + `<line class="mid" x1="0" y1="20" x2="100" y2="20"/><line class="cur" x1="${viewPly / n * 100}" y1="0" x2="${viewPly / n * 100}" y2="40"/>` + pts.filter(([, , i]) => marks[i - 1]?.kind).map(([x, y, i]) => `<ellipse class="dot" cx="${x}" cy="${y}" rx="0.9" ry="2" fill="${color[marks[i - 1].kind]}"/>`).join("");
+  renderGraph(g);
   const done = an.evals.filter(Boolean).length;
   $("#an-progress").classList.toggle("done", an.done);
-  $("#an-progress span").style.width = `${done / (n + 1) * 100}%`;
+  $("#an-progress span").style.width = `${done / (g.length + 1) * 100}%`;
   const sum = an.summary;
   const card = (c) => {
     const s = sum?.[c];
@@ -6196,9 +6225,41 @@ $("#an-acc").addEventListener("click", (e) => {
   if (j < 0) j = moves.findIndex((_, k) => mine(k));
   if (j >= 0) goto(j + 1);
 });
-$("#an-graph").addEventListener("click", (e) => {
+var GRAPH_H = 96;
+var MARK_COLOR = { blunder: "#ca3431", mistake: "#e58f2a", inaccuracy: "#f7c045" };
+function renderGraph(g) {
+  const svg = $("#an-graph");
+  const W = Math.max(120, Math.round(svg.clientWidth || 300)), H = GRAPH_H, n = Math.max(1, g.length);
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const x = (i) => i / n * W;
+  const y = (ev) => H - winPct(ev) / 100 * (H - 4) - 2;
+  const pts = [];
+  for (let i = 0; i <= g.length; i++) if (an.evals[i]) pts.push([x(i), y(an.evals[i]), i]);
+  const marks = an.summary?.moves || [];
+  svg.innerHTML = (pts.length > 1 ? `<path class="area" d="M${pts[0][0]},${H} ${pts.map(([px, py]) => `L${px.toFixed(1)},${py.toFixed(1)}`).join(" ")} L${pts.at(-1)[0].toFixed(1)},${H} Z"/>` : "") + `<line class="mid" x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/><line class="cur" x1="${x(viewPly)}" y1="0" x2="${x(viewPly)}" y2="${H}"/>` + pts.filter(([, , i]) => marks[i - 1]?.kind).map(([px, py, i]) => `<circle class="dot" cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="${MARK_COLOR[marks[i - 1].kind]}"/>`).join("") + '<line class="hov" x1="-9" y1="0" x2="-9" y2="' + H + '"/>';
+}
+var graphPly = (e) => {
   const r = e.currentTarget.getBoundingClientRect();
-  goto(Math.round((e.clientX - r.left) / r.width * active().length));
+  return Math.max(0, Math.min(active().length, Math.round((e.clientX - r.left) / r.width * active().length)));
+};
+$("#an-graph").addEventListener("click", (e) => goto(graphPly(e)));
+$("#an-graph").addEventListener("mousemove", (e) => {
+  if (!an) return;
+  const g = active(), i = graphPly(e), ev = an.evals[i];
+  const hov = $("#an-graph .hov");
+  const px = i / Math.max(1, g.length) * Math.max(120, Math.round($("#an-graph").clientWidth || 300));
+  hov?.setAttribute("x1", String(px));
+  hov?.setAttribute("x2", String(px));
+  const p = g.plies[i - 1], kind = an.summary?.moves[i - 1]?.kind;
+  $("#an-tip").textContent = i === 0 ? `Start · ${formatEval(ev)}` : `${Math.ceil(i / 2)}${i % 2 ? "." : "…"} ${p.san}${kind ? MARKS[kind] : ""} · ${ev ? formatEval(ev) : "…"}`;
+});
+$("#an-graph").addEventListener("mouseleave", () => {
+  $("#an-tip").textContent = "";
+  $("#an-graph .hov")?.setAttribute("x1", "-9");
+  $("#an-graph .hov")?.setAttribute("x2", "-9");
+});
+addEventListener("resize", () => {
+  if (an) renderAnalysis();
 });
 function openDialog(sel) {
   const d = $(sel);
@@ -6350,7 +6411,7 @@ $("#btn-archive").addEventListener("click", () => {
   openDialog("#dlg-archive");
 });
 $("#btn-help").addEventListener("click", () => openDialog("#dlg-help"));
-$("#btn-settings").addEventListener("click", () => openDialog("#dlg-settings"));
+$("#btn-settings").addEventListener("click", openSettings);
 $("#btn-analyse").addEventListener("click", () => startAnalysis());
 $$(".act-analyse").forEach((b) => b.addEventListener("click", () => startAnalysis()));
 $("#over-analyse").addEventListener("click", () => {
@@ -6361,6 +6422,52 @@ $('[data-nav="prev"]').addEventListener("click", () => goto(viewPly - 1));
 $('[data-nav="next"]').addEventListener("click", () => goto(viewPly + 1));
 $$(".act-pause").forEach((b) => b.addEventListener("click", togglePause));
 $("#btn-flip2").addEventListener("click", () => $("#btn-flip").click());
+$("#btn-flip3").addEventListener("click", () => $("#btn-flip").click());
+$("#btn-sound").addEventListener("click", () => {
+  settings.sound = !settings.sound;
+  storage.saveSettings(settings);
+  applyPrefs();
+  renderControls();
+  toast(settings.sound ? "Sound on" : "Sound off");
+});
+$("#focus-close").addEventListener("click", toggleFocus);
+$$(".act-newgame").forEach((b) => b.addEventListener("click", () => {
+  if (review) exitReview();
+  if (game.ai) openComputer();
+  else if (game.remote) openRemote("create");
+  else openNewGame();
+}));
+$$(".act-rematch").forEach((b) => b.addEventListener("click", () => $("#over-rematch").click()));
+{
+  const handle = $("#board-resize");
+  let start = null;
+  handle.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    start = { x: e.clientX, y: e.clientY, size: $(".board-frame").getBoundingClientRect().width };
+  });
+  handle.addEventListener("pointermove", (e) => {
+    if (!start) return;
+    const size = Math.round(Math.max(280, start.size + Math.max(e.clientX - start.x, e.clientY - start.y)));
+    settings.boardSize = size;
+    applyPrefs();
+  });
+  const end = () => {
+    if (!start) return;
+    start = null;
+    const fits = $(".board-frame").getBoundingClientRect().width;
+    if (settings.boardSize > fits) settings.boardSize = 0;
+    storage.saveSettings(settings);
+    applyPrefs();
+  };
+  handle.addEventListener("pointerup", end);
+  handle.addEventListener("pointercancel", end);
+  handle.addEventListener("dblclick", () => {
+    settings.boardSize = 0;
+    storage.saveSettings(settings);
+    applyPrefs();
+  });
+}
 $("#btn-flip").addEventListener("click", () => {
   clearTimeout(flipTimer);
   board.flip();
@@ -6469,30 +6576,58 @@ document.addEventListener("keydown", (e) => {
   else return;
   e.preventDefault();
 });
-var bindSwitch = (sel, key, after) => {
-  const input = $(sel);
-  input.checked = settings[key];
-  input.addEventListener("change", () => {
-    settings[key] = input.checked;
-    storage.saveSettings(settings);
-    after?.();
-  });
-};
-bindSwitch("#set-autoflip", "autoFlip", () => {
+var setInputs = () => $$("#form-settings [data-set]");
+var themeBefore = settings.theme;
+var settingsSaved = false;
+function openSettings() {
+  for (const el2 of setInputs()) {
+    const v = settings[el2.dataset.set];
+    if (el2 instanceof HTMLInputElement) el2.checked = el2.hasAttribute("data-invert") ? !v : !!v;
+    else el2.value = String(v);
+  }
+  themeBefore = settings.theme;
+  settingsSaved = false;
+  showSettingsTab("board");
+  openDialog("#dlg-settings");
+}
+function showSettingsTab(tab) {
+  $$("#dlg-settings [data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+  $$("#dlg-settings [data-pane]").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== tab));
+}
+$$("#dlg-settings [data-tab]").forEach((b) => b.addEventListener("click", () => showSettingsTab(b.dataset.tab)));
+$("#form-settings").addEventListener("submit", () => {
+  settingsSaved = true;
+  for (const el2 of setInputs()) {
+    const key = el2.dataset.set;
+    settings[key] = el2 instanceof HTMLInputElement ? el2.hasAttribute("data-invert") ? !el2.checked : el2.checked : el2.dataset.kind === "bool" ? el2.value === "true" : el2.value;
+  }
+  storage.saveSettings(settings);
+  applyPrefs();
+  applyFocus();
   render();
   if (settings.autoFlip) scheduleFlip(0);
 });
-bindSwitch("#set-dests", "showDests", applyPrefs);
-bindSwitch("#set-coords", "coords", applyPrefs);
-bindSwitch("#set-sound", "sound", applyPrefs);
-bindSwitch("#set-winbar", "winBar", render);
+$("#set-cancel").addEventListener("click", () => $("#dlg-settings").close());
+$("#dlg-settings").addEventListener("close", () => {
+  if (!settingsSaved) {
+    settings.theme = themeBefore;
+    applyPrefs();
+  }
+});
 $$(".swatch").forEach((s) => s.addEventListener("click", () => {
   settings.theme = s.dataset.theme;
-  storage.saveSettings(settings);
   applyPrefs();
 }));
+var ANIM_MS = { none: 0, fast: 90, medium: 150, slow: 260 };
 function applyPrefs() {
-  board.setPrefs({ showDests: settings.showDests, coords: settings.coords });
+  board.setPrefs({
+    showDests: settings.showDests,
+    coords: settings.coords,
+    highlightLast: settings.highlightLast,
+    moveMethod: settings.moveMethod
+  });
+  $("#board").style.setProperty("--piece-ms", `${ANIM_MS[settings.animation] ?? 150}ms`);
+  $(".game").style.setProperty("--board-user", settings.boardSize ? `${settings.boardSize}px` : "");
   sound.setEnabled(settings.sound);
   $("#board").dataset.theme = settings.theme;
   $$(".swatch").forEach((s) => s.setAttribute("aria-checked", String(s.dataset.theme === settings.theme)));

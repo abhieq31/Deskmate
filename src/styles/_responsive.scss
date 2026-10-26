@@ -30,6 +30,8 @@
   .moveline { border-radius: 8px; min-height: 40px; }
   .board-tools, body.focus .board-tools { grid-area: mbar; justify-self: end; align-self: center; flex-direction: row; margin-right: 6px; }
   .focus-acts, body.focus .focus-acts { display: none; }
+  .tool-more { opacity: 1; transform: none; pointer-events: auto; }
+  .board-resize { display: none; }
   .evalbar { right: auto; left: 0; top: auto; bottom: calc(100% + 2px); width: 100%; height: 6px; }
   .evalbar-fill { top: 0; height: 100%; width: var(--w, 50%); }
   .evalbar.flip .evalbar-fill { left: auto; right: 0; }

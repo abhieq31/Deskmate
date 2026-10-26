@@ -33,3 +33,11 @@ test('formatting', () => {
   assert.equal(formatEval({ mate: -2 }), '-M2');
   assert.equal(formatEval({ mate: 0, winner: 'w' }), '1-0');
 });
+
+test('the engine\'s own best move is never marked, whatever the next search says', () => {
+  // ply 1 loses 20 win% by the numbers, but it is exactly the move the engine chose
+  const evals = [{ cp: 300, pv: ['e2e4'] }, { cp: -60, pv: [] }];
+  assert.equal(summarize(evals, 1).moves[0].kind, 'blunder');
+  assert.equal(summarize(evals, 1, ['e2e4']).moves[0].kind, null);
+  assert.equal(summarize(evals, 1, ['d2d4']).moves[0].kind, 'blunder');
+});

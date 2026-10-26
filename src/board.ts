@@ -40,7 +40,7 @@ export class Board {
   onMove: (from: string, to: string) => void;
   orientation: Color;
   state: BoardState;
-  prefs: { showDests: boolean; coords: boolean };
+  prefs: { showDests: boolean; coords: boolean; highlightLast: boolean; moveMethod: 'both' | 'drag' | 'click' };
   pieces: Map<string, { el: HTMLElement; code: string }>;
   selected: string | null;
   drag: Drag | null;
@@ -60,7 +60,7 @@ export class Board {
     this.onMove = opts.onMove;
     this.orientation = 'w';
     this.state = { fen: '8/8/8/8/8/8/8/8', lastMove: null, check: null, dests: new Map(), movable: null };
-    this.prefs = { showDests: true, coords: true };
+    this.prefs = { showDests: true, coords: true, highlightLast: true, moveMethod: 'both' };
     this.pieces = new Map(); // square -> { el, code }
     this.selected = null;
     this.drag = null;
@@ -251,7 +251,7 @@ export class Board {
     const occupied = fenPieces(this.state.fen);
     for (const s of this.squareEls) {
       const sq = s.dataset.sq;
-      s.classList.toggle('last-move', !!lastMove && lastMove.includes(sq));
+      s.classList.toggle('last-move', this.prefs.highlightLast && !!lastMove && lastMove.includes(sq));
       s.classList.toggle('selected', sel === sq);
       s.classList.toggle('check', check === sq);
       const isDest = this.prefs.showDests && targets.includes(sq);
@@ -297,14 +297,18 @@ export class Board {
     }
 
     const targets = this.selected ? this.state.dests.get(this.selected) || [] : [];
-    if (this.selected && targets.includes(sq)) {
+    if (this.selected && targets.includes(sq) && this.prefs.moveMethod !== 'drag') {
       const from = this.selected;
       this.selected = null;
       this._highlight();
       this.onMove(from, sq);
       return;
     }
-    if (this._canMoveFrom(sq)) {
+    if (this._canMoveFrom(sq) && this.prefs.moveMethod === 'click') {
+      e.preventDefault();
+      this.selected = this.selected === sq ? null : sq; // click only: select, never lift
+      this._highlight();
+    } else if (this._canMoveFrom(sq)) {
       e.preventDefault();
       this._capture(e);
       const wasSelected = this.selected === sq;
@@ -372,7 +376,7 @@ export class Board {
     if (d.moved) { this._putBack(d, true); return; } // dragged somewhere it can't go
     // a tap: on the piece already in hand (or selected) it puts it back; otherwise the piece stays
     // in hand and follows the mouse until the next click (on touch it waits on its square)
-    if (d.retap || d.wasSelected) this._putBack(d, false);
+    if (d.retap || d.wasSelected || this.prefs.moveMethod === 'drag') this._putBack(d, false);
     else if (e.pointerType === 'mouse') { d.held = true; this._highlight(); }
     else this._putBack(d, true);
   }

@@ -136,3 +136,28 @@ kbd {
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .confetti { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 1000; display: none; }
 .confetti.on { display: block; }
+
+/* ---------- settings: tabs, one option per row, Save / Cancel ---------- */
+.modal.settings { width: min(520px, calc(100vw - 24px)); padding: 0; }
+.set-tabs { display: grid; grid-template-columns: repeat(3, 1fr); background: #121213; border-bottom: 1px solid var(--line); }
+.set-tabs button {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 6px 10px; border: 0;
+  background: none; color: var(--muted); font: 600 0.85rem var(--font); cursor: pointer; border-bottom: 2px solid transparent;
+}
+.set-tabs button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.set-tabs button[aria-selected="true"] { color: var(--text-strong); border-bottom-color: var(--accent); background: rgba(255, 255, 255, 0.03); }
+.set-pane { padding: 6px 20px 4px; max-height: min(60vh, 520px); overflow-y: auto; }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; padding: 6px 0; border-bottom: 1px solid var(--line); color: var(--text-strong); font-size: 0.95rem; cursor: default; }
+.set-row:last-of-type { border-bottom: 0; }
+.set-row.switch { cursor: pointer; }
+.set-row.switch .track { order: 2; }
+.set-row select {
+  width: 52%; height: 38px; padding: 0 34px 0 12px; border-radius: 6px; border: 1px solid var(--line);
+  background: #1d1d1f url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23aaa' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 12px center;
+  color: var(--text-strong); font: inherit; font-size: 0.92rem; appearance: none; cursor: pointer;
+}
+.set-row select:focus-visible { outline: 2px solid var(--blue); }
+.set-row .themes { margin: 0; }
+.set-pane .tools { margin: 14px 0 6px; }
+.set-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 14px 20px 18px; border-top: 1px solid var(--line); }
+.btn.big { min-height: 46px; font-size: 1.02rem; font-weight: 700; }

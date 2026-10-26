@@ -232,7 +232,8 @@ body {
   --pw: clamp(300px, 26vw, 400px);
   --tools: 40px;
   /* the same size in focus mode (which inherits it): hiding the menu never resizes or moves the board */
-  --board: min(calc(100vh - 2 * var(--bar-h) - 48px), calc(100vw - 64px - var(--pw) - var(--tools) - 116px), 1000px);
+  /* --board-user: the size the player dragged the corner handle to, if any */
+  --board: min(calc(100vh - 2 * var(--bar-h) - 48px), calc(100vw - 64px - var(--pw) - var(--tools) - 116px), 1000px, var(--board-user, 4000px));
   display: grid;
   grid-template-columns: var(--board) var(--tools) var(--pw);
   grid-template-rows: var(--bar-h) var(--board) var(--bar-h);
@@ -281,12 +282,75 @@ body {
   position: relative;
 }
 
+/* the gear is always there; flip, focus and sound appear when the pointer comes to this column */
 .board-tools {
   grid-area: 1/2/3/3;
-  align-self: start;
+  align-self: stretch;
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.tool-more {
+  display: flex;
+  flex-direction: inherit;
+  gap: inherit;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.board-tools:hover .tool-more, .board-tools:focus-within .tool-more {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+#btn-sound .ico-sound-off, #btn-sound.off .ico-sound-on {
+  display: none;
+}
+
+#btn-sound.off .ico-sound-off {
+  display: block;
+}
+
+/* the corner handle: just past the board's bottom-right corner, shown with the tools */
+.board-resize {
+  position: absolute;
+  right: -30px;
+  bottom: -2px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  color: #8a8580;
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 0.15s;
+  touch-action: none;
+}
+
+.board-resize svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.board-resize:hover {
+  color: #fff;
+}
+
+.board-area:hover .board-resize, .game:has(.board-tools:hover) .board-resize, .board-resize:active {
+  opacity: 1;
+}
+
+.game > .focus-close {
+  display: none;
 }
 
 .board-tools .icon-btn {
@@ -768,31 +832,58 @@ body[data-view=home] #btn-focus {
   overflow: hidden;
 }
 
+.an-graph-wrap {
+  position: relative;
+}
+
 .an-graph {
   width: 100%;
-  height: 76px;
-  border-radius: 4px;
-  background: #2a2a2c;
+  height: 96px;
+  border-radius: 6px;
+  background: #2b2a28;
   cursor: pointer;
   display: block;
 }
 
 .an-graph .area {
-  fill: #f2f2f2;
+  fill: #f0eee9;
 }
 
 .an-graph .mid {
-  stroke: rgba(128, 128, 128, 0.6);
-  stroke-width: 0.15;
+  stroke: rgba(128, 128, 128, 0.55);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
 }
 
 .an-graph .cur {
   stroke: var(--accent-2);
-  stroke-width: 0.5;
+  stroke-width: 2;
+}
+
+.an-graph .hov {
+  stroke: rgba(54, 146, 231, 0.8);
+  stroke-width: 1;
 }
 
 .an-graph .dot {
-  stroke: none;
+  stroke: #1d1d1f;
+  stroke-width: 1.5;
+}
+
+.an-tip {
+  position: absolute;
+  left: 8px;
+  top: 6px;
+  font: 600 0.75rem var(--font);
+  color: #222;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 4px;
+  padding: 1px 6px;
+  pointer-events: none;
+}
+
+.an-tip:empty {
+  display: none;
 }
 
 .an-progress {
@@ -1344,7 +1435,7 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .panel {
   body.focus .game {
     --lw: 150px;
     --rw: 96px;
-    --board: min(calc(100vh - 28px), calc(100vw - var(--lw) - var(--rw) - 88px), 1400px); /* gaps 40 + padding 48 */
+    --board: min(calc(100vh - 28px), calc(100vw - var(--lw) - var(--rw) - 88px), 1400px, var(--board-user, 4000px)); /* gaps 40 + padding 48 */
     grid-template-columns: var(--lw) var(--board) var(--rw);
     grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, 1fr) auto;
     grid-template-areas: "ptop board tools" ".    board ." "ctop board acts" "cbot board acts" ".    board ." "pbot board nav";
@@ -1418,6 +1509,17 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .panel {
     gap: 4px;
     align-self: end;
     justify-self: start;
+  }
+  /* × in the top-left corner leaves focus mode, like chess.com */
+  body.focus .game > .focus-close {
+    display: grid;
+    position: fixed;
+    top: 10px;
+    left: 12px;
+    color: #9a958e;
+  }
+  body.focus .focus-acts .sq-btn.wide {
+    width: var(--rw);
   }
 }
 .focus-nav .icon-btn {
@@ -1795,7 +1897,7 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .panel {
   height: 12.5%;
   will-change: transform;
   z-index: 2;
-  transition: transform 0.15s cubic-bezier(0.25, 0.8, 0.35, 1), opacity 0.15s;
+  transition: transform var(--piece-ms, 150ms) cubic-bezier(0.25, 0.8, 0.35, 1), opacity 0.15s;
 }
 
 .board.no-anim .piece, .board.no-anim .board-inner {
@@ -2776,6 +2878,120 @@ kbd {
   display: block;
 }
 
+/* ---------- settings: tabs, one option per row, Save / Cancel ---------- */
+.modal.settings {
+  width: min(520px, 100vw - 24px);
+  padding: 0;
+}
+
+.set-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: #121213;
+  border-bottom: 1px solid var(--line);
+}
+
+.set-tabs button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 6px 10px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: 600 0.85rem var(--font);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.set-tabs button svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.set-tabs button[aria-selected=true] {
+  color: var(--text-strong);
+  border-bottom-color: var(--accent);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.set-pane {
+  padding: 6px 20px 4px;
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 52px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-strong);
+  font-size: 0.95rem;
+  cursor: default;
+}
+
+.set-row:last-of-type {
+  border-bottom: 0;
+}
+
+.set-row.switch {
+  cursor: pointer;
+}
+
+.set-row.switch .track {
+  order: 2;
+}
+
+.set-row select {
+  width: 52%;
+  height: 38px;
+  padding: 0 34px 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #1d1d1f url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23aaa' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 12px center;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 0.92rem;
+  appearance: none;
+  cursor: pointer;
+}
+
+.set-row select:focus-visible {
+  outline: 2px solid var(--blue);
+}
+
+.set-row .themes {
+  margin: 0;
+}
+
+.set-pane .tools {
+  margin: 14px 0 6px;
+}
+
+.set-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.btn.big {
+  min-height: 46px;
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
 /* ---------- responsive ---------- */
 @media (max-width: 760px) {
   /* rows: menu + move strip, top bar, board, bottom bar, actions (+ the review after a game) */
@@ -2864,6 +3080,14 @@ kbd {
     margin-right: 6px;
   }
   .focus-acts, body.focus .focus-acts {
+    display: none;
+  }
+  .tool-more {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+  .board-resize {
     display: none;
   }
   .evalbar {

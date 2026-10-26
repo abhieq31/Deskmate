@@ -194,7 +194,7 @@ function renderMoves() {
 
 // SAN with figurine piece letters
 const FIG = { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘' };
-const san = (s) => s.replace(/[KQRBN]/g, (c) => `<span class="fig">${FIG[c]}</span>`);
+const san = (s: string) => (settings.notation === 'letter' ? s : s.replace(/[KQRBN]/g, (c) => `<span class="fig">${FIG[c]}</span>`));
 
 const tcText = (tc) => (tc.base ? `${tc.label} · ${tc.kind}` : 'Unlimited');
 
@@ -233,6 +233,10 @@ function renderControls() {
   for (const b of $$('.act-draw, .act-resign')) b.classList.toggle('hidden', finished);
   for (const b of $$('.act-draw')) if (game.ai && !review) b.classList.add('hidden'); // the computer plays on
   for (const b of $$('.act-analyse')) b.classList.toggle('hidden', !finished || !!an);
+  // once it's over: start another, or the same again with colours swapped
+  for (const b of $$('.act-newgame')) b.classList.toggle('hidden', !finished);
+  for (const b of $$('.act-rematch')) b.classList.toggle('hidden', !finished || !!review);
+  $('#btn-sound').classList.toggle('off', !settings.sound);
   $('.game').classList.toggle('analysing', !!an);
   for (const b of $$('.act-pause')) {
     b.classList.toggle('hidden', !game.hasClock || !liveGame || !!game.remote);
@@ -262,7 +266,7 @@ async function onMove(from, to) {
   if (!isLive() || game.over || !myTurn()) return;
   let promotion;
   if (game.isPromotion(from, to)) {
-    promotion = await board.askPromotion(to, game.turn);
+    promotion = settings.autoQueen ? 'q' : await board.askPromotion(to, game.turn);
     if (!promotion) { render(); return; }
   }
   if (!applyMove(from, to, promotion)) render();
@@ -396,7 +400,7 @@ function onGameOver() {
   setTimeout(() => {
     if (game !== g || !g.over) return;
     openDialog('#dlg-over');
-    if (g.result !== '1/2-1/2') confetti();
+    if (g.result !== '1/2-1/2' && settings.celebration !== 'none') confetti();
   }, 650);
 }
 
@@ -743,7 +747,11 @@ $('#btn-remote').addEventListener('click', () => (game.remote && !game.over && !
 
 // depth 16 or one second per position on WebAssembly; the plain-JS fallback is ~25x slower,
 // so it gets less depth and less time (a 40-move game then takes about a minute)
-const AN_LIMITS = { wasm: { depth: 16, movetime: 1000 }, asm: { depth: 12, movetime: 700 } };
+const AN_LIMITS = {
+  fast: { wasm: { depth: 12, movetime: 400 }, asm: { depth: 9, movetime: 350 } },
+  balanced: { wasm: { depth: 16, movetime: 1000 }, asm: { depth: 12, movetime: 700 } },
+  deep: { wasm: { depth: 20, movetime: 2500 }, asm: { depth: 14, movetime: 1500 } },
+};
 
 /** A finished position needs no engine: mate or draw on the board. */
 function terminalEval(fen) {
@@ -783,7 +791,7 @@ async function startAnalysis() {
   let limits;
   try {
     engine = engine || new Engine();
-    limits = AN_LIMITS[await engine.start()];
+    limits = (AN_LIMITS[settings.anDepth] || AN_LIMITS.balanced)[await engine.start()];
   } catch {
     if (an === run) { an = null; render(); }
     return toast(location.protocol === 'file:'
@@ -799,7 +807,7 @@ async function startAnalysis() {
     const fen = g.fenAt(i);
     run.evals[i] = terminalEval(fen) || await engine.analyse(fen, limits) || { cp: 0, pv: [], depth: 0 };
     if (an !== run) return;
-    run.summary = summarize(run.evals, g.length);
+    run.summary = summarize(run.evals, g.length, g.plies.map((p) => p.from + p.to + (p.promotion || '')));
     renderMoves();
     renderAnalysis();
   }
@@ -823,7 +831,7 @@ function renderAnalysis() {
   $$('#board .sq-glyph').forEach((e) => e.remove());
   $('#an-acc').classList.toggle('hidden', !on);
   if (!on) { board.setAutoShapes([]); renderWinBar(); return; }
-  $('#evalbar').classList.remove('hidden');
+  $('#evalbar').classList.toggle('hidden', !settings.evalBar);
   const ev = an.evals[viewPly];
   const white = winPct(ev);
 
@@ -841,7 +849,7 @@ function renderAnalysis() {
   const evalsDone = an.evals.filter(Boolean).length;
   $('#an-line').textContent = !ev ? `Stockfish is thinking… ${evalsDone}/${g.length + 1}` : ev.pv?.length ? pvSan(fen, ev.pv) : g.result && viewPly === g.length ? g.termination : '';
   const best = ev?.pv?.[0];
-  board.setAutoShapes(best ? [{ from: best.slice(0, 2), to: best.slice(2, 4) }] : []);
+  board.setAutoShapes(best && settings.bestArrow ? [{ from: best.slice(0, 2), to: best.slice(2, 4) }] : []);
 
   // chess.com-style verdict on the move that led here: "Nf6 is a blunder. Best was Qe7."
   const played = g.plies[viewPly - 1];
@@ -864,22 +872,11 @@ function renderAnalysis() {
     sq?.insertAdjacentHTML('beforeend', `<span class="sq-glyph k-${kind}">${MARKS[kind]}</span>`);
   }
 
-  // graph: White's winning chances over the game
-  const n = g.length;
-  const pts = [];
-  for (let i = 0; i <= n; i++) if (an.evals[i]) pts.push([(i / n) * 100, 40 - (winPct(an.evals[i]) / 100) * 40, i]);
-  const marks = an.summary?.moves || [];
-  const color = { blunder: '#ca3431', mistake: '#e58f2a', inaccuracy: '#f7c045' };
-  $('#an-graph').innerHTML =
-    (pts.length > 1 ? `<path class="area" d="M0,40 ${pts.map(([x, y]) => `L${x.toFixed(2)},${y.toFixed(2)}`).join(' ')} L100,40 Z"/>` : '') +
-    '<line class="mid" x1="0" y1="20" x2="100" y2="20"/>' +
-    `<line class="cur" x1="${(viewPly / n) * 100}" y1="0" x2="${(viewPly / n) * 100}" y2="40"/>` +
-    pts.filter(([, , i]) => marks[i - 1]?.kind).map(([x, y, i]) =>
-      `<ellipse class="dot" cx="${x}" cy="${y}" rx="0.9" ry="2" fill="${color[marks[i - 1].kind]}"/>`).join('');
+  renderGraph(g);
 
   const done = an.evals.filter(Boolean).length;
   $('#an-progress').classList.toggle('done', an.done);
-  $('#an-progress span').style.width = `${(done / (n + 1)) * 100}%`;
+  $('#an-progress span').style.width = `${(done / (g.length + 1)) * 100}%`;
 
   const sum = an.summary;
   const card = (c) => {
@@ -931,10 +928,48 @@ $('#an-acc').addEventListener('click', (e) => {
   if (j >= 0) goto(j + 1);
 });
 
-$('#an-graph').addEventListener('click', (e) => {
-  const r = e.currentTarget.getBoundingClientRect();
-  goto(Math.round(((e.clientX - r.left) / r.width) * active().length));
+/**
+ * The evaluation graph: White's winning chances move by move (white area = White better), drawn at
+ * the panel's real pixel size so the marks are round. Coloured dots mark ?? / ? / ?!, the red
+ * line is the move on the board; hover shows a move and its evaluation, click jumps to it.
+ */
+const GRAPH_H = 96;
+const MARK_COLOR = { blunder: '#ca3431', mistake: '#e58f2a', inaccuracy: '#f7c045' };
+function renderGraph(g: Game) {
+  const svg = $('#an-graph') as SVGSVGElement;
+  const W = Math.max(120, Math.round(svg.clientWidth || 300)), H = GRAPH_H, n = Math.max(1, g.length);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const x = (i: number) => (i / n) * W;
+  const y = (ev: Eval) => H - (winPct(ev) / 100) * (H - 4) - 2; // 2px inset so 0% and 100% stay visible
+  const pts: [number, number, number][] = [];
+  for (let i = 0; i <= g.length; i++) if (an.evals[i]) pts.push([x(i), y(an.evals[i]), i]);
+  const marks = an.summary?.moves || [];
+  svg.innerHTML =
+    (pts.length > 1 ? `<path class="area" d="M${pts[0][0]},${H} ${pts.map(([px, py]) => `L${px.toFixed(1)},${py.toFixed(1)}`).join(' ')} L${pts.at(-1)[0].toFixed(1)},${H} Z"/>` : '') +
+    `<line class="mid" x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/>` +
+    `<line class="cur" x1="${x(viewPly)}" y1="0" x2="${x(viewPly)}" y2="${H}"/>` +
+    pts.filter(([, , i]) => marks[i - 1]?.kind).map(([px, py, i]) =>
+      `<circle class="dot" cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="${MARK_COLOR[marks[i - 1].kind]}"/>`).join('') +
+    '<line class="hov" x1="-9" y1="0" x2="-9" y2="' + H + '"/>';
+}
+
+const graphPly = (e: MouseEvent) => {
+  const r = (e.currentTarget as Element).getBoundingClientRect();
+  return Math.max(0, Math.min(active().length, Math.round(((e.clientX - r.left) / r.width) * active().length)));
+};
+$('#an-graph').addEventListener('click', (e: MouseEvent) => goto(graphPly(e)));
+$('#an-graph').addEventListener('mousemove', (e: MouseEvent) => {
+  if (!an) return;
+  const g = active(), i = graphPly(e), ev = an.evals[i];
+  const hov = $('#an-graph .hov');
+  const px = (i / Math.max(1, g.length)) * Math.max(120, Math.round($('#an-graph').clientWidth || 300));
+  hov?.setAttribute('x1', String(px)); hov?.setAttribute('x2', String(px));
+  const p = g.plies[i - 1], kind = an.summary?.moves[i - 1]?.kind;
+  $('#an-tip').textContent = i === 0 ? `Start · ${formatEval(ev)}` :
+    `${Math.ceil(i / 2)}${i % 2 ? '.' : '…'} ${p.san}${kind ? MARKS[kind] : ''} · ${ev ? formatEval(ev) : '…'}`;
 });
+$('#an-graph').addEventListener('mouseleave', () => { $('#an-tip').textContent = ''; $('#an-graph .hov')?.setAttribute('x1', '-9'); $('#an-graph .hov')?.setAttribute('x2', '-9'); });
+addEventListener('resize', () => { if (an) renderAnalysis(); });
 
 /* ---------------- dialogs ---------------- */
 
@@ -1090,7 +1125,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) requ
 $('#btn-new').addEventListener('click', () => openNewGame());
 $('#btn-archive').addEventListener('click', () => { renderArchive(); openDialog('#dlg-archive'); });
 $('#btn-help').addEventListener('click', () => openDialog('#dlg-help'));
-$('#btn-settings').addEventListener('click', () => openDialog('#dlg-settings'));
+$('#btn-settings').addEventListener('click', openSettings);
 $('#btn-analyse').addEventListener('click', () => startAnalysis());
 $$('.act-analyse').forEach((b) => b.addEventListener('click', () => startAnalysis()));
 $('#over-analyse').addEventListener('click', () => { $('#dlg-over').close(); startAnalysis(); });
@@ -1098,6 +1133,49 @@ $('[data-nav="prev"]').addEventListener('click', () => goto(viewPly - 1));
 $('[data-nav="next"]').addEventListener('click', () => goto(viewPly + 1));
 $$('.act-pause').forEach((b) => b.addEventListener('click', togglePause));
 $('#btn-flip2').addEventListener('click', () => $('#btn-flip').click());
+$('#btn-flip3').addEventListener('click', () => $('#btn-flip').click());
+$('#btn-sound').addEventListener('click', () => {
+  settings.sound = !settings.sound;
+  storage.saveSettings(settings);
+  applyPrefs();
+  renderControls();
+  toast(settings.sound ? 'Sound on' : 'Sound off');
+});
+$('#focus-close').addEventListener('click', toggleFocus);
+$$('.act-newgame').forEach((b) => b.addEventListener('click', () => {
+  if (review) exitReview();
+  if (game.ai) openComputer(); else if (game.remote) openRemote('create'); else openNewGame();
+}));
+$$('.act-rematch').forEach((b) => b.addEventListener('click', () => $('#over-rematch').click()));
+
+// the corner handle: drag to make the board smaller or larger (up to what fits), double-click to reset
+{
+  const handle = $('#board-resize');
+  let start: { x: number; y: number; size: number } | null = null;
+  handle.addEventListener('pointerdown', (e: PointerEvent) => {
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    start = { x: e.clientX, y: e.clientY, size: $('.board-frame').getBoundingClientRect().width };
+  });
+  handle.addEventListener('pointermove', (e: PointerEvent) => {
+    if (!start) return;
+    const size = Math.round(Math.max(280, start.size + Math.max(e.clientX - start.x, e.clientY - start.y)));
+    settings.boardSize = size;
+    applyPrefs();
+  });
+  const end = () => {
+    if (!start) return;
+    start = null;
+    // never store more than fits: past that the board just stays as large as it can be
+    const fits = $('.board-frame').getBoundingClientRect().width;
+    if (settings.boardSize > fits) settings.boardSize = 0;
+    storage.saveSettings(settings);
+    applyPrefs();
+  };
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+  handle.addEventListener('dblclick', () => { settings.boardSize = 0; storage.saveSettings(settings); applyPrefs(); });
+}
 $('#btn-flip').addEventListener('click', () => { clearTimeout(flipTimer); board.flip(); renderPlayers(); renderAnalysis(); });
 $('#btn-undo').addEventListener('click', takeback);
 
@@ -1202,29 +1280,62 @@ document.addEventListener('keydown', (e) => {
 
 /* ---------------- settings ---------------- */
 
-const bindSwitch = (sel, key, after) => {
-  const input = $(sel);
-  input.checked = settings[key];
-  input.addEventListener('change', () => {
-    settings[key] = input.checked;
-    storage.saveSettings(settings);
-    after?.();
-  });
-};
-bindSwitch('#set-autoflip', 'autoFlip', () => { render(); if (settings.autoFlip) scheduleFlip(0); });
-bindSwitch('#set-dests', 'showDests', applyPrefs);
-bindSwitch('#set-coords', 'coords', applyPrefs);
-bindSwitch('#set-sound', 'sound', applyPrefs);
-bindSwitch('#set-winbar', 'winBar', render);
+/* ---------------- settings: edited on a copy, applied on Save ---------------- */
 
+const setInputs = () => $$('#form-settings [data-set]') as (HTMLInputElement | HTMLSelectElement)[];
+let themeBefore = settings.theme; // to undo the live preview on Cancel
+let settingsSaved = false;
+
+function openSettings() {
+  for (const el of setInputs()) {
+    const v = settings[el.dataset.set];
+    if (el instanceof HTMLInputElement) el.checked = el.hasAttribute('data-invert') ? !v : !!v;
+    else el.value = String(v);
+  }
+  themeBefore = settings.theme;
+  settingsSaved = false;
+  showSettingsTab('board');
+  openDialog('#dlg-settings');
+}
+
+function showSettingsTab(tab: string) {
+  $$('#dlg-settings [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  $$('#dlg-settings [data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== tab));
+}
+$$('#dlg-settings [data-tab]').forEach((b) => b.addEventListener('click', () => showSettingsTab(b.dataset.tab)));
+
+$('#form-settings').addEventListener('submit', () => {
+  settingsSaved = true;
+  for (const el of setInputs()) {
+    const key = el.dataset.set;
+    settings[key] = el instanceof HTMLInputElement ? (el.hasAttribute('data-invert') ? !el.checked : el.checked)
+      : el.dataset.kind === 'bool' ? el.value === 'true' : el.value;
+  }
+  storage.saveSettings(settings);
+  applyPrefs();
+  applyFocus();
+  render();
+  if (settings.autoFlip) scheduleFlip(0);
+});
+// closed any way but Save (Cancel, Esc, a click outside): undo the colour preview
+$('#set-cancel').addEventListener('click', () => $('#dlg-settings').close());
+$('#dlg-settings').addEventListener('close', () => { if (!settingsSaved) { settings.theme = themeBefore; applyPrefs(); } });
+
+// the board colours preview at once; Save keeps them, Cancel puts the old ones back
 $$('.swatch').forEach((s) => s.addEventListener('click', () => {
   settings.theme = s.dataset.theme;
-  storage.saveSettings(settings);
   applyPrefs();
 }));
 
+const ANIM_MS = { none: 0, fast: 90, medium: 150, slow: 260 };
+
 function applyPrefs() {
-  board.setPrefs({ showDests: settings.showDests, coords: settings.coords });
+  board.setPrefs({
+    showDests: settings.showDests, coords: settings.coords, highlightLast: settings.highlightLast,
+    moveMethod: settings.moveMethod,
+  });
+  $('#board').style.setProperty('--piece-ms', `${ANIM_MS[settings.animation] ?? 150}ms`);
+  $('.game').style.setProperty('--board-user', settings.boardSize ? `${settings.boardSize}px` : '');
   sound.setEnabled(settings.sound);
   $('#board').dataset.theme = settings.theme;
   $$('.swatch').forEach((s) => s.setAttribute('aria-checked', String(s.dataset.theme === settings.theme)));

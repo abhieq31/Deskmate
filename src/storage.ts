@@ -38,6 +38,16 @@ export const DEFAULT_SETTINGS = {
   theme: 'ember',
   focus: true, // during a game: only the board, the players and the clocks
   winBar: true, // a slim bar by the board with each side's winning chances
+  notation: 'figurine', // moves as ♘f3, or Nf3 with 'letter'
+  animation: 'medium', // piece slides: 'none' | 'fast' | 'medium' | 'slow'
+  celebration: 'confetti', // or 'none'
+  moveMethod: 'both', // 'both' | 'drag' | 'click'
+  highlightLast: true,
+  autoQueen: false, // promote without asking
+  anDepth: 'balanced', // analysis: 'fast' | 'balanced' | 'deep'
+  bestArrow: true, // analysis: the engine's move as an arrow
+  evalBar: true, // analysis: the bar beside the board
+  boardSize: 0, // px the player dragged the board to with the corner handle; 0 = as large as fits
   white: 'White',
   black: 'Black',
   tc: 'none',

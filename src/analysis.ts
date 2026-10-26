@@ -27,15 +27,18 @@ export const moveAccuracy = (loss) => clamp(103.1668 * Math.exp(-0.04354 * loss)
 
 /**
  * Summarise an analysed game. evals[i] is the evaluation after ply i (evals[0] = start).
- * Returns per-ply classifications and, per colour, accuracy and counts.
+ * Returns per-ply classifications and, per colour, accuracy and counts. `played[i]` (optional) is
+ * ply i+1 in UCI: a move the engine itself chose before it is never marked (two searches of a
+ * slightly different depth can otherwise disagree with each other), as on lichess.
  */
-export function summarize(evals, plyCount) {
+export function summarize(evals, plyCount, played: string[] = []) {
   const moves = [];
   const side = { w: { losses: [], blunder: 0, mistake: 0, inaccuracy: 0 }, b: { losses: [], blunder: 0, mistake: 0, inaccuracy: 0 } };
   for (let i = 1; i <= plyCount; i++) {
     if (!evals[i - 1] || !evals[i]) { moves.push(null); continue; }
     const color = i % 2 === 1 ? 'w' : 'b';
     const c = classify(evals[i - 1], evals[i], color);
+    if (played[i - 1] && evals[i - 1].pv?.[0] === played[i - 1]) { c.kind = null; c.loss = Math.min(c.loss, 2); }
     moves.push(c);
     side[color].losses.push(c.loss);
     if (c.kind) side[color][c.kind]++;

@@ -55,6 +55,14 @@ Please use it in line with your employer's policies.
   side's chances (lichess's win% from a short Stockfish search), updated
   after every move. No best moves, no arrows, nothing in the move list;
   turn it off in Settings.
+- **Board tools when you want them.** Only ⚙ shows by the board; move the
+  pointer next to it for focus, flip and sound, and a corner handle to drag
+  the board smaller or larger (double-click it to reset).
+- **Settings like a chess site's:** Board (theme, coordinates, figurine or
+  letter notation, animation speed, win celebration, drag / click / both,
+  highlight last move, sounds, legal moves, white always on bottom), Play
+  (auto-queen, winning chances, focus mode) and Analysis (engine depth,
+  best-move arrow, evaluation bar). Save applies, Cancel throws it away.
 - **Opening names** for every game, from lichess's open
   [chess-openings](https://github.com/lichess-org/chess-openings) data set
   (3,865 named lines, transpositions included).
