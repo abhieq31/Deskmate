@@ -857,6 +857,8 @@ if (hasCode(location.hash)) applyFromHash();
 if (paused) toast('Game restored — clocks paused');
 else if (game.length) toast('Game restored');
 
-if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+// the single-file build (deskmate.html) has no sw.js next to it, wherever it is hosted
+const singleFile = document.documentElement.hasAttribute('data-single-file');
+if ('serviceWorker' in navigator && location.protocol !== 'file:' && !singleFile) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }

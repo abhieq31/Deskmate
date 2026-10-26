@@ -7,7 +7,7 @@
 **Chess with your colleagues: on one laptop, or across two.**
 Put the laptop between you and play, or send game codes through the chat tool you already use.
 
-[**▶ Play now**](https://abhieq31.github.io/Deskmate/) · [**⬇ Offline version**](https://abhieq31.github.io/Deskmate/deskmate.html) · [Report a bug](https://github.com/abhieq31/Deskmate/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/Deskmate/issues/new?template=feature_request.md)
+[**▶ Play now**](https://abhieq31.com/deskmate) · [**⬇ Offline version**](https://abhieq31.github.io/Deskmate/deskmate.html) · [Report a bug](https://github.com/abhieq31/Deskmate/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/Deskmate/issues/new?template=feature_request.md)
 
 <img src="docs/screenshot.png" alt="Deskmate on a laptop: players above and below the board, both clocks with Draw and Resign on the right" width="760" />
 <img src="docs/phone.png" alt="Deskmate on a phone: each player row has its clock, toolbar at the bottom" width="190" />
@@ -87,6 +87,14 @@ which is fine for a game at your desk.
 whole app (about 225 KB) in a single file. Save it anywhere and open it by
 double-click. It makes no network requests. Build it yourself with
 `npm run build` (writes `deskmate.html`).
+
+## Hosting it on your own site
+
+`deskmate.html` is self-contained (inline CSS, JS and images), so any web
+server can host it at any path. Drop it in as `deskmate/index.html`. That's
+how [abhieq31.com/deskmate](https://abhieq31.com/deskmate) runs: the file sits
+in the site's `public/` folder. It needs `script-src 'unsafe-inline'` and
+`img-src data:` if your site sends a Content-Security-Policy.
 
 ## Run it locally
 

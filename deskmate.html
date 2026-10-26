@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-single-file>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -704,7 +704,7 @@ kbd {
       </div>
     </section>
 
-    <p class="side-foot muted">Games are stored only in this browser. <a href="https://github.com/abhieq31/Deskmate" target="_blank" rel="noopener">Open source</a> — contributions welcome.<span class="offline-dl"> · <a href="deskmate.html" download>Download the offline version</a> (one HTML file, no internet needed).</span></p>
+    <p class="side-foot muted">Games are stored only in this browser. <a href="https://github.com/abhieq31/Deskmate" target="_blank" rel="noopener">Open source</a> — contributions welcome.<span class="offline-dl"> · <a href="" download="deskmate.html">Download the offline version</a> (one HTML file, no internet needed).</span></p>
   </dialog>
 
   <!-- Remote: paste / show code -->
@@ -6052,7 +6052,9 @@ if (hasCode(location.hash)) applyFromHash();
 if (paused) toast('Game restored — clocks paused');
 else if (game.length) toast('Game restored');
 
-if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+// the single-file build (deskmate.html) has no sw.js next to it, wherever it is hosted
+const singleFile = document.documentElement.hasAttribute('data-single-file');
+if ('serviceWorker' in navigator && location.protocol !== 'file:' && !singleFile) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 

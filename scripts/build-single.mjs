@@ -64,6 +64,9 @@ swap('href="assets/icon.svg"', `href="${icon}"`);
 swap('src="assets/icon.svg"', `src="${icon}"`);
 // the brand link would point at a folder when opened from disk
 swap('<a class="brand" href="./"', '<a class="brand" href="#"');
+// works from any URL (e.g. abhieq31.com/deskmate): "download" saves this very page
+swap('<a href="deskmate.html" download>', '<a href="" download="deskmate.html">');
+swap('<html lang="en">', '<html lang="en" data-single-file>');
 
 // committed at the repo root so GitHub Pages (deploy from branch) serves it as-is
 writeFileSync(join(root, 'deskmate.html'), html);
