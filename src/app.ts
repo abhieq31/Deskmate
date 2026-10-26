@@ -216,8 +216,8 @@ const ICON_RESUME = '<svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg><
 
 function renderControls() {
   const g = active();
-  for (const b of [$('#nav-first'), $('#nav-prev'), $('[data-nav="prev"]')]) b.disabled = viewPly === 0;
-  for (const b of [$('#nav-last'), $('#nav-next'), $('[data-nav="next"]')]) b.disabled = viewPly === g.length;
+  for (const b of [$('#nav-first'), $('#nav-prev'), $('[data-nav="prev"]'), $('#focus-prev')]) b.disabled = viewPly === 0;
+  for (const b of [$('#nav-last'), $('#nav-next'), $('[data-nav="next"]'), $('#focus-next')]) b.disabled = viewPly === g.length;
   const liveGame = !review;
   $('#btn-undo').disabled = !liveGame || game.length === 0 || !!game.remote;
   const noActions = !liveGame || game.over || (game.remote ? !bothSeated() : game.length === 0);
@@ -1165,6 +1165,8 @@ $('#over-review').addEventListener('click', () => { $('#dlg-over').close(); goto
 $('#over-pgn').addEventListener('click', () => download(game));
 
 $('#nav-first').addEventListener('click', () => goto(0));
+$('#focus-prev').addEventListener('click', () => goto(viewPly - 1));
+$('#focus-next').addEventListener('click', () => goto(viewPly + 1));
 $('#nav-prev').addEventListener('click', () => goto(viewPly - 1));
 $('#nav-next').addEventListener('click', () => goto(viewPly + 1));
 $('#nav-last').addEventListener('click', () => goto(active().length));

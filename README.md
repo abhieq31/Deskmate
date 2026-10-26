@@ -47,9 +47,10 @@ Please use it in line with your employer's policies.
   level with both bars and holds the opening's name, every move, move
   navigation, and ½ Draw / ⚑ Resign.
 - **Focus mode** (on by default, **Z** or the button by the board's top
-  right corner): just the board, the players at its top and bottom edge,
-  both clocks between them, and Draw / Resign as two buttons beside it.
-  The board keeps exactly the same size and height in both views.
+  right corner): the board as large as the window allows (full height less
+  a thin margin), the players with big avatars at its top and bottom edge,
+  both clocks stacked between them, Draw / Resign as two square buttons
+  on the right and ‹ › to step through the moves.
 - **Winning chances, quietly.** A slim bar beside the board shows each
   side's chances (lichess's win% from a short Stockfish search), updated
   after every move. No best moves, no arrows, nothing in the move list;

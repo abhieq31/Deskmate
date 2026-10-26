@@ -1,39 +1,56 @@
-/* ---------- focus mode (Z): the board, the players, both clocks and two buttons ----------
-   [avatar name ]  [          ]  [⚙ ⤢]
-   [            ]  [          ]
-   [   clock    ]  [  board   ]  [ ½ ]
-   [   clock    ]  [          ]  [ ⚑ ]
-   [avatar name ]  [          ]
+@use 'tokens' as *;
+
+/* ---------- focus mode (Z): as much board as the window allows, like chess.com's ----------
+   [ avatar  ]  [            ]  [⚙ ⤢]
+   [  name   ]  [            ]
+   [ clock   ]  [   board    ]  [ ½ ]
+   [ clock   ]  [            ]  [ ⚑ ]
+   [ avatar  ]  [            ]
+   [  name   ]  [            ]  [‹ ›]
+   The board takes the full height less a thin margin; the narrow side columns hold the rest.
    Centred by padding, not min-height, so the 1fr rows never grow past the board. */
 #btn-focus .ico-compress, body.focus #btn-focus .ico-expand { display: none; }
 body.focus #btn-focus .ico-compress { display: block; }
 body.focus { --sb-w: 0px; }
 body.focus .sidebar, body.focus .mobile-bar, body.focus .panel { display: none; }
-body.focus .game {
-  --lw: 200px; --rw: 120px;
-  grid-template-columns: var(--lw) var(--board) var(--rw);
-  grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    "ptop board tools"
-    ".    board ."
-    "ctop board acts"
-    "cbot board acts"
-    ".    board ."
-    "pbot board .";
-  gap: 8px 24px;
-  min-height: 0;
-  padding: max(24px, calc((100vh - var(--board)) / 2)) 24px 0 52px;
+.focus-nav { display: none; }
+
+@media (min-width: $phone + 1px) {
+  body.focus .game {
+    --lw: 150px; --rw: 96px;
+    --board: min(calc(100vh - 28px), calc(100vw - var(--lw) - var(--rw) - 88px), 1400px); /* gaps 40 + padding 48 */
+    grid-template-columns: var(--lw) var(--board) var(--rw);
+    grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "ptop board tools"
+      ".    board ."
+      "ctop board acts"
+      "cbot board acts"
+      ".    board ."
+      "pbot board nav";
+    gap: 12px 20px;
+    min-height: 0;
+    padding: max(14px, calc((100vh - var(--board)) / 2)) 16px 0 32px;
+  }
+  /* players: a big avatar with the name, taken pieces and status centred under it */
+  body.focus .player { flex-direction: column; align-items: center; gap: 6px; justify-self: center; max-width: 100%; text-align: center; }
+  body.focus .player .avatar { width: 56px; height: 56px; }
+  body.focus .player .pmeta { align-items: center; }
+  body.focus .player .pline { flex-direction: column; align-items: center; gap: 2px; }
+  body.focus .player.top { grid-area: ptop; align-self: start; }
+  body.focus .player.bottom { grid-area: pbot; align-self: end; }
+  body.focus .clock-wrap { justify-self: center; }
+  body.focus .clock-top { grid-area: ctop; }
+  body.focus .clock-bottom { grid-area: cbot; }
+  body.focus .clock { width: 124px; height: 46px; font-size: 1.5rem; }
+  body.focus .board-area { grid-area: 1 / 2 / 7 / 3; }
+  body.focus .board-tools { grid-area: tools; flex-direction: row; justify-self: start; align-self: start; }
+  body.focus .focus-acts { grid-area: acts; display: flex; flex-direction: column; gap: 10px; align-self: center; justify-self: start; }
+  body.focus .focus-nav { grid-area: nav; display: flex; gap: 4px; align-self: end; justify-self: start; }
 }
-body.focus .player.top { grid-area: ptop; align-self: start; max-width: 100%; }
-body.focus .player.bottom { grid-area: pbot; align-self: end; max-width: 100%; }
-body.focus .clock-top { grid-area: ctop; justify-self: stretch; }
-body.focus .clock-bottom { grid-area: cbot; justify-self: stretch; }
-body.focus .clock { width: 100%; }
-body.focus .board-area { grid-area: 1 / 2 / 7 / 3; }
-body.focus .board-tools { grid-area: tools; flex-direction: row; justify-self: start; }
-body.focus .focus-acts { grid-area: acts; display: flex; flex-direction: column; gap: 10px; align-self: center; justify-self: start; }
+.focus-nav .icon-btn { color: #9a958e; }
 .sq-btn {
-  display: grid; place-items: center; width: 56px; height: 56px; border-radius: 8px; border: 1px solid var(--line);
+  display: grid; place-items: center; width: 48px; height: 48px; border-radius: 8px; border: 1px solid var(--line);
   background: #1d1d1f; color: #d6d4d1; cursor: pointer; transition: background 0.15s, color 0.15s;
 }
 .sq-btn:hover:not(:disabled) { background: #29292c; color: #fff; }
