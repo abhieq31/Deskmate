@@ -67,6 +67,12 @@
     </div>
   </section>
 
+  <!-- top-right corner: focus and settings, one above the other -->
+  <div class="corner-tools">
+    <button class="icon-btn" id="btn-focus" title="Hide menu and moves (Z)" aria-label="Focus on the board"><svg viewBox="0 0 24 24" class="ico-expand"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><svg viewBox="0 0 24 24" class="ico-compress"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
+    <button class="icon-btn gear" id="btn-settings" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+  </div>
+
   <main class="game">
     <!-- phones: menu button + the one-line move strip -->
     <div class="mobile-bar">
@@ -83,8 +89,6 @@
     </section>
     <div class="clock-wrap clock-top">
       <div class="clock" id="clock-top" role="timer"><svg class="clock-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span data-time></span></div>
-      <button class="icon-btn" id="btn-focus" title="Hide menu and moves (Z)" aria-label="Focus on the board"><svg viewBox="0 0 24 24" class="ico-expand"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><svg viewBox="0 0 24 24" class="ico-compress"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
-      <button class="icon-btn gear" id="btn-settings" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
     </div>
 
     <section class="board-area">
@@ -106,22 +110,28 @@
       </div>
     </section>
     <div class="clock-wrap clock-bottom">
-      <span class="focus-acts">
-        <button class="icon-btn act-draw" aria-label="Draw"><span class="half">½</span></button>
-        <button class="icon-btn danger act-resign" aria-label="Resign"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></button>
-      </span>
       <div class="clock" id="clock-bottom" role="timer"><svg class="clock-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span data-time></span></div>
     </div>
 
-    <!-- desktop: one line of moves, analysis when there is one, Draw / Resign -->
-    <aside class="panel" id="panel" aria-label="Game">
-      <div class="moveline-slot" id="moveline-slot-panel">
+    <!-- right column, between the clocks: the one line of moves, then Draw / Resign -->
+    <div class="side">
+      <div class="moveline-slot" id="moveline-slot-side">
         <div class="moveline" id="moveline">
           <button class="ml-arrow" id="nav-prev" title="Back (←)" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
           <div class="ml-moves" id="moves" aria-label="Moves"></div>
           <button class="ml-arrow" id="nav-next" title="Forward (→)" aria-label="Next move"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
         </div>
       </div>
+      <div class="side-acts" aria-label="Game actions">
+        <button class="act act-draw"><span class="half">½</span><span>Draw</span></button>
+        <button class="act act-resign"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg><span>Resign</span></button>
+        <button class="act act-pause hidden"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
+        <button class="act primary act-analyse hidden"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8M7.5 12l2-2.5 2 1.5 2-3"/></svg><span>Analyse game</span></button>
+      </div>
+    </div>
+
+    <!-- left column, between the players: the result, and the analysis after a game -->
+    <aside class="panel" id="panel" aria-label="Game">
       <div class="analysis hidden" id="analysis">
         <p class="an-verdict" id="an-verdict"></p>
         <div class="an-head"><span class="an-eval" id="an-eval">0.0</span><span class="an-line" id="an-line"></span></div>
@@ -136,21 +146,8 @@
         </div>
       </div>
       <div class="result-line hidden" id="result-line"></div>
-      <div class="panel-actions">
-        <button class="btn action act-draw"><span class="half">½</span><span>Draw</span></button>
-        <button class="btn action danger act-resign"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg><span>Resign</span></button>
-        <button class="btn action act-pause hidden"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
-        <button class="btn action primary act-analyse hidden"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8M7.5 12l2-2.5 2 1.5 2-3"/></svg><span>Analyse game</span></button>
-      </div>
     </aside>
 
-    <!-- phones: actions under the board -->
-    <nav class="rail" aria-label="Game actions">
-      <button class="rb act-draw"><span class="half">½</span><span>Draw</span></button>
-      <button class="rb danger act-resign"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg><span>Resign</span></button>
-      <button class="rb act-pause hidden"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
-      <button class="rb act-analyse hidden"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8M7.5 12l2-2.5 2 1.5 2-3"/></svg><span>Analyse</span></button>
-    </nav>
   </main>
 
   <!-- Settings (⚙ next to the board) -->
@@ -313,7 +310,7 @@
     </div>
     <ul class="help">
       <li>Click or drag a piece. Dots show where it can go; rings show captures.</li>
-      <li>On one laptop, the board turns to the side of whoever is to move (toggle <em>Auto-flip</em>).</li>
+      <li>On one laptop, the board turns to the side of whoever is to move (setting: <em>Turn the board for each player</em>).</li>
       <li>Right-click and drag to draw arrows; right-click a square to circle it.</li>
       <li><em>Play a colleague</em>: create a game and share its 6-character code once. Moves then appear on both laptops as they are played.</li>
       <li>Your current game survives a page reload. Finished games go to <em>Saved games</em>.</li>

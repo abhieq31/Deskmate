@@ -1075,9 +1075,9 @@ function applyPrefs() {
   $$('.swatch').forEach((s) => s.setAttribute('aria-checked', String(s.dataset.theme === settings.theme)));
 }
 
-// The one-line move strip sits at the top of the side panel on wide screens and above the board on phones.
+// The one-line move strip sits under the top clock on wide screens and above the board on phones.
 const phoneLayout = matchMedia('(max-width: 760px)');
-const placeMoves = () => $(phoneLayout.matches ? '#moveline-slot-mobile' : '#moveline-slot-panel').appendChild($('#moveline'));
+const placeMoves = () => $(phoneLayout.matches ? '#moveline-slot-mobile' : '#moveline-slot-side').appendChild($('#moveline'));
 phoneLayout.addEventListener('change', placeMoves);
 
 /* ---------------- sidebar ---------------- */
