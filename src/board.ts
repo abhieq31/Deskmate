@@ -23,10 +23,17 @@ export interface BoardState {
   movable: Color | null;
 }
 interface Shape { from: string; to: string }
+/**
+ * A piece in hand. `pressed`: the button (or finger) is down. `held`: it was lifted with a tap and
+ * now follows the pointer until the next press or release on a square it can go to. `retap`: the
+ * current press started on the piece already in hand, so a plain tap puts it back.
+ */
 interface Drag {
   from: string; el: HTMLElement; x: number; y: number; rect: DOMRect; moved: boolean; wasSelected: boolean;
   over: string | null; px?: number; py?: number; raf?: number;
+  pressed: boolean; held: boolean; retap: boolean;
 }
+type PointerLike = { clientX: number; clientY: number; pointerType?: string };
 
 export class Board {
   root: HTMLElement;
@@ -81,8 +88,6 @@ export class Board {
     window.addEventListener('pointermove', (e) => this._move(e));
     window.addEventListener('pointerup', (e) => this._up(e));
     window.addEventListener('pointercancel', () => this._cancelDrag());
-    // if the browser takes the pointer away mid-drag (window switch, gesture), drop where it was
-    root.addEventListener('lostpointercapture', (e) => { if (this.drag) this._up({ ...e, clientX: this.drag.px ?? e.clientX, clientY: this.drag.py ?? e.clientY }); });
     window.addEventListener('blur', () => this._cancelDrag());
     root.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -144,6 +149,7 @@ export class Board {
       this.shapes = [];
       this._renderShapes();
     }
+    if (this.drag && (posChanged || !this.state.movable)) this._cancelDrag();
     if (this.selected && !(this.state.dests.get(this.selected) && this.state.movable)) this.selected = null;
     this._syncPieces();
     this._highlight();
@@ -251,7 +257,7 @@ export class Board {
       const isDest = this.prefs.showDests && targets.includes(sq);
       s.classList.toggle('move-dest', isDest && !occupied.has(sq));
       s.classList.toggle('capture-dest', isDest && occupied.has(sq));
-      s.classList.toggle('hover', !!this.drag?.moved && this.drag.over === sq);
+      s.classList.toggle('hover', !!(this.drag?.moved || this.drag?.held) && this.drag.over === sq);
       s.classList.toggle('can-move', !!movable && dests.has(sq));
     }
     this.root.classList.toggle('movable', !!movable);
@@ -276,6 +282,20 @@ export class Board {
     if (e.button !== 0) return;
     if (this.shapes.length) { this.shapes = []; this._renderShapes(); }
 
+    // a piece already in hand: this press puts it down, or picks it up again to drag it
+    const d = this.drag;
+    if (d) {
+      e.preventDefault();
+      if (sq !== d.from && (this.state.dests.get(d.from) || []).includes(sq)) { this._drop(d, sq); return; }
+      if (sq === d.from) {
+        Object.assign(d, { x: e.clientX, y: e.clientY, moved: false, pressed: true, retap: true });
+        this._capture(e);
+        this._follow(e.clientX, e.clientY);
+        return;
+      }
+      this._putBack(d, false); // somewhere else: put it back, then handle the press as usual
+    }
+
     const targets = this.selected ? this.state.dests.get(this.selected) || [] : [];
     if (this.selected && targets.includes(sq)) {
       const from = this.selected;
@@ -286,13 +306,15 @@ export class Board {
     }
     if (this._canMoveFrom(sq)) {
       e.preventDefault();
-      // keep getting pointer events even if the pointer leaves the board mid-drag
-      try { this.root.setPointerCapture(e.pointerId); } catch { /* not supported: window listeners still work */ }
+      this._capture(e);
       const wasSelected = this.selected === sq;
       this.selected = sq;
       const el = this.pieces.get(sq).el;
       // lift the piece at once and centre it under the pointer, like chess.com and lichess
-      this.drag = { from: sq, el, x: e.clientX, y: e.clientY, rect: this.inner.getBoundingClientRect(), moved: false, wasSelected, over: sq };
+      this.drag = {
+        from: sq, el, x: e.clientX, y: e.clientY, rect: this.inner.getBoundingClientRect(), moved: false, wasSelected,
+        over: sq, pressed: true, held: false, retap: false,
+      };
       el.classList.add('dragging');
       this._follow(e.clientX, e.clientY);
       this._highlight();
@@ -300,6 +322,11 @@ export class Board {
       this.selected = null;
       this._highlight();
     }
+  }
+
+  /** Keep getting pointer events even if the pointer leaves the board mid-drag. */
+  _capture(e: PointerEvent) {
+    try { this.root.setPointerCapture(e.pointerId); } catch { /* not supported: window listeners still work */ }
   }
 
   /** Put the dragged piece's centre at the pointer; batched to one update per frame. */
@@ -319,16 +346,16 @@ export class Board {
   _move(e: PointerEvent) {
     const d = this.drag;
     if (!d) return;
-    // the button is already up but no pointerup reached us (seen with trackpad tap-to-drag):
-    // treat this as the drop, so the piece never stays stuck to the pointer
-    if (e.pointerType === 'mouse' && e.buttons === 0) { this._up(e); return; }
-    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 3) d.moved = true;
+    // a held piece follows the mouse with no button down; a finger can only drag while touching
+    if (!d.pressed && e.pointerType !== 'mouse') return;
+    // never trust e.buttons here: macOS tap-to-drag reports 0 while the drag is in progress
+    if (d.pressed && !d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 3) d.moved = true;
     this._follow(e.clientX, e.clientY);
     const over = this._eventSquare(e);
     if (over !== d.over) { d.over = over; this._highlight(); }
   }
 
-  _up(e: { clientX: number; clientY: number }) {
+  _up(e: PointerLike) {
     if (this.drawing) {
       const to = this._eventSquare(e);
       if (to) this._toggleShape(this.drawing.from, to);
@@ -337,34 +364,52 @@ export class Board {
     }
     const d = this.drag;
     if (!d) return;
+    const to = this._eventSquare(e);
+    // released over a square it can go to: put it down there, whatever happened before
+    if (to && to !== d.from && (this.state.dests.get(d.from) || []).includes(to)) { this._drop(d, to); return; }
+    if (!d.pressed) return; // a stray release while the piece is held: keep holding
+    d.pressed = false;
+    if (d.moved) { this._putBack(d, true); return; } // dragged somewhere it can't go
+    // a tap: on the piece already in hand (or selected) it puts it back; otherwise the piece stays
+    // in hand and follows the mouse until the next click (on touch it waits on its square)
+    if (d.retap || d.wasSelected) this._putBack(d, false);
+    else if (e.pointerType === 'mouse') { d.held = true; this._highlight(); }
+    else this._putBack(d, true);
+  }
+
+  /** Put the piece in hand down on `to` without sliding, and report the move. */
+  _drop(d: Drag, to: string) {
     this.drag = null;
     if (d.raf) cancelAnimationFrame(d.raf);
-    const to = this._eventSquare(e);
-    const targets = this.state.dests.get(d.from) || [];
-    // drop: no slide, the piece is already where the player let go of it
     this.root.classList.add('no-anim');
     d.el.classList.remove('dragging');
-    if (to && to !== d.from && targets.includes(to)) {
-      const { code } = this.pieces.get(d.from);
-      const captured = this.pieces.get(to);
-      if (captured) captured.el.remove();
-      this.pieces.delete(d.from);
-      this.pieces.set(to, { el: d.el, code });
-      this._place(d.el, to);
-      reflow(d.el);
-      this.root.classList.remove('no-anim');
-      this.selected = null;
-      this._highlight();
-      this.onMove(d.from, to);
-      return;
-    }
+    const { code } = this.pieces.get(d.from);
+    this.pieces.get(to)?.el.remove();
+    this.pieces.delete(d.from);
+    this.pieces.set(to, { el: d.el, code });
+    this._place(d.el, to);
+    reflow(d.el);
+    this.root.classList.remove('no-anim');
+    this.selected = null;
+    this._highlight();
+    this.onMove(d.from, to);
+  }
+
+  /** Put the piece in hand back on its square; `keepSelected` leaves its moves showing. */
+  _putBack(d: Drag, keepSelected: boolean) {
+    this.drag = null;
+    if (d.raf) cancelAnimationFrame(d.raf);
+    this.root.classList.add('no-anim');
+    d.el.classList.remove('dragging');
     this._place(d.el, d.from);
     reflow(d.el);
     this.root.classList.remove('no-anim');
-    // a plain click on an already selected piece deselects it; otherwise it stays selected
-    if (!d.moved && d.wasSelected) this.selected = null;
+    this.selected = keepSelected ? d.from : null;
     this._highlight();
   }
+
+  /** Drop whatever is in hand back on its square (Escape, window switch, new position). */
+  cancel() { this._cancelDrag(); }
 
   _cancelDrag() {
     if (!this.drag) return;

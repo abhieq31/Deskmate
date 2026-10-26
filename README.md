@@ -66,8 +66,13 @@ Please use it in line with your employer's policies.
   a little bigger with a deeper shadow, and follows the pointer once per
   screen frame. Drop it on any square; the target is outlined while you
   drag. The cursor shows an open hand over pieces you can move and a
-  closed one while you hold one. Touch and trackpad double-tap-drag work
-  too, and the piece always lets go when you do. Click-to-move works too.
+  closed one while you hold one. Or tap a piece once: it stays in your
+  hand and follows the mouse until you click or release on a square it can
+  go to (tap it again or press Esc to put it back). Mouse drag, trackpad
+  double-tap-drag (with or without drag lock) and touch all work, and none
+  of it depends on the browser reporting the button state. If dragging ever
+  misbehaves on your device, open `…/deskmate?debug-input` and send a
+  screenshot of the event log in the corner.
 - **Post-game analysis with Stockfish.** Once a game ends (or for any saved
 , Stockfish 11 analyses every move in your browser. You
   get an evaluation bar, the engine's best line and an arrow for its best

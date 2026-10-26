@@ -1180,7 +1180,7 @@ $('#btn-fen').addEventListener('click', () => copy(active().fenAt(viewPly), 'FEN
 
 document.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement).closest('input, textarea') || $$('dialog[open]').length) return;
-  if (e.key === 'Escape') return setSidebar(false);
+  if (e.key === 'Escape') { board.cancel(); return setSidebar(false); }
   const k = e.key;
   if (k === 'ArrowLeft') goto(viewPly - 1);
   else if (k === 'ArrowRight') goto(viewPly + 1);
@@ -1343,6 +1343,25 @@ board.setOrientation(homeOrientation());
 setView(inProgress() ? 'game' : 'home');
 if (game.remote) connectRoom(game.remote.room);
 computerMove(); // a restored game against the computer, with the computer to move
+
+// …/deskmate?debug-input shows the last pointer events on screen, to diagnose drag problems on a
+// device we can't test (e.g. a trackpad's tap-to-drag)
+if (new URLSearchParams(location.search).has('debug-input')) {
+  const box = document.body.appendChild(document.createElement('pre'));
+  box.className = 'input-log';
+  const lines: string[] = [];
+  let lastMove = '';
+  const log = (e: PointerEvent | MouseEvent) => {
+    const p = e as PointerEvent;
+    const line = `${e.type.padEnd(18)} ${p.pointerType ?? ''} button=${e.button} buttons=${e.buttons} detail=${e.detail} ${Math.round(e.clientX)},${Math.round(e.clientY)}`;
+    // moves only when something other than the position changes
+    if (e.type.endsWith('move')) { const key = `${e.type} ${p.pointerType} ${e.buttons}`; if (key === lastMove) return; lastMove = key; }
+    lines.push(line);
+    box.textContent = lines.slice(-16).join('\n');
+  };
+  for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'lostpointercapture', 'mousedown', 'mouseup', 'click', 'dblclick'])
+    addEventListener(t, log as EventListener, true);
+}
 
 // a shared link (…/deskmate#K7QM2X) opens "Join with a code" with the code filled in
 const linkCode = parseRoomCode(location.hash);
