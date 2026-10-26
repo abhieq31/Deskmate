@@ -4,7 +4,7 @@
 
 # Deskmate
 
-**Chess with your colleagues: on one laptop, or across two.**
+**Chess with the person at the next desk.**
 Share one short code and play live, each on your own work laptop. Or put one laptop between you.
 
 [**▶ Play now**](https://abhieq31.com/deskmate) · [**⬇ Offline version**](https://github.com/abhieq31/Deskmate/raw/main/deskmate.html) · [Report a bug](https://github.com/abhieq31/Deskmate/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/Deskmate/issues/new?template=feature_request.md)
@@ -29,29 +29,39 @@ Please use it in line with your employer's policies.
   gets a 6-character code like `K7Q-M2X`. The other types it in once, and
   moves appear on both screens within moments. Clocks, draw offers,
   resignations and rematches sync too. ([How it works](#play-a-colleague))
+- **The office table.** The home page keeps a league table of everyone who
+  has played on that laptop: played, won, drawn, lost, points. Settle who
+  is actually best on the floor.
+- **Clocks named for the break you have.** Lift ride (1+0), Coffee break
+  (3+2), Tea break (5+0), Lunch (10+5), Long lunch (15+10), Friday 5 pm
+  (30+0) and more.
 - **A home page** with Play a colleague, Join with a code, Play on this
-  laptop, Resume, and your recent games with Review and Analyse. The logo
-  always brings you back to it.
+  laptop, Resume, your recent games and the office table. The logo always
+  brings you back to it.
 - **Focus mode while you play** (on by default). The board is as large as
-  the window allows, with only the players (name, captured pieces, points
-  lead) and their clocks, and small ½ / ⚑ buttons for draw and resign. The
-  expand button at the board's top-right corner (or **Z**) brings back the
-  chess.com-style view: an icon sidebar, one line of moves top right, and
-  chess.com's quiet "½ Draw ⚑ Resign" buttons.
+  the window allows: players and the pieces they've taken on the left,
+  both clocks on the right with Draw and Resign between them, and nothing
+  else. The expand button in the top-right corner (or **Z**) brings back
+  the menu and the line of moves.
 - **Replay with clocks.** Stepping back through a game shows each clock as
-  it stood at that move, and exported PGNs carry `[%clk]` times like
-  lichess and chess.com.
-- **Two boards:** chess.com green and grey stone (settings ⚙).
-- **Fluid pieces.** Pressing a piece lifts it under the cursor, and it
-  follows the pointer once per screen frame. The target square is outlined
-  while you drag, and click-to-move works too.
+  it stood at that move, and exported PGNs carry `[%clk]` times.
+- **Ink and ember.** Black, white and one red. Two boards: Ember (ivory and
+  crimson, the default) and Stone (grey with a fine grain).
+- **Pieces you can pick up.** Press a piece and it lifts into your hand,
+  a little bigger with a deeper shadow, and follows the pointer once per
+  screen frame. Drop it on any square; the target is outlined while you
+  drag. The cursor shows an open hand over pieces you can move and a
+  closed one while you hold one. Click-to-move works too.
 - **Post-game analysis with Stockfish.** Once a game ends (or for any saved
   or imported game), Stockfish 11 analyses every move in your browser. You
   get an evaluation bar, the engine's best line and an arrow for its best
   move, an evaluation graph, accuracy for both players, and ?? / ? / ?!
   marks on blunders, mistakes and inaccuracies, the way lichess calculates
-  them. A chess.com-style line names the move ("Nf6?? is a blunder. Best
-  was Qe7."). There is no engine during play.
+  them. A line names the move ("Nf6?? is a blunder. Best was Qe7."), the
+  whole game is listed under the graph, and clicking the graph, a move or
+  a player's "1??" count jumps there. It works even where company Chrome
+  has WebAssembly switched off (a slower plain-JavaScript engine takes
+  over). There is no engine during play.
 - **Same-laptop games.** After each move the board switches to the side of
   whoever moves next. The view just changes; nothing spins. (Auto-flip can be
   turned off in the menu.)

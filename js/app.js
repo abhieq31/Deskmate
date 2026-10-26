@@ -7,6 +7,7 @@ import { confetti } from './confetti.js';
 import { packMoves, unpackMoves } from './remote.js';
 import { Room, newRoomCode, parseRoomCode, formatRoomCode } from './live.js';
 import { Engine } from './engine.js';
+import { standings } from './office.js';
 import { summarize, winPct, formatEval, MARKS } from './analysis.js';
 import { Chess } from '../vendor/chess.js';
 
@@ -16,7 +17,7 @@ const other = (c) => (c === 'w' ? 'b' : 'w');
 const colorName = (c) => (c === 'w' ? 'White' : 'Black');
 
 const settings = storage.loadSettings();
-if (!['green', 'stone'].includes(settings.theme)) settings.theme = 'green'; // the only two boards now
+if (!['ember', 'stone'].includes(settings.theme)) settings.theme = 'ember'; // the only two boards now
 if (!settings.pid) {
   settings.pid = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(36).padStart(2, '0')).join('');
   storage.saveSettings(settings);
@@ -832,7 +833,7 @@ function openNewGame(prefill) {
   grid.innerHTML = TIME_CONTROLS.map((t) => `
     <label class="tc${t.id === p.tc ? ' checked' : ''}">
       <input type="radio" name="tc" value="${t.id}"${t.id === p.tc ? ' checked' : ''} />
-      <strong>${t.base ? t.label : '∞'}</strong><small>${t.kind || 'No clock'}</small>
+      <strong>${t.base ? t.label : '∞'}</strong><small>${t.moment}</small>
     </label>`).join('');
   openDialog('#dlg-new');
 }
@@ -1182,8 +1183,17 @@ function renderHome() {
     const d = new Date(g.endedAt || g.startedAt);
     return `<li data-id="${g.id}"><span class="res ${cls}">${res}</span>
       <span class="who">${esc(g.white || '?')} vs ${esc(g.black || '?')}<small>${esc(g.termination || 'In progress')} · ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</small></span>
-      <span class="acts"><button class="btn small" data-act="review">Review</button>${g.result ? '<button class="btn small primary" data-act="analyse">Analyse</button>' : ''}</span></li>`;
+      <span class="acts"><button class="btn small" data-act="review">Review</button>${g.result ? '<button class="btn small" data-act="analyse">Analyse</button>' : ''}</span></li>`;
   }).join('') : '<li class="empty">Your finished games will appear here.</li>';
+  renderOffice();
+}
+
+/** The office table: everyone who has played on this laptop, best score first. */
+function renderOffice() {
+  const rows = standings(storage.loadArchive()).slice(0, 8);
+  $('#home-office').classList.toggle('hidden', !rows.length);
+  $('#office-table').innerHTML = rows.map((r, i) => `<tr><td class="rk">${i + 1}</td><td class="nm">${esc(r.name)}</td>` +
+    `<td>${r.played}</td><td>${r.won}</td><td>${r.drawn}</td><td>${r.lost}</td><td class="pts">${String(r.score).replace('.5', '½')}</td></tr>`).join('');
 }
 
 $('#home-games').addEventListener('click', (e) => {

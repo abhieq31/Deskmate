@@ -35,7 +35,7 @@ export const DEFAULT_SETTINGS = {
   sound: true,
   showDests: true,
   coords: true,
-  theme: 'green',
+  theme: 'ember',
   focus: true, // during a game: only the board, the players and the clocks
   white: 'White',
   black: 'Black',

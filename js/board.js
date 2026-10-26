@@ -44,7 +44,7 @@ export class Board {
     this.svg.innerHTML = `<defs><marker id="ah" orient="auto" markerWidth="4" markerHeight="8" refX="2.05" refY="2.01">
       <path d="M0,0 V4 L3,2 Z" fill="currentColor"/></marker>
       <marker id="ah-auto" orient="auto" markerWidth="4" markerHeight="8" refX="2.05" refY="2.01">
-      <path d="M0,0 V4 L3,2 Z" fill="#3692e7"/></marker></defs><g></g>`;
+      <path d="M0,0 V4 L3,2 Z" fill="#121212" fill-opacity="0.62"/></marker></defs><g></g>`;
     this.inner.appendChild(this.svg);
     this.promoEl = el('div', 'promo hidden', root);
 
@@ -280,7 +280,7 @@ export class Board {
       d.raf = 0;
       if (this.drag !== d) return;
       const size = d.rect.width / 8;
-      d.el.style.transform = `translate3d(${d.px - d.rect.left - size / 2}px, ${d.py - d.rect.top - size / 2}px, 0)`;
+      d.el.style.transform = `translate3d(${d.px - d.rect.left - size / 2}px, ${d.py - d.rect.top - size / 2}px, 0) scale(1.14)`;
     });
   }
 

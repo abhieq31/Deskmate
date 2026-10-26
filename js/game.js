@@ -4,17 +4,18 @@ import { Chess, DEFAULT_POSITION } from '../vendor/chess.js';
 
 export const START_FEN = DEFAULT_POSITION;
 
+// `moment`: the desk-sized break each one fits in
 export const TIME_CONTROLS = [
-  { id: 'none', label: 'Unlimited', base: 0, inc: 0 },
-  { id: '1+0', label: '1 + 0', base: 1, inc: 0, kind: 'Bullet' },
-  { id: '3+0', label: '3 + 0', base: 3, inc: 0, kind: 'Blitz' },
-  { id: '3+2', label: '3 + 2', base: 3, inc: 2, kind: 'Blitz' },
-  { id: '5+0', label: '5 + 0', base: 5, inc: 0, kind: 'Blitz' },
-  { id: '5+3', label: '5 + 3', base: 5, inc: 3, kind: 'Blitz' },
-  { id: '10+0', label: '10 + 0', base: 10, inc: 0, kind: 'Rapid' },
-  { id: '10+5', label: '10 + 5', base: 10, inc: 5, kind: 'Rapid' },
-  { id: '15+10', label: '15 + 10', base: 15, inc: 10, kind: 'Rapid' },
-  { id: '30+0', label: '30 + 0', base: 30, inc: 0, kind: 'Classical' },
+  { id: 'none', label: 'Unlimited', base: 0, inc: 0, moment: 'No clock' },
+  { id: '1+0', label: '1 + 0', base: 1, inc: 0, kind: 'Bullet', moment: 'Lift ride' },
+  { id: '3+0', label: '3 + 0', base: 3, inc: 0, kind: 'Blitz', moment: 'Printer queue' },
+  { id: '3+2', label: '3 + 2', base: 3, inc: 2, kind: 'Blitz', moment: 'Coffee break' },
+  { id: '5+0', label: '5 + 0', base: 5, inc: 0, kind: 'Blitz', moment: 'Tea break' },
+  { id: '5+3', label: '5 + 3', base: 5, inc: 3, kind: 'Blitz', moment: 'After stand-up' },
+  { id: '10+0', label: '10 + 0', base: 10, inc: 0, kind: 'Rapid', moment: 'Build running' },
+  { id: '10+5', label: '10 + 5', base: 10, inc: 5, kind: 'Rapid', moment: 'Lunch' },
+  { id: '15+10', label: '15 + 10', base: 15, inc: 10, kind: 'Rapid', moment: 'Long lunch' },
+  { id: '30+0', label: '30 + 0', base: 30, inc: 0, kind: 'Classical', moment: 'Friday, 5 pm' },
 ];
 
 export const timeControl = (id) => TIME_CONTROLS.find((t) => t.id === id) || TIME_CONTROLS[0];

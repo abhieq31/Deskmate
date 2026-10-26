@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Deskmate · Chess with your colleagues</title>
   <meta name="description" content="Free, open-source chess for colleagues: two players on one laptop, or on two laptops with one short game code. Clocks, legal move hints, local game history. No account." />
-  <meta name="theme-color" content="#161512" />
+  <meta name="theme-color" content="#0e0e0f" />
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <!-- left sidebar (chess.com-style): icons only, labels when expanded -->
+  <!-- left sidebar: icons only, labels when expanded -->
   <aside class="sidebar" id="sidebar" aria-label="Main menu">
     <a class="sb-brand" href="./" id="sb-home" title="Home" aria-label="Deskmate home"><img src="assets/icon.svg" alt="" width="30" height="30" /><span>Desk<b>mate</b></span></a>
       <button class="sb-item" id="btn-new" title="New game"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>New game</span></button>
@@ -31,7 +31,7 @@
         <img src="assets/icon.svg" alt="" width="64" height="64" />
         <div>
           <h1>Desk<b>mate</b></h1>
-          <p>Chess with your colleagues: on one laptop, or on two with one short code.</p>
+          <p>Chess with the person at the next desk. No account, no ads, nothing to install.</p>
         </div>
       </header>
       <div class="home-play">
@@ -58,6 +58,10 @@
           <button class="link-btn" id="home-all">All saved games</button>
         </div>
         <ul class="home-games" id="home-games"></ul>
+      </section>
+      <section class="home-recent hidden" id="home-office">
+        <div class="home-recent-head"><h2>Office table</h2><small class="muted">from the games played on this laptop</small></div>
+        <table class="office"><thead><tr><th></th><th class="nm">Player</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th></tr></thead><tbody id="office-table"></tbody></table>
       </section>
       <footer class="home-foot">
         <button class="link-btn" id="btn-help">How to play</button>
@@ -165,7 +169,7 @@
     </div>
     <h3>Board</h3>
     <div class="themes" role="radiogroup" aria-label="Board theme">
-      <button class="swatch" data-theme="green" title="Green" aria-label="Green board"></button>
+      <button class="swatch" data-theme="ember" title="Ember" aria-label="Ember board (ivory and crimson)"></button>
       <button class="swatch" data-theme="stone" title="Stone" aria-label="Stone board"></button>
     </div>
     <h3>Game</h3>

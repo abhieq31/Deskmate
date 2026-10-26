@@ -14,7 +14,7 @@ const read = (p) => readFileSync(join(root, p), 'utf8');
 
 // dependency order: a module must come after everything it imports
 const MODULES = ['vendor/chess.js', 'vendor/secp256k1.js', 'js/game.js', 'js/remote.js', 'js/live.js',
-  'js/engine.js', 'js/analysis.js', 'js/board.js', 'js/storage.js', 'js/sound.js', 'js/confetti.js', 'js/app.js'];
+  'js/engine.js', 'js/analysis.js', 'js/office.js', 'js/board.js', 'js/storage.js', 'js/sound.js', 'js/confetti.js', 'js/app.js'];
 
 function wrapModule(path) {
   let src = read(path);

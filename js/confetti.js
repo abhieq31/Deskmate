@@ -1,5 +1,5 @@
 // Lightweight celebratory confetti burst on a full-screen canvas.
-const COLORS = ['#f0d9b5', '#b58863', '#9bc700', '#ffd166', '#ef476f', '#06d6a0', '#ffffff'];
+const COLORS = ['#e5383b', '#ff4d4f', '#a8323e', '#ffffff', '#f3eee7', '#1d1d1f'];
 
 export function confetti(count = 160) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
