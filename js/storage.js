@@ -1,6 +1,16 @@
 // localStorage persistence. Everything stays in this browser; nothing is sent anywhere.
-const KEYS = { current: 'obchess:current', archive: 'obchess:archive', settings: 'obchess:settings' };
+const KEYS = { current: 'deskmate:current', archive: 'deskmate:archive', settings: 'deskmate:settings' };
 const ARCHIVE_LIMIT = 300;
+
+// the app used to be called OBChess: carry its saved data over once
+try {
+  for (const [name, key] of Object.entries(KEYS)) {
+    const legacy = `obchess:${name}`;
+    const old = localStorage.getItem(legacy);
+    if (old !== null && localStorage.getItem(key) === null) localStorage.setItem(key, old);
+    if (old !== null) localStorage.removeItem(legacy);
+  }
+} catch { /* storage unavailable */ }
 
 const read = (key, fallback) => {
   try {

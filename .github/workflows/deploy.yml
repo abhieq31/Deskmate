@@ -41,7 +41,7 @@ jobs:
           node scripts/build-single.mjs
           mkdir _site
           cp -r index.html manifest.webmanifest sw.js css js vendor assets _site/
-          cp dist/obchess.html _site/obchess.html
+          cp dist/deskmate.html _site/deskmate.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

@@ -1,10 +1,10 @@
-// OBChess application controller: wires the game model, board, clocks, storage and UI.
+// Deskmate application controller: wires the game model, board, clocks, storage and UI.
 import { Game, TIME_CONTROLS, checkSquare, material } from './game.js';
 import { Board } from './board.js';
 import { storage } from './storage.js';
 import { sound } from './sound.js';
 import { confetti } from './confetti.js';
-import { encodeCode, decodeCode, compareToLocal } from './remote.js';
+import { encodeCode, decodeCode, compareToLocal, hasCode } from './remote.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -157,7 +157,7 @@ function renderStatus() {
   }
   $('#status-text').textContent = title;
   $('#status-sub').textContent = sub;
-  document.title = g.result ? `${g.winnerText()} · OBChess` : review ? 'Review · OBChess' : `${colorName(game.turn)} to move · OBChess`;
+  document.title = g.result ? `${g.winnerText()} · Deskmate` : review ? 'Review · Deskmate' : `${colorName(game.turn)} to move · Deskmate`;
 
   const banner = $('#review-banner');
   const showBanner = !!review || viewPly !== game.length;
@@ -446,7 +446,7 @@ $('#archive-clear').addEventListener('click', () => {
 $('#archive-export').addEventListener('click', () => {
   const list = storage.loadArchive();
   if (!list.length) return toast('Nothing to export');
-  saveFile(`obchess-games-${Date.now()}.pgn`, list.map((g) => new Game(g).pgn()).join('\n'));
+  saveFile(`deskmate-games-${Date.now()}.pgn`, list.map((g) => new Game(g).pgn()).join('\n'));
 });
 
 $('#form-import').addEventListener('submit', (e) => {
@@ -753,13 +753,13 @@ function applyFromHash() {
   history.replaceState(null, '', location.pathname + location.search);
   joinOrUpdate(text);
 }
-addEventListener('hashchange', () => { if (location.hash.includes('OBC1-')) applyFromHash(); });
+addEventListener('hashchange', () => { if (hasCode(location.hash)) applyFromHash(); });
 
 // paste a code anywhere on the page
 document.addEventListener('paste', (e) => {
   if (e.target.closest('input, textarea')) return;
   const text = e.clipboardData?.getData('text') || '';
-  if (!text.includes('OBC1-')) return;
+  if (!hasCode(text)) return;
   e.preventDefault();
   joinOrUpdate(text);
 });
@@ -812,7 +812,7 @@ applyPrefs();
 if (!/^https?:$/.test(location.protocol)) $('.offline-dl')?.remove();
 board.setOrientation(homeOrientation());
 render();
-if (location.hash.includes('OBC1-')) applyFromHash();
+if (hasCode(location.hash)) applyFromHash();
 if (paused) toast('Game restored — clocks paused');
 else if (game.length) toast('Game restored');
 

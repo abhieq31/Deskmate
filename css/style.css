@@ -1,5 +1,5 @@
 /* ==========================================================================
-   OBChess — styles. Dark, lichess-inspired UI. No build step, no framework.
+   Deskmate — styles. Dark, lichess-inspired UI. No build step, no framework.
    ========================================================================== */
 
 :root {
@@ -189,7 +189,12 @@ h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; colo
   position: absolute; inset: 0; border-radius: 6px; overflow: hidden;
   transform: rotate(var(--rot));
 }
-.board.flipping .board-inner { transition: transform 0.62s cubic-bezier(.65, 0, .35, 1); overflow: visible; }
+.board.flipping .board-inner {
+  transition: transform 0.62s cubic-bezier(.65, 0, .35, 1); overflow: visible;
+  /* a square turned 45° is 1.41x as wide: shrink to 0.7 while turning so it stays in its own column */
+  animation: flipShrink 0.62s linear;
+}
+@keyframes flipShrink { 30%, 70% { scale: 0.7; } }
 
 .squares { position: absolute; inset: 0; display: grid; grid-template: repeat(8, 1fr) / repeat(8, 1fr); }
 .sq { position: relative; }

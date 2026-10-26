@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for OBChess
+about: Suggest an idea for Deskmate
 labels: enhancement
 ---
 

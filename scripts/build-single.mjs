@@ -1,4 +1,4 @@
-// Builds dist/obchess.html: the whole app in ONE self-contained file that runs by
+// Builds dist/deskmate.html: the whole app in ONE self-contained file that runs by
 // double-click (file://) with no server and no network. Zero dependencies.
 //
 //   node scripts/build-single.mjs
@@ -66,5 +66,5 @@ swap('src="assets/icon.svg"', `src="${icon}"`);
 swap('<a class="brand" href="./"', '<a class="brand" href="#"');
 
 mkdirSync(join(root, 'dist'), { recursive: true });
-writeFileSync(join(root, 'dist/obchess.html'), html);
-console.log(`dist/obchess.html  ${(html.length / 1024).toFixed(0)} KB`);
+writeFileSync(join(root, 'dist/deskmate.html'), html);
+console.log(`dist/deskmate.html  ${(html.length / 1024).toFixed(0)} KB`);

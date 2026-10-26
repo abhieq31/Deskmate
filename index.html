@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>OBChess · Over-the-board chess</title>
+  <title>Deskmate · Chess with your colleagues</title>
   <meta name="description" content="Free, open-source over-the-board chess for two players on one screen. Auto-flipping board, legal move hints, clocks and local game history. No account, no tracking." />
   <meta name="theme-color" content="#161512" />
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
@@ -14,9 +14,9 @@
   <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
 
   <header class="topbar">
-    <a class="brand" href="./" aria-label="OBChess home">
+    <a class="brand" href="./" aria-label="Deskmate home">
       <img src="assets/icon.svg" alt="" width="30" height="30" />
-      <span>OB<b>Chess</b></span>
+      <span>Desk<b>mate</b></span>
     </a>
     <nav class="top-actions">
       <button class="btn ghost" id="btn-remote" title="Play a colleague on another laptop"><svg viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg><span>Play remotely</span></button>
@@ -72,7 +72,7 @@
         <button class="btn small" id="btn-import">Import PGN</button>
       </section>
 
-      <p class="side-foot muted">Games are stored only in this browser. <a href="https://github.com/abhieq31/OBChess" target="_blank" rel="noopener">Open source</a> — contributions welcome.<span class="offline-dl"> · <a href="obchess.html" download>Download the offline version</a> (one HTML file, no internet needed).</span></p>
+      <p class="side-foot muted">Games are stored only in this browser. <a href="https://github.com/abhieq31/OBChess" target="_blank" rel="noopener">Open source</a> — contributions welcome.<span class="offline-dl"> · <a href="deskmate.html" download>Download the offline version</a> (one HTML file, no internet needed).</span></p>
     </aside>
 
     <section class="board-area">
@@ -153,7 +153,7 @@
       <button class="btn icon-only ghost" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
     <ol class="steps">
-      <li><b>Make a move.</b> OBChess gives you a short game code.</li>
+      <li><b>Make a move.</b> Deskmate gives you a short game code.</li>
       <li><b>Send the code</b> through Teams, Slack, email or any chat.</li>
       <li><b>They paste it</b>, make their move and send a code back.</li>
     </ol>
@@ -179,7 +179,7 @@
       </div>
     </form>
     <form method="dialog" id="form-remote-join" data-pane="join" class="hidden">
-      <textarea id="remote-join-text" rows="4" spellcheck="false" placeholder="Paste the code your colleague sent (it starts with OBC1-)"></textarea>
+      <textarea id="remote-join-text" rows="4" spellcheck="false" placeholder="Paste the code your colleague sent (it starts with DM1-)"></textarea>
       <div class="modal-actions">
         <button type="button" class="btn" data-close>Cancel</button>
         <button type="submit" class="btn primary">Join game</button>

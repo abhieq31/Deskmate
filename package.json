@@ -1,5 +1,5 @@
 {
-  "name": "obchess",
+  "name": "deskmate",
   "version": "1.1.0",
   "description": "Open-source over-the-board chess: two players, one screen, auto-flipping board.",
   "private": true,

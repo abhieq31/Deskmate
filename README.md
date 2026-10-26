@@ -1,32 +1,32 @@
 <div align="center">
 
-<img src="assets/icon.svg" width="72" alt="OBChess logo" />
+<img src="assets/icon.svg" width="72" alt="Deskmate logo" />
 
-# OBChess
+# Deskmate
 
 **Chess with your colleagues: on one laptop, or across two.**
 Put the laptop between you and play, or send game codes through the chat tool you already use.
 
-[**▶ Play now**](https://abhieq31.github.io/OBChess/) · [**⬇ Offline version**](https://abhieq31.github.io/OBChess/obchess.html) · [Report a bug](https://github.com/abhieq31/OBChess/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/OBChess/issues/new?template=feature_request.md)
+[**▶ Play now**](https://abhieq31.github.io/OBChess/) · [**⬇ Offline version**](https://abhieq31.github.io/OBChess/deskmate.html) · [Report a bug](https://github.com/abhieq31/OBChess/issues/new?template=bug_report.md) · [Suggest a feature](https://github.com/abhieq31/OBChess/issues/new?template=feature_request.md)
 
-<img src="docs/screenshot.png" alt="OBChess game screen: board in the centre, players, clocks and move list on the right" width="860" />
+<img src="docs/screenshot.png" alt="Deskmate game screen: board in the centre, players, clocks and move list on the right" width="860" />
 
 </div>
 
 ## Why
 
-Chess sites get blocked on work networks. OBChess is a static page with no
+Chess sites get blocked on work networks. Deskmate is a static page with no
 server, no account, no tracking and no third-party requests. It runs from
 GitHub Pages or `localhost`, or as **one HTML file you open by
 double-click**. It also works with no network at all.
 
-Please use it in line with your employer's policies. OBChess keeps
+Please use it in line with your employer's policies. Deskmate keeps
 everything local; it is not designed to get around IT controls.
 
 ## Features
 
 - **Play a colleague on another laptop with game codes.** After your move
-  you get a short code like `OBC1-eyJp…`. Paste it into Teams, Slack, email
+  you get a short code like `DM1-eyJp…`. Paste it into Teams, Slack, email
   or any chat. Your colleague pastes it and moves, then sends a code back.
   There's no server and no account, and nothing to block apart from the chat
   you already use. ([how it works](#play-a-colleague-remotely))
@@ -61,7 +61,7 @@ everything local; it is not designed to get around IT controls.
 2. You get a **game code** (and a link). Send it to your colleague in any chat.
 3. They click the link, or press **Play remotely → I have a code** and paste
    it. They can also press **Ctrl+V** anywhere on the page.
-4. After each move OBChess copies the new code to your clipboard. Send it,
+4. After each move Deskmate copies the new code to your clipboard. Send it,
    and paste the reply when it comes back. Repeat until mate. 🙂
 
 Draw offers, resignations and the final result travel inside the codes too.
@@ -79,10 +79,10 @@ which is fine for a game at your desk.
 
 ## Offline version (one file)
 
-[`obchess.html`](https://abhieq31.github.io/OBChess/obchess.html) is the
+[`deskmate.html`](https://abhieq31.github.io/OBChess/deskmate.html) is the
 whole app (about 225 KB) in a single file. Save it anywhere and open it by
 double-click. It makes no network requests. Build it yourself with
-`npm run build` (writes `dist/obchess.html`).
+`npm run build` (writes `dist/deskmate.html`).
 
 ## Run it locally
 
@@ -123,7 +123,7 @@ js/storage.js         localStorage wrapper
 js/sound.js           Web Audio synthesized sounds
 js/confetti.js        celebration effect
 sw.js                 offline cache (service worker)
-scripts/build-single.mjs  bundles everything into dist/obchess.html (no deps)
+scripts/build-single.mjs  bundles everything into dist/deskmate.html (no deps)
 vendor/chess.js       chess rules engine (chess.js 1.4.0, BSD-2-Clause)
 tests/                node:test unit tests for js/game.js and js/remote.js
 ```
@@ -143,9 +143,9 @@ Contributions are welcome, from typo fixes to new features. See
 
 ## Credits & licenses
 
-- OBChess source code: [MIT](LICENSE)
+- Deskmate source code: [MIT](LICENSE)
 - Rules engine: [chess.js](https://github.com/jhlywa/chess.js) by Jeff Hlywa, BSD-2-Clause
 - Pieces: *cburnett* set by Colin M.L. Burnett, GPLv2+, via [lichess](https://github.com/lichess-org/lila). See [assets/pieces/cburnett/LICENSE.md](assets/pieces/cburnett/LICENSE.md)
 - Visual language inspired by [lichess.org](https://lichess.org). Please support them.
 
-Please use OBChess where your employer's policies allow it.
+Please use Deskmate where your employer's policies allow it.

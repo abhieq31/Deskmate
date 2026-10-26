@@ -1,6 +1,6 @@
 {
-  "name": "OBChess — over-the-board chess",
-  "short_name": "OBChess",
+  "name": "Deskmate — over-the-board chess",
+  "short_name": "Deskmate",
   "description": "Two players, one screen. Auto-flipping board, clocks and local game history.",
   "start_url": "./",
   "scope": "./",

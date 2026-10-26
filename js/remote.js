@@ -1,12 +1,18 @@
 // Game codes for remote play: the whole game is packed into a short text code
 // that players paste to each other in any chat tool. No server is involved.
 //
-// Code = "OBC1-" + base64url(JSON payload). Moves are stored as one byte each:
+// Code = "DM1-" + base64url(JSON payload); codes from before the rename start "OBC1-".
+// Moves are stored as one byte each:
 // the index of the move in the position's legal moves, sorted by from+to+promotion,
 // so the encoding doesn't depend on the move order of any particular chess library.
 import { Chess } from '../vendor/chess.js';
 
-export const CODE_PREFIX = 'OBC1-';
+export const CODE_PREFIX = 'DM1-';
+// any code this version can read: the current prefix plus the pre-rename one
+const CODE_RE = /\b(?:DM1|OBC1)-([A-Za-z0-9_-]+)/;
+
+/** True if the text contains something that looks like a game code. */
+export const hasCode = (text) => CODE_RE.test(String(text));
 
 const sortedMoves = (chess) =>
   chess.moves({ verbose: true })
@@ -60,11 +66,11 @@ export function encodeCode(g) {
 
 /** Extract and decode a code from arbitrary pasted text (a bare code, a chat message or a link). */
 export function decodeCode(text) {
-  const match = /OBC1-[A-Za-z0-9_-]+/.exec(String(text));
-  if (!match) throw new Error('No OBChess game code found.');
+  const match = CODE_RE.exec(String(text));
+  if (!match) throw new Error('No Deskmate game code found.');
   let p;
   try {
-    p = JSON.parse(new TextDecoder().decode(fromB64url(match[0].slice(CODE_PREFIX.length))));
+    p = JSON.parse(new TextDecoder().decode(fromB64url(match[1])));
   } catch {
     throw new Error('This code is damaged — ask your opponent to copy it again.');
   }

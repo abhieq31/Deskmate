@@ -200,7 +200,7 @@ export class Game {
     // chess.js's PGN parser does not accept escaped quotes, so swap them for apostrophes
     const esc = (s) => String(s).replace(/[\\"]/g, "'");
     const headers = [
-      ['Event', this.remote ? 'Casual remote game' : 'Casual over-the-board game'], ['Site', 'OBChess'], ['Date', date],
+      ['Event', this.remote ? 'Casual remote game' : 'Casual over-the-board game'], ['Site', 'Deskmate'], ['Date', date],
       ['White', this.white], ['Black', this.black], ['Result', this.result || '*'],
       ['TimeControl', tc.base ? `${tc.base * 60}+${tc.inc}` : '-'],
     ];

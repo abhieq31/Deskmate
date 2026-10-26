@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeCode, decodeCode, packMoves, unpackMoves, compareToLocal } from '../js/remote.js';
+import { encodeCode, decodeCode, packMoves, unpackMoves, compareToLocal, hasCode } from '../js/remote.js';
 
 const opera = ['e4', 'e5', 'Nf3', 'd6', 'd4', 'Bg4', 'dxe5', 'Bxf3', 'Qxf3', 'dxe5', 'Bc4', 'Nf6',
   'Qb3', 'Qe7', 'Nc3', 'c6', 'Bg5', 'b5', 'Nxb5', 'cxb5', 'Bxb5+', 'Nbd7', 'O-O-O', 'Rd8',
@@ -23,8 +23,10 @@ test('code round trip with unicode names, result and draw offer', () => {
     id: 'abc123', white: 'Ananya ♛', black: 'Bo "Bishop"', sender: 'b',
     moves: ['d4', 'd5'], offer: 'b',
   });
-  assert.match(code, /^OBC1-[A-Za-z0-9_-]+$/);
-  const d = decodeCode(`Your move! ${code} (paste into OBChess)`);
+  assert.match(code, /^DM1-[A-Za-z0-9_-]+$/);
+  assert.ok(hasCode(`#${code}`));
+  assert.ok(!hasCode('nothing here'));
+  const d = decodeCode(`Your move! ${code} (paste into Deskmate)`);
   assert.equal(d.id, 'abc123');
   assert.equal(d.white, 'Ananya ♛');
   assert.equal(d.black, 'Bo "Bishop"');
@@ -38,10 +40,18 @@ test('code round trip with unicode names, result and draw offer', () => {
   assert.equal(done.termination, 'Checkmate');
 });
 
+test('codes from before the rename (OBC1-) still decode', () => {
+  const legacy = 'OBC1-' + encodeCode({ id: 'old', white: 'A', black: 'B', sender: 'w', moves: ['e4', 'c5'] }).slice('DM1-'.length);
+  assert.ok(hasCode(legacy));
+  const d = decodeCode(legacy);
+  assert.equal(d.id, 'old');
+  assert.deepEqual(d.moves, ['e4', 'c5']);
+});
+
 test('rejects junk and damaged codes', () => {
-  assert.throws(() => decodeCode('hello'), /No OBChess game code/);
-  assert.throws(() => decodeCode('OBC1-!!!!'), /No OBChess|damaged/);
-  assert.throws(() => decodeCode('OBC1-AAAA'), /damaged|not a valid/);
+  assert.throws(() => decodeCode('hello'), /No Deskmate game code/);
+  assert.throws(() => decodeCode('DM1-!!!!'), /No Deskmate|damaged/);
+  assert.throws(() => decodeCode('DM1-AAAA'), /damaged|not a valid/);
   const code = encodeCode({ id: 'x', white: 'A', black: 'B', sender: 'w', moves: ['e4'] });
   assert.throws(() => decodeCode(code.slice(0, -6)), /damaged|not a valid|illegal/);
 });
