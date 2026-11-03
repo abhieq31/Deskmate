@@ -35,9 +35,7 @@ Please use it in line with your employer's policies.
 - **The office table.** The home page keeps a league table of everyone who
   has played on that laptop: played, won, drawn, lost, points. Settle who
   is actually best on the floor.
-- **Clocks named for the break you have.** Lift ride (1+0), Coffee break
-  (3+2), Tea break (5+0), Lunch (10+5), Long lunch (15+10), Friday 5 pm
-  (30+0) and more.
+- **Ten clocks**, from 1+0 to 30+0, or none.
 - **A home page** with Play a colleague, Join with a code, Play on this
   laptop, Resume, your recent games and the office table. The logo always
   brings you back to it.

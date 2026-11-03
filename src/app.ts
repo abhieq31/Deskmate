@@ -171,7 +171,6 @@ function renderMoves() {
     const m = marks[i]?.kind;
     parts.push(`<button class="mv${viewPly === i + 1 ? ' active' : ''}${m ? ` ${m}` : ''}" data-ply="${i + 1}">${san(p.san)}${m ? `<span class="mark">${MARKS[m]}</span>` : ''}</button>`);
   });
-  if (!g.plies.length) parts.push('<span class="empty">No moves yet</span>');
   const list = $('#moves');
   list.innerHTML = parts.join('');
   // keep the current move in view by scrolling the strip itself (never the page)
@@ -185,22 +184,18 @@ function renderMoves() {
 
   renderAnMoves();
   renderOpening(g);
-  $('#tc-label').textContent = g.tcInfo.base ? g.tcInfo.label.replace(/ /g, '') : '';
 
   const rl = $('#result-line');
   rl.classList.toggle('hidden', !g.result);
-  if (g.result) rl.innerHTML = `<strong>${g.result.replace(/1\/2/g, '½')}</strong><span>${g.termination} · ${g.winnerText()}</span>`;
+  if (g.result) rl.innerHTML = `<strong>${g.result.replace(/1\/2/g, '½')}</strong><span>${g.result === '1/2-1/2' ? g.termination : `${g.termination} · ${g.winnerText()}`}</span>`;
 }
 
 // SAN with figurine piece letters
 const FIG = { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘' };
 const san = (s: string) => (settings.notation === 'letter' ? s : s.replace(/[KQRBN]/g, (c) => `<span class="fig">${FIG[c]}</span>`));
 
-const tcText = (tc) => (tc.base ? `${tc.label} · ${tc.kind}` : 'Unlimited');
-
 function renderStatus() {
   const g = active();
-  $('#tc-badge').textContent = tcText(g.tcInfo);
   document.title = g.result ? `${g.winnerText()} · Deskmate` : review ? 'Review · Deskmate' : `${colorName(game.turn)} to move · Deskmate`;
 
   const banner = $('#review-banner');
@@ -219,7 +214,7 @@ function renderControls() {
   for (const b of [$('#nav-first'), $('#nav-prev'), $('[data-nav="prev"]'), $('#focus-prev')]) b.disabled = viewPly === 0;
   for (const b of [$('#nav-last'), $('#nav-next'), $('[data-nav="next"]'), $('#focus-next')]) b.disabled = viewPly === g.length;
   const liveGame = !review;
-  $('#btn-undo').disabled = !liveGame || game.length === 0 || !!game.remote;
+  $('#btn-undo').classList.toggle('hidden', !liveGame || game.length === 0 || !!game.remote || game.over);
   const noActions = !liveGame || game.over || (game.remote ? !bothSeated() : game.length === 0);
   const theyOffer = !!game.remote && !game.over && game.remote.offer === other(game.remote.me);
   for (const b of $$('.act-draw')) {
@@ -905,7 +900,7 @@ function renderAnMoves() {
     rows.push(`<span class="an-num">${i / 2 + 1}.</span>${cell(i)}${cell(i + 1)}`);
   }
   const list = $('#an-moves');
-  list.innerHTML = rows.join('') || '<span class="an-empty">No moves yet</span>';
+  list.innerHTML = rows.join('');
   // keep the current move in view by scrolling the list itself (never the page)
   const act = list.querySelector('.active');
   if (act) {
@@ -992,7 +987,7 @@ function openNewGame(prefill?: { white: string; black: string; tc: string }) {
   grid.innerHTML = TIME_CONTROLS.map((t) => `
     <label class="tc${t.id === p.tc ? ' checked' : ''}">
       <input type="radio" name="tc" value="${t.id}"${t.id === p.tc ? ' checked' : ''} />
-      <strong>${t.base ? t.label : '∞'}</strong><small>${t.moment}</small>
+      <strong>${t.base ? t.label : '∞'}</strong>
     </label>`).join('');
   openDialog('#dlg-new');
 }
@@ -1017,7 +1012,7 @@ function renderArchive() {
   const list = storage.loadArchive();
   const ul = $('#archive-list');
   if (!list.length) {
-    ul.innerHTML = '<li class="empty">No saved games yet. Finished games appear here automatically.</li>';
+    ul.innerHTML = '<li class="empty">No saved games yet</li>';
     return;
   }
   ul.innerHTML = list.map((g) => {
@@ -1126,7 +1121,6 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) requ
 
 $('#btn-new').addEventListener('click', () => openNewGame());
 $('#btn-archive').addEventListener('click', () => { renderArchive(); openDialog('#dlg-archive'); });
-$('#btn-help').addEventListener('click', () => openDialog('#dlg-help'));
 $('#btn-settings').addEventListener('click', openSettings);
 $('#btn-analyse').addEventListener('click', () => startAnalysis());
 $$('.act-analyse').forEach((b) => b.addEventListener('click', () => startAnalysis()));
@@ -1134,8 +1128,8 @@ $('#over-analyse').addEventListener('click', () => { $('#dlg-over').close(); sta
 $('[data-nav="prev"]').addEventListener('click', () => goto(viewPly - 1));
 $('[data-nav="next"]').addEventListener('click', () => goto(viewPly + 1));
 $$('.act-pause').forEach((b) => b.addEventListener('click', togglePause));
-$('#btn-flip2').addEventListener('click', () => $('#btn-flip').click());
-$('#btn-flip3').addEventListener('click', () => $('#btn-flip').click());
+$('#btn-flip2').addEventListener('click', flipBoard);
+$('#btn-flip3').addEventListener('click', flipBoard);
 $('#btn-sound').addEventListener('click', () => {
   settings.sound = !settings.sound;
   storage.saveSettings(settings);
@@ -1178,7 +1172,7 @@ $$('.act-rematch').forEach((b) => b.addEventListener('click', () => $('#over-rem
   handle.addEventListener('pointercancel', end);
   handle.addEventListener('dblclick', () => { settings.boardSize = 0; storage.saveSettings(settings); applyPrefs(); });
 }
-$('#btn-flip').addEventListener('click', () => { clearTimeout(flipTimer); board.flip(); renderPlayers(); renderAnalysis(); });
+function flipBoard() { clearTimeout(flipTimer); board.flip(); renderPlayers(); renderAnalysis(); }
 $('#btn-undo').addEventListener('click', takeback);
 
 $$('.act-draw').forEach((b) => b.addEventListener('click', () => {
@@ -1186,8 +1180,6 @@ $$('.act-draw').forEach((b) => b.addEventListener('click', () => {
   const opp = r && (game.nameOf(other(r.me)) || 'your colleague');
   const theyOffer = r && r.offer === other(r.me);
   $('#draw-title').textContent = !r ? 'Agree to a draw?' : theyOffer ? `Accept ${opp}'s draw offer?` : `Offer ${opp} a draw?`;
-  $('#draw-sub').textContent = !r ? 'Both players should agree before confirming.'
-    : theyOffer ? 'The game ends as a draw.' : 'They can accept it, or decline by making a move.';
   $('#draw-confirm').textContent = r && !theyOffer ? 'Offer draw' : 'Draw';
   openDialog('#dlg-draw');
 }));
@@ -1238,11 +1230,9 @@ $('#over-rematch').addEventListener('click', () => {
   }
   const ai = game.ai && { color: other(game.ai.color), level: game.ai.level };
   startGame({ white: game.black, black: game.white, tc: game.tc, ai });
-  toast('Colours swapped. Good luck!');
+  toast('Colours swapped');
 });
 $('#over-new').addEventListener('click', () => { $('#dlg-over').close(); game.ai ? openComputer() : openNewGame(); });
-$('#over-review').addEventListener('click', () => { $('#dlg-over').close(); goto(0); toast('Use ← → to step through the game'); });
-$('#over-pgn').addEventListener('click', () => download(game));
 
 $('#nav-first').addEventListener('click', () => goto(0));
 $('#focus-prev').addEventListener('click', () => goto(viewPly - 1));
@@ -1268,14 +1258,13 @@ document.addEventListener('keydown', (e) => {
   else if (k === 'ArrowRight') goto(viewPly + 1);
   else if (k === 'ArrowUp') goto(0);
   else if (k === 'ArrowDown') goto(active().length);
-  else if (k === 'f' || k === 'F') $('#btn-flip').click();
+  else if (k === 'f' || k === 'F') flipBoard();
   else if (k === ' ') togglePause();
   else if ((e.ctrlKey || e.metaKey) && k === 'z') takeback();
   else if (k === 'n' || k === 'N') openNewGame();
   else if (k === 'h' || k === 'H') $('#btn-archive').click();
   else if (k === 'm' || k === 'M') setSidebar(!$('#sidebar').classList.contains('open'));
   else if (k === 'z' || k === 'Z') toggleFocus();
-  else if (k === '?') openDialog('#dlg-help');
   else return;
   e.preventDefault();
 });
@@ -1391,18 +1380,18 @@ function renderHome() {
   const resume = inProgress();
   $('#home-resume').classList.toggle('hidden', !resume);
   if (resume) {
-    $('#home-resume-sub').textContent = `${game.white || 'White'} vs ${game.black || 'Black'}` +
-      (game.remote ? ` · live, code ${formatRoomCode(game.remote.room)}` : ` · ${Math.ceil(game.length / 2)} moves`);
+    $('#home-resume-label').textContent = `Resume ${game.white || 'White'} vs ${game.black || 'Black'}`;
   }
   const list = storage.loadArchive().slice(0, 5);
-  $('#home-games').innerHTML = list.length ? list.map((g) => {
+  $('#home-recent').classList.toggle('hidden', !list.length);
+  $('#home-games').innerHTML = list.map((g) => {
     const res = g.result ? g.result.replace(/1\/2/g, '½') : 'unfinished';
     const cls = g.result === '1-0' ? 'w' : g.result === '0-1' ? 'b' : g.result ? 'd' : 'u';
     const d = new Date(g.endedAt || g.startedAt);
     return `<li data-id="${g.id}"><span class="res ${cls}">${res}</span>
       <span class="who">${esc(g.white || '?')} vs ${esc(g.black || '?')}<small>${esc(g.termination || 'In progress')} · ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</small></span>
       <span class="acts"><button class="btn small" data-act="review">Review</button>${g.result ? '<button class="btn small" data-act="analyse">Analyse</button>' : ''}</span></li>`;
-  }).join('') : '<li class="empty">Your finished games will appear here.</li>';
+  }).join('');
   renderOffice();
 }
 

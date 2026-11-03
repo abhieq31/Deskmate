@@ -84,7 +84,6 @@ body[data-view="home"] #btn-focus { display: none; }
   padding: 0 14px; height: 42px; border-bottom: 1px solid var(--line);
 }
 .opening { color: var(--text); font-size: 0.9rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tc-label { color: var(--muted); font: 600 0.8rem var(--mono); flex: none; }
 .panel-nav { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--line); flex: none; }
 .panel-actions { display: flex; align-items: center; gap: 4px; padding: 6px 8px 8px; flex: none; min-height: 50px; }
 .panel-actions .flip-btn { margin-left: auto; color: var(--muted); }
@@ -99,7 +98,7 @@ body[data-view="home"] #btn-focus { display: none; }
 .txt-btn.act-resign:hover:not(:disabled) { color: #f08c8c; }
 .txt-btn.offer, .sq-btn.offer { color: var(--gold); animation: offerPulse 1.4s ease-in-out infinite; }
 .panel-actions .act-analyse { flex: 1; }
-.panel-actions .txt-btn { padding: 0 8px; gap: 6px; font-size: 0.9rem; }
+.panel-actions .txt-btn, .panel-actions .btn { padding: 0 8px; gap: 6px; font-size: 0.9rem; white-space: nowrap; }
 .panel-actions .flip-btn { width: 32px; }
 .icon-btn {
   display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 6px; flex: none;
@@ -124,7 +123,6 @@ body[data-view="home"] #btn-focus { display: none; }
 }
 .ml-moves::-webkit-scrollbar { display: none; }
 .ml-num { color: var(--muted); font-weight: 600; font-size: 0.92rem; margin: 0 2px 0 6px; }
-.ml-moves .empty { color: var(--muted); font-size: 0.9rem; padding: 0 4px; }
 .mv {
   border: 0; background: transparent; color: var(--text-strong); cursor: pointer; flex: none;
   padding: 4px 6px; border-radius: 4px; font: 600 0.98rem/1.2 var(--font); transition: background 0.12s;
@@ -174,7 +172,6 @@ body[data-view="home"] #btn-focus { display: none; }
   align-content: start; gap: 1px 4px; padding: 6px 10px; scrollbar-width: thin;
 }
 .an-moves > :nth-child(6n + 1), .an-moves > :nth-child(6n + 2), .an-moves > :nth-child(6n + 3) { background: rgba(255, 255, 255, 0.025); }
-.an-empty { grid-column: 1 / -1; color: var(--muted); font-size: 0.9rem; padding: 8px 4px; }
 .an-num { color: var(--muted); font-size: 0.85rem; display: flex; align-items: center; padding-left: 4px; }
 .an-moves .mv { text-align: left; }
 .tk { border: 0; background: none; padding: 1px 3px; border-radius: 3px; font: inherit; color: var(--muted); cursor: pointer; }

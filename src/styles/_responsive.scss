@@ -54,7 +54,7 @@
   .home-games li { grid-template-columns: 54px 1fr; }
   .home-games .acts { grid-column: 1 / -1; }
   .tc-grid { grid-template-columns: repeat(3, 1fr); }
-  .names, .names.two { grid-template-columns: 1fr; }
+  .names { grid-template-columns: 1fr; }
   .names #new-swap { justify-self: center; transform: rotate(90deg); }
   .archive li { grid-template-columns: 60px 1fr; }
   .archive .acts { grid-column: 1 / -1; justify-content: flex-end; }
@@ -75,12 +75,3 @@
 .sq-glyph.k-mistake { background: #e58f2a; }
 .sq-glyph.k-inaccuracy { background: #d9a714; }
 
-/* play the computer: three levels */
-.levels { display: grid; gap: 6px; }
-.levels label { display: block; cursor: pointer; }
-.levels input { position: absolute; opacity: 0; pointer-events: none; }
-.levels span { display: flex; align-items: baseline; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); }
-.levels b { color: var(--text-strong); min-width: 4.5em; }
-.levels small { color: var(--muted); }
-.levels input:checked + span { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-.levels input:focus-visible + span { outline: 2px solid var(--blue); }

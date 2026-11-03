@@ -502,12 +502,6 @@ body[data-view=home] #btn-focus {
   text-overflow: ellipsis;
 }
 
-.tc-label {
-  color: var(--muted);
-  font: 600 0.8rem var(--mono);
-  flex: none;
-}
-
 .panel-nav {
   display: flex;
   gap: 6px;
@@ -584,10 +578,11 @@ body[data-view=home] #btn-focus {
   flex: 1;
 }
 
-.panel-actions .txt-btn {
+.panel-actions .txt-btn, .panel-actions .btn {
   padding: 0 8px;
   gap: 6px;
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .panel-actions .flip-btn {
@@ -689,12 +684,6 @@ body[data-view=home] #btn-focus {
   font-weight: 600;
   font-size: 0.92rem;
   margin: 0 2px 0 6px;
-}
-
-.ml-moves .empty {
-  color: var(--muted);
-  font-size: 0.9rem;
-  padding: 0 4px;
 }
 
 .mv {
@@ -930,13 +919,6 @@ body[data-view=home] #btn-focus {
 
 .an-moves > :nth-child(6n+1), .an-moves > :nth-child(6n+2), .an-moves > :nth-child(6n+3) {
   background: rgba(255, 255, 255, 0.025);
-}
-
-.an-empty {
-  grid-column: 1/-1;
-  color: var(--muted);
-  font-size: 0.9rem;
-  padding: 8px 4px;
 }
 
 .an-num {
@@ -1204,12 +1186,6 @@ body[data-view=home] .game, body[data-view=game] .home {
   color: var(--accent-2);
 }
 
-.home-hero p {
-  margin: 4px 0 0;
-  color: var(--muted);
-  font-size: 1.05rem;
-}
-
 .home-play {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -1257,19 +1233,12 @@ body[data-view=home] .game, body[data-view=game] .home {
   font-size: 1.15rem;
 }
 
-.home-tile small {
-  display: block;
-  color: var(--muted);
-  font-size: 0.88rem;
-  margin-top: 2px;
-}
-
 .home-tile.primary {
   background: linear-gradient(180deg, #e5383b, #c1121f);
   box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.2);
 }
 
-.home-tile.primary svg, .home-tile.primary small {
+.home-tile.primary svg {
   color: rgba(255, 255, 255, 0.9);
 }
 
@@ -1331,13 +1300,6 @@ body[data-view=home] .game, body[data-view=game] .home {
 .home-games .acts {
   display: flex;
   gap: 6px;
-}
-
-.home-games .empty {
-  display: block;
-  color: var(--muted);
-  padding: 10px 0;
-  font-style: italic;
 }
 
 .office {
@@ -1578,22 +1540,6 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .panel {
   gap: 2px;
 }
 
-.tc-badge {
-  padding: 3px 10px;
-  border-radius: 99px;
-  background: rgba(229, 56, 59, 0.16);
-  color: var(--accent-2);
-  font-weight: 600;
-  font-size: 0.78rem;
-  white-space: nowrap;
-  align-self: center;
-  justify-self: start;
-}
-
-.tc-badge:empty {
-  display: none;
-}
-
 .switch {
   display: flex;
   align-items: center;
@@ -1742,12 +1688,6 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .panel {
 .tools .btn svg {
   width: 17px;
   height: 17px;
-}
-
-.side-foot {
-  font-size: 0.8rem;
-  padding: 14px 0 0;
-  margin: 0;
 }
 
 /* ---------- board ---------- */
@@ -2387,8 +2327,20 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .panel {
 .names {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
-  align-items: end;
+  align-items: center;
   gap: 10px;
+  margin-bottom: 16px;
+}
+
+.names .field {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.names .field .pc {
+  width: 26px;
+  height: 26px;
 }
 
 .field {
@@ -2405,7 +2357,7 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .panel {
   gap: 6px;
 }
 
-.field input, textarea {
+.field input, .name-input, .code-input, textarea {
   width: 100%;
   padding: 10px 12px;
   border-radius: 8px;
@@ -2416,7 +2368,7 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .panel {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.field input:focus, textarea:focus {
+.field input:focus, .name-input:focus, .code-input:focus, textarea:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(229, 56, 59, 0.25);
@@ -2470,11 +2422,6 @@ textarea {
   color: var(--text-strong);
   font-size: 1.05rem;
   white-space: nowrap;
-}
-
-.tc small {
-  color: var(--muted);
-  font-size: 0.72rem;
 }
 
 .tc:hover {
@@ -2603,54 +2550,7 @@ textarea {
   font-size: 0.72rem;
 }
 
-.help {
-  padding-left: 18px;
-  margin: 0 0 16px;
-}
-
-.help li {
-  margin-bottom: 8px;
-}
-
-.keys {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
-
-.keys td {
-  padding: 6px 4px;
-  border-top: 1px solid var(--line);
-}
-
-.keys td:first-child {
-  width: 42%;
-  white-space: nowrap;
-}
-
-kbd {
-  display: inline-block;
-  min-width: 1.8em;
-  padding: 2px 6px;
-  border-radius: 5px;
-  text-align: center;
-  background: #1c1b18;
-  border: 1px solid #4a4742;
-  border-bottom-width: 3px;
-  font: 600 0.8rem var(--mono);
-  color: var(--text-strong);
-}
-
 /* play a colleague */
-.tiny {
-  font-size: 0.8rem;
-  margin: 8px 0 0;
-}
-
-.center {
-  text-align: center;
-}
-
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -2688,8 +2588,13 @@ kbd {
   outline: 2px solid var(--blue);
 }
 
-#dlg-remote .field {
-  margin-bottom: 12px;
+#form-ai, #form-remote-create, #form-remote-join {
+  display: grid;
+  gap: 14px;
+}
+
+#form-ai .modal-actions, #dlg-remote .modal-actions {
+  margin-top: 8px;
 }
 
 .code-input {
@@ -2702,10 +2607,6 @@ kbd {
 .wide-btn {
   flex: 1;
   min-height: 44px;
-}
-
-.invite p {
-  margin: 0 0 14px;
 }
 
 .room-code {
@@ -2782,10 +2683,6 @@ kbd {
   background: var(--panel-2);
   color: var(--text-strong);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-}
-
-.names.two {
-  grid-template-columns: 1fr 1fr;
 }
 
 .color-pick {
@@ -2950,7 +2847,7 @@ kbd {
   cursor: default;
 }
 
-.set-row:last-of-type {
+.set-row:last-child {
   border-bottom: 0;
 }
 
@@ -3187,7 +3084,7 @@ kbd {
   .tc-grid {
     grid-template-columns: repeat(3, 1fr);
   }
-  .names, .names.two {
+  .names {
     grid-template-columns: 1fr;
   }
   .names #new-swap {
@@ -3239,51 +3136,6 @@ kbd {
   background: #d9a714;
 }
 
-/* play the computer: three levels */
-.levels {
-  display: grid;
-  gap: 6px;
-}
-
-.levels label {
-  display: block;
-  cursor: pointer;
-}
-
-.levels input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.levels span {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--panel-2);
-}
-
-.levels b {
-  color: var(--text-strong);
-  min-width: 4.5em;
-}
-
-.levels small {
-  color: var(--muted);
-}
-
-.levels input:checked + span {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-.levels input:focus-visible + span {
-  outline: 2px solid var(--blue);
-}
-
 </style>
 </head>
 <body>
@@ -3304,34 +3156,31 @@ kbd {
     <div class="home-inner">
       <header class="home-hero">
         <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjZmY1YTVmIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjYjMxMjFmIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHJ4PSIxNCIgZmlsbD0iIzEyMTIxMyIvPgogIDxwYXRoIGQ9Ik04IDhoMTJ2MTJIOHpNMzIgOGgxMnYxMkgzMnpNMjAgMjBoMTJ2MTJIMjB6TTQ0IDIwaDEydjEySDQ0ek04IDMyaDEydjEySDh6TTMyIDMyaDEydjEySDMyek0yMCA0NGgxMnYxMkgyMHpNNDQgNDRoMTJ2MTJINDR6IiBmaWxsPSIjZmZmZmZmIiBvcGFjaXR5PSIuMDYiLz4KICA8cGF0aCBmaWxsPSJ1cmwoI2cpIiBkPSJNMjcgMTNjOSAuOCAxNSA3IDE1IDE5LjVWNTFIMTljMC04LjIgOC45LTcuNCA3LjItMTguNi0zIDIuMy00LjYgMi44LTcuNCA0LjYtMS41IDEtMi45LS40LTIuNS0yIDEuOC0zLjIgMi40LTMuNiAzLjQtNy40LjktMy4zIDMuOC02LjUgNS42LTguNEwyNyAxM3oiLz4KICA8Y2lyY2xlIGN4PSIyNSIgY3k9IjIzLjUiIHI9IjEuOCIgZmlsbD0iIzEyMTIxMyIvPgogIDxyZWN0IHg9IjE3IiB5PSI0OSIgd2lkdGg9IjI3IiBoZWlnaHQ9IjUiIHJ4PSIyLjUiIGZpbGw9InVybCgjZykiLz4KPC9zdmc+Cg==" alt="" width="64" height="64" />
-        <div>
-          <h1>Desk<b>mate</b></h1>
-          <p>Chess with the person at the next desk. No account, no ads, nothing to install.</p>
-        </div>
+        <h1>Desk<b>mate</b></h1>
       </header>
       <div class="home-play">
         <button class="home-tile primary" id="home-colleague">
           <svg viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>
-          <span><strong>Play a colleague</strong><small>Each on your own laptop, one 6-letter code</small></span>
+          <span><strong>Play a colleague</strong></span>
         </button>
         <button class="home-tile" id="home-join">
           <svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
-          <span><strong>Join with a code</strong><small>Your colleague sent you a code</small></span>
+          <span><strong>Join with a code</strong></span>
         </button>
         <button class="home-tile" id="home-local">
           <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
-          <span><strong>Play on this laptop</strong><small>Pass and play; the board turns for each player</small></span>
+          <span><strong>Play on this laptop</strong></span>
         </button>
         <button class="home-tile" id="home-ai">
           <svg viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="12" rx="3"/><path d="M12 7V4M9 12h.01M15 12h.01M9.5 16h5"/></svg>
-          <span><strong>Play the computer</strong><small>Alone at your desk? Easy, medium or hard</small></span>
+          <span><strong>Play the computer</strong></span>
         </button>
         <button class="home-tile hidden" id="home-resume">
           <svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>
-          <span><strong>Resume game</strong><small id="home-resume-sub"></small></span>
+          <span><strong id="home-resume-label">Resume game</strong></span>
         </button>
       </div>
-      <section class="home-recent">
+      <section class="home-recent hidden" id="home-recent">
         <div class="home-recent-head">
           <h2>Recent games</h2>
           <button class="link-btn" id="home-all">All saved games</button>
@@ -3339,11 +3188,10 @@ kbd {
         <ul class="home-games" id="home-games"></ul>
       </section>
       <section class="home-recent hidden" id="home-office">
-        <div class="home-recent-head"><h2>Office table</h2><small class="muted">from the games played on this laptop</small></div>
+        <div class="home-recent-head"><h2>Office table</h2></div>
         <table class="office"><thead><tr><th></th><th class="nm">Player</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th></tr></thead><tbody id="office-table"></tbody></table>
       </section>
       <footer class="home-foot">
-        <button class="link-btn" id="btn-help">How to play</button>
         <a class="link-btn" href="https://github.com/abhieq31/Deskmate" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" class="fill"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .8.1-.7.4-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .6 1.4.2 2.4.1 2.7a3.9 3.9 0 0 1 1 2.7c0 3.9-2.3 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg> Source code</a>
       </footer>
     </div>
@@ -3420,7 +3268,7 @@ kbd {
 
     <!-- right panel, top and bottom level with the player bars -->
     <aside class="panel" id="panel" aria-label="Game">
-      <div class="panel-head"><span class="opening" id="opening">Starting position</span><span class="tc-label" id="tc-label"></span></div>
+      <div class="panel-head"><span class="opening" id="opening">Starting position</span></div>
       <div class="analysis hidden" id="analysis">
         <p class="an-verdict" id="an-verdict"></p>
         <div class="an-head"><span class="an-eval" id="an-eval">0.0</span><span class="an-line" id="an-line"></span></div>
@@ -3439,10 +3287,11 @@ kbd {
       <div class="panel-actions">
         <button class="txt-btn act-draw"><span class="half">½</span><span>Draw</span></button>
         <button class="txt-btn act-resign"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg><span>Resign</span></button>
+        <button class="txt-btn hidden" id="btn-undo" title="Takeback (Ctrl+Z)"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span>Takeback</span></button>
         <button class="txt-btn act-pause hidden"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
         <button class="txt-btn act-newgame hidden"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>New game</span></button>
         <button class="txt-btn act-rematch hidden"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg><span>Rematch</span></button>
-        <button class="btn primary small act-analyse hidden"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8M7.5 12l2-2.5 2 1.5 2-3"/></svg>Analyse game</button>
+        <button class="btn primary small act-analyse hidden"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8M7.5 12l2-2.5 2 1.5 2-3"/></svg>Analyse</button>
         <button class="icon-btn flip-btn" id="btn-flip2" title="Flip board (F)" aria-label="Flip board"><svg viewBox="0 0 24 24"><path d="M7 4v13M3.5 13.5 7 17l3.5-3.5M17 20V7M13.5 10.5 17 7l3.5 3.5"/></svg></button>
       </div>
     </aside>
@@ -3462,33 +3311,29 @@ kbd {
           <button type="button" class="swatch" data-theme="stone" title="Stone" aria-label="Stone board"></button>
           <button type="button" class="swatch" data-theme="green" title="Green" aria-label="Green board"></button>
         </div></div>
-        <label class="set-row"><span>Show board coordinates</span><select data-set="coords" data-kind="bool"><option value="true">Inside</option><option value="false">None</option></select></label>
-        <label class="set-row"><span>Piece notation</span><select data-set="notation"><option value="figurine">Figurine</option><option value="letter">Letter</option></select></label>
-        <label class="set-row"><span>Piece animations</span><select data-set="animation"><option value="none">None</option><option value="fast">Fast</option><option value="medium">Medium (default)</option><option value="slow">Slow</option></select></label>
-        <label class="set-row"><span>Win celebration</span><select data-set="celebration"><option value="confetti">Confetti</option><option value="none">None</option></select></label>
-        <label class="set-row"><span>Move method</span><select data-set="moveMethod"><option value="both">Drag or click</option><option value="drag">Drag only</option><option value="click">Click only</option></select></label>
+        <label class="set-row switch"><span>Coordinates</span><input type="checkbox" data-set="coords" /><span class="track"></span></label>
+        <label class="set-row"><span>Notation</span><select data-set="notation"><option value="figurine">Figurine</option><option value="letter">Letter</option></select></label>
+        <label class="set-row"><span>Animation</span><select data-set="animation"><option value="none">None</option><option value="fast">Fast</option><option value="medium">Medium</option><option value="slow">Slow</option></select></label>
+        <label class="set-row"><span>Celebration</span><select data-set="celebration"><option value="confetti">Confetti</option><option value="none">None</option></select></label>
+        <label class="set-row"><span>Move pieces by</span><select data-set="moveMethod"><option value="both">Drag or click</option><option value="drag">Drag</option><option value="click">Click</option></select></label>
         <label class="set-row switch"><span>Highlight last move</span><input type="checkbox" data-set="highlightLast" /><span class="track"></span></label>
-        <label class="set-row switch"><span>Play sounds</span><input type="checkbox" data-set="sound" /><span class="track"></span></label>
-        <label class="set-row switch"><span>Show legal moves</span><input type="checkbox" data-set="showDests" /><span class="track"></span></label>
+        <label class="set-row switch"><span>Sounds</span><input type="checkbox" data-set="sound" /><span class="track"></span></label>
+        <label class="set-row switch"><span>Legal moves</span><input type="checkbox" data-set="showDests" /><span class="track"></span></label>
         <label class="set-row switch"><span>White always on bottom</span><input type="checkbox" data-set="autoFlip" data-invert /><span class="track"></span></label>
       </section>
       <section class="set-pane hidden" data-pane="play">
-        <label class="set-row switch"><span>Always promote to queen</span><input type="checkbox" data-set="autoQueen" /><span class="track"></span></label>
-        <label class="set-row switch"><span>Winning chances by the board</span><input type="checkbox" data-set="winBar" /><span class="track"></span></label>
-        <label class="set-row switch"><span>Focus mode during games</span><input type="checkbox" data-set="focus" /><span class="track"></span></label>
+        <label class="set-row switch"><span>Auto-queen</span><input type="checkbox" data-set="autoQueen" /><span class="track"></span></label>
+        <label class="set-row switch"><span>Win chances</span><input type="checkbox" data-set="winBar" /><span class="track"></span></label>
+        <label class="set-row switch"><span>Focus mode</span><input type="checkbox" data-set="focus" /><span class="track"></span></label>
         <div class="tools">
-          <button type="button" class="btn small" id="btn-flip" title="Flip board (F)"><svg viewBox="0 0 24 24"><path d="M7 4v13M3.5 13.5 7 17l3.5-3.5M17 20V7M13.5 10.5 17 7l3.5 3.5"/></svg>Flip board</button>
-          <button type="button" class="btn small" id="btn-undo" title="Takeback (Ctrl+Z)"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Takeback</button>
           <button type="button" class="btn small" id="btn-pgn-copy">Copy PGN</button>
           <button type="button" class="btn small" id="btn-pgn-download">Download PGN</button>
           <button type="button" class="btn small" id="btn-fen">Copy FEN</button>
-          <span class="tc-badge" id="tc-badge"></span>
         </div>
-        <p class="side-foot muted">Games are stored only in this browser.</p>
       </section>
       <section class="set-pane hidden" data-pane="analysis">
-        <label class="set-row"><span>Engine depth</span><select data-set="anDepth"><option value="fast">Fast</option><option value="balanced">Balanced (default)</option><option value="deep">Deep</option></select></label>
-        <label class="set-row switch"><span>Show the best move as an arrow</span><input type="checkbox" data-set="bestArrow" /><span class="track"></span></label>
+        <label class="set-row"><span>Engine depth</span><select data-set="anDepth"><option value="fast">Fast</option><option value="balanced">Balanced</option><option value="deep">Deep</option></select></label>
+        <label class="set-row switch"><span>Best move arrow</span><input type="checkbox" data-set="bestArrow" /><span class="track"></span></label>
         <label class="set-row switch"><span>Evaluation bar</span><input type="checkbox" data-set="evalBar" /><span class="track"></span></label>
       </section>
       <div class="set-actions">
@@ -3503,11 +3348,10 @@ kbd {
     <form method="dialog" id="form-new">
       <h2>New game</h2>
       <div class="names">
-        <label class="field"><span><i class="pc wK"></i>White</span><input id="new-white" maxlength="24" autocomplete="off" /></label>
+        <label class="field"><span><i class="pc wK"></i></span><input id="new-white" maxlength="24" autocomplete="off" aria-label="White" placeholder="White" /></label>
         <button type="button" class="btn icon-only" id="new-swap" title="Swap colours" aria-label="Swap colours"><svg viewBox="0 0 24 24"><path d="M7 7h13M16 3l4 4-4 4M17 17H4M8 13l-4 4 4 4"/></svg></button>
-        <label class="field"><span><i class="pc bK"></i>Black</span><input id="new-black" maxlength="24" autocomplete="off" /></label>
+        <label class="field"><span><i class="pc bK"></i></span><input id="new-black" maxlength="24" autocomplete="off" aria-label="Black" placeholder="Black" /></label>
       </div>
-      <h3>Time control</h3>
       <div class="tc-grid" id="tc-grid"></div>
       <div class="modal-actions">
         <button type="button" class="btn" value="cancel" data-close>Cancel</button>
@@ -3523,21 +3367,18 @@ kbd {
         <h2>Play the computer</h2>
         <button type="button" class="btn icon-only ghost" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       </div>
-      <label class="field"><span>Your name</span><input id="ai-name" maxlength="24" autocomplete="off" placeholder="Your name" /></label>
-      <h3>Level</h3>
-      <div class="levels" role="radiogroup">
-        <label><input type="radio" name="ai-level" value="easy" /><span><b>Easy</b><small>Makes mistakes. Good for a first game.</small></span></label>
-        <label><input type="radio" name="ai-level" value="medium" checked /><span><b>Medium</b><small>Punishes loose pieces.</small></span></label>
-        <label><input type="radio" name="ai-level" value="hard" /><span><b>Hard</b><small>Strong club player. Good luck.</small></span></label>
+      <input id="ai-name" class="name-input" maxlength="24" autocomplete="off" placeholder="Your name" aria-label="Your name" />
+      <div class="color-pick levels" role="radiogroup" aria-label="Level">
+        <label><input type="radio" name="ai-level" value="easy" /><span>Easy</span></label>
+        <label><input type="radio" name="ai-level" value="medium" checked /><span>Medium</span></label>
+        <label><input type="radio" name="ai-level" value="hard" /><span>Hard</span></label>
       </div>
-      <h3>You play</h3>
       <div class="color-pick">
         <label><input type="radio" name="ai-color" value="w" checked /><span><i class="pc wK"></i>White</span></label>
         <label><input type="radio" name="ai-color" value="random" /><span><b class="duo"><i class="pc wK"></i><i class="pc bK"></i></b>Random</span></label>
         <label><input type="radio" name="ai-color" value="b" /><span><i class="pc bK"></i>Black</span></label>
       </div>
-      <h3>Clock</h3>
-      <div class="chips" id="ai-tc"></div>
+      <div class="chips" id="ai-tc" aria-label="Clock"></div>
       <div class="modal-actions">
         <button type="submit" class="btn primary wide-btn">Play</button>
       </div>
@@ -3550,8 +3391,6 @@ kbd {
     <h2 id="over-title"></h2>
     <p class="muted" id="over-reason"></p>
     <div class="modal-actions wrap">
-      <button class="btn" id="over-review">Review game</button>
-      <button class="btn" id="over-pgn">Download PGN</button>
       <button class="btn" id="over-analyse">Analyse</button>
       <button class="btn" id="over-new">New game</button>
       <button class="btn primary" id="over-rematch">Rematch</button>
@@ -3569,29 +3408,26 @@ kbd {
       <button type="button" role="tab" data-tab="join" aria-selected="false">Join with a code</button>
     </div>
     <form method="dialog" id="form-remote-create" data-pane="create">
-      <label class="field"><span>Your name</span><input id="remote-create-name" maxlength="24" autocomplete="off" placeholder="Your name" required /></label>
-      <h3>You play</h3>
+      <input id="remote-create-name" class="name-input" maxlength="24" autocomplete="off" placeholder="Your name" aria-label="Your name" required />
       <div class="color-pick">
         <label><input type="radio" name="remote-color" value="w" checked /><span><i class="pc wK"></i>White</span></label>
         <label><input type="radio" name="remote-color" value="random" /><span><b class="duo"><i class="pc wK"></i><i class="pc bK"></i></b>Random</span></label>
         <label><input type="radio" name="remote-color" value="b" /><span><i class="pc bK"></i>Black</span></label>
       </div>
-      <h3>Clock</h3>
-      <div class="chips" id="remote-tc"></div>
+      <div class="chips" id="remote-tc" aria-label="Clock"></div>
       <div class="modal-actions">
         <button type="submit" class="btn primary wide-btn">Create game</button>
       </div>
     </form>
     <form method="dialog" id="form-remote-join" data-pane="join" class="hidden">
-      <label class="field"><span>Game code</span><input id="remote-join-code" class="code-input" maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K7Q-M2X" required /></label>
-      <label class="field"><span>Your name</span><input id="remote-join-name" maxlength="24" autocomplete="off" placeholder="Your name" required /></label>
+      <input id="remote-join-code" class="code-input" maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Code" aria-label="Game code" required />
+      <input id="remote-join-name" class="name-input" maxlength="24" autocomplete="off" placeholder="Your name" aria-label="Your name" required />
       <p class="error hidden" id="remote-join-error"></p>
       <div class="modal-actions">
         <button type="submit" class="btn primary wide-btn" id="remote-join-btn">Join game</button>
       </div>
     </form>
     <div data-pane="invite" class="hidden invite">
-      <p class="muted">Give your colleague this code. They open Deskmate, choose <b>Play a colleague → Join with a code</b> and type it in.</p>
       <div class="room-code" id="room-code">K7Q-M2X</div>
       <div class="modal-actions center-actions">
         <button class="btn" id="room-copy-link">Copy link</button>
@@ -3614,7 +3450,6 @@ kbd {
   <!-- Draw -->
   <dialog id="dlg-draw" class="modal">
     <h2 id="draw-title">Agree to a draw?</h2>
-    <p class="muted" id="draw-sub">Both players should agree before confirming.</p>
     <div class="modal-actions">
       <button class="btn" data-close>Keep playing</button>
       <button class="btn primary" id="draw-confirm">Draw</button>
@@ -3627,38 +3462,11 @@ kbd {
       <h2>Saved games</h2>
       <button class="btn icon-only ghost" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
-    <p class="muted">Finished and abandoned games are kept in this browser (up to 300).</p>
     <ul class="archive" id="archive-list"></ul>
     <div class="modal-actions">
       <button class="btn danger ghost" id="archive-clear">Delete all</button>
       <button class="btn" id="archive-export">Export all as PGN</button>
     </div>
-  </dialog>
-
-  <!-- Help -->
-  <dialog id="dlg-help" class="modal">
-    <div class="modal-head">
-      <h2>How to play</h2>
-      <button class="btn icon-only ghost" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-    </div>
-    <ul class="help">
-      <li>Drag a piece, or click it and then click where it goes. Dots show where it can go; rings show captures.</li>
-      <li>On one laptop, the board turns to the side of whoever is to move (setting: <em>Turn the board for each player</em>).</li>
-      <li>Right-click and drag to draw arrows; right-click a square to circle it.</li>
-      <li><em>Play a colleague</em>: create a game and share its 6-character code once. Moves then appear on both laptops as they are played.</li>
-      <li>Your current game survives a page reload. Finished games go to <em>Saved games</em>.</li>
-    </ul>
-    <table class="keys">
-      <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous / next move</td></tr>
-      <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>First / last move</td></tr>
-      <tr><td><kbd>F</kbd></td><td>Flip board</td></tr>
-      <tr><td><kbd>Space</kbd></td><td>Pause / resume clocks (same-laptop games)</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>Takeback</td></tr>
-      <tr><td><kbd>N</kbd></td><td>New game</td></tr>
-      <tr><td><kbd>H</kbd></td><td>Saved games</td></tr>
-      <tr><td><kbd>M</kbd></td><td>Expand or collapse the menu</td></tr>
-      <tr><td><kbd>Z</kbd></td><td>Focus: show only the board, players and clocks</td></tr>
-    </table>
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -7151,16 +6959,16 @@ var Chess = class {
 // src/game.ts
 var START_FEN = DEFAULT_POSITION;
 var TIME_CONTROLS = [
-  { id: "none", label: "Unlimited", base: 0, inc: 0, moment: "No clock" },
-  { id: "1+0", label: "1 + 0", base: 1, inc: 0, kind: "Bullet", moment: "Lift ride" },
-  { id: "3+0", label: "3 + 0", base: 3, inc: 0, kind: "Blitz", moment: "Printer queue" },
-  { id: "3+2", label: "3 + 2", base: 3, inc: 2, kind: "Blitz", moment: "Coffee break" },
-  { id: "5+0", label: "5 + 0", base: 5, inc: 0, kind: "Blitz", moment: "Tea break" },
-  { id: "5+3", label: "5 + 3", base: 5, inc: 3, kind: "Blitz", moment: "After stand-up" },
-  { id: "10+0", label: "10 + 0", base: 10, inc: 0, kind: "Rapid", moment: "Build running" },
-  { id: "10+5", label: "10 + 5", base: 10, inc: 5, kind: "Rapid", moment: "Lunch" },
-  { id: "15+10", label: "15 + 10", base: 15, inc: 10, kind: "Rapid", moment: "Long lunch" },
-  { id: "30+0", label: "30 + 0", base: 30, inc: 0, kind: "Classical", moment: "Friday, 5 pm" }
+  { id: "none", label: "Unlimited", base: 0, inc: 0 },
+  { id: "1+0", label: "1 + 0", base: 1, inc: 0 },
+  { id: "3+0", label: "3 + 0", base: 3, inc: 0 },
+  { id: "3+2", label: "3 + 2", base: 3, inc: 2 },
+  { id: "5+0", label: "5 + 0", base: 5, inc: 0 },
+  { id: "5+3", label: "5 + 3", base: 5, inc: 3 },
+  { id: "10+0", label: "10 + 0", base: 10, inc: 0 },
+  { id: "10+5", label: "10 + 5", base: 10, inc: 5 },
+  { id: "15+10", label: "15 + 10", base: 15, inc: 10 },
+  { id: "30+0", label: "30 + 0", base: 30, inc: 0 }
 ];
 var timeControl = (id) => TIME_CONTROLS.find((t) => t.id === id) || TIME_CONTROLS[0];
 var VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -9188,7 +8996,6 @@ function renderMoves() {
     const m = marks[i]?.kind;
     parts.push(`<button class="mv${viewPly === i + 1 ? " active" : ""}${m ? ` ${m}` : ""}" data-ply="${i + 1}">${san(p.san)}${m ? `<span class="mark">${MARKS[m]}</span>` : ""}</button>`);
   });
-  if (!g.plies.length) parts.push('<span class="empty">No moves yet</span>');
   const list = $("#moves");
   list.innerHTML = parts.join("");
   const act = list.querySelector(".active");
@@ -9200,17 +9007,14 @@ function renderMoves() {
   else list.scrollLeft = list.scrollWidth;
   renderAnMoves();
   renderOpening(g);
-  $("#tc-label").textContent = g.tcInfo.base ? g.tcInfo.label.replace(/ /g, "") : "";
   const rl = $("#result-line");
   rl.classList.toggle("hidden", !g.result);
-  if (g.result) rl.innerHTML = `<strong>${g.result.replace(/1\/2/g, "½")}</strong><span>${g.termination} · ${g.winnerText()}</span>`;
+  if (g.result) rl.innerHTML = `<strong>${g.result.replace(/1\/2/g, "½")}</strong><span>${g.result === "1/2-1/2" ? g.termination : `${g.termination} · ${g.winnerText()}`}</span>`;
 }
 var FIG = { K: "♔", Q: "♕", R: "♖", B: "♗", N: "♘" };
 var san = (s) => settings.notation === "letter" ? s : s.replace(/[KQRBN]/g, (c) => `<span class="fig">${FIG[c]}</span>`);
-var tcText = (tc) => tc.base ? `${tc.label} · ${tc.kind}` : "Unlimited";
 function renderStatus() {
   const g = active();
-  $("#tc-badge").textContent = tcText(g.tcInfo);
   document.title = g.result ? `${g.winnerText()} · Deskmate` : review ? "Review · Deskmate" : `${colorName(game.turn)} to move · Deskmate`;
   const banner = $("#review-banner");
   const showBanner = !an && (!!review || viewPly !== game.length);
@@ -9226,7 +9030,7 @@ function renderControls() {
   for (const b of [$("#nav-first"), $("#nav-prev"), $('[data-nav="prev"]'), $("#focus-prev")]) b.disabled = viewPly === 0;
   for (const b of [$("#nav-last"), $("#nav-next"), $('[data-nav="next"]'), $("#focus-next")]) b.disabled = viewPly === g.length;
   const liveGame = !review;
-  $("#btn-undo").disabled = !liveGame || game.length === 0 || !!game.remote;
+  $("#btn-undo").classList.toggle("hidden", !liveGame || game.length === 0 || !!game.remote || game.over);
   const noActions = !liveGame || game.over || (game.remote ? !bothSeated() : game.length === 0);
   const theyOffer = !!game.remote && !game.over && game.remote.offer === other(game.remote.me);
   for (const b of $$(".act-draw")) {
@@ -9875,7 +9679,7 @@ function renderAnMoves() {
     rows.push(`<span class="an-num">${i / 2 + 1}.</span>${cell(i)}${cell(i + 1)}`);
   }
   const list = $("#an-moves");
-  list.innerHTML = rows.join("") || '<span class="an-empty">No moves yet</span>';
+  list.innerHTML = rows.join("");
   const act = list.querySelector(".active");
   if (act) {
     const t = act.offsetTop;
@@ -9952,7 +9756,7 @@ function openNewGame(prefill) {
   grid.innerHTML = TIME_CONTROLS.map((t) => `
     <label class="tc${t.id === p.tc ? " checked" : ""}">
       <input type="radio" name="tc" value="${t.id}"${t.id === p.tc ? " checked" : ""} />
-      <strong>${t.base ? t.label : "∞"}</strong><small>${t.moment}</small>
+      <strong>${t.base ? t.label : "∞"}</strong>
     </label>`).join("");
   openDialog("#dlg-new");
 }
@@ -9975,7 +9779,7 @@ function renderArchive() {
   const list = storage.loadArchive();
   const ul = $("#archive-list");
   if (!list.length) {
-    ul.innerHTML = '<li class="empty">No saved games yet. Finished games appear here automatically.</li>';
+    ul.innerHTML = '<li class="empty">No saved games yet</li>';
     return;
   }
   ul.innerHTML = list.map((g) => {
@@ -10083,7 +9887,6 @@ $("#btn-archive").addEventListener("click", () => {
   renderArchive();
   openDialog("#dlg-archive");
 });
-$("#btn-help").addEventListener("click", () => openDialog("#dlg-help"));
 $("#btn-settings").addEventListener("click", openSettings);
 $("#btn-analyse").addEventListener("click", () => startAnalysis());
 $$(".act-analyse").forEach((b) => b.addEventListener("click", () => startAnalysis()));
@@ -10094,8 +9897,8 @@ $("#over-analyse").addEventListener("click", () => {
 $('[data-nav="prev"]').addEventListener("click", () => goto(viewPly - 1));
 $('[data-nav="next"]').addEventListener("click", () => goto(viewPly + 1));
 $$(".act-pause").forEach((b) => b.addEventListener("click", togglePause));
-$("#btn-flip2").addEventListener("click", () => $("#btn-flip").click());
-$("#btn-flip3").addEventListener("click", () => $("#btn-flip").click());
+$("#btn-flip2").addEventListener("click", flipBoard);
+$("#btn-flip3").addEventListener("click", flipBoard);
 $("#btn-sound").addEventListener("click", () => {
   settings.sound = !settings.sound;
   storage.saveSettings(settings);
@@ -10141,19 +9944,18 @@ $$(".act-rematch").forEach((b) => b.addEventListener("click", () => $("#over-rem
     applyPrefs();
   });
 }
-$("#btn-flip").addEventListener("click", () => {
+function flipBoard() {
   clearTimeout(flipTimer);
   board.flip();
   renderPlayers();
   renderAnalysis();
-});
+}
 $("#btn-undo").addEventListener("click", takeback);
 $$(".act-draw").forEach((b) => b.addEventListener("click", () => {
   const r = game.remote;
   const opp = r && (game.nameOf(other(r.me)) || "your colleague");
   const theyOffer = r && r.offer === other(r.me);
   $("#draw-title").textContent = !r ? "Agree to a draw?" : theyOffer ? `Accept ${opp}'s draw offer?` : `Offer ${opp} a draw?`;
-  $("#draw-sub").textContent = !r ? "Both players should agree before confirming." : theyOffer ? "The game ends as a draw." : "They can accept it, or decline by making a move.";
   $("#draw-confirm").textContent = r && !theyOffer ? "Offer draw" : "Draw";
   openDialog("#dlg-draw");
 }));
@@ -10201,18 +10003,12 @@ $("#over-rematch").addEventListener("click", () => {
   }
   const ai = game.ai && { color: other(game.ai.color), level: game.ai.level };
   startGame({ white: game.black, black: game.white, tc: game.tc, ai });
-  toast("Colours swapped. Good luck!");
+  toast("Colours swapped");
 });
 $("#over-new").addEventListener("click", () => {
   $("#dlg-over").close();
   game.ai ? openComputer() : openNewGame();
 });
-$("#over-review").addEventListener("click", () => {
-  $("#dlg-over").close();
-  goto(0);
-  toast("Use ← → to step through the game");
-});
-$("#over-pgn").addEventListener("click", () => download(game));
 $("#nav-first").addEventListener("click", () => goto(0));
 $("#focus-prev").addEventListener("click", () => goto(viewPly - 1));
 $("#focus-next").addEventListener("click", () => goto(viewPly + 1));
@@ -10238,14 +10034,13 @@ document.addEventListener("keydown", (e) => {
   else if (k === "ArrowRight") goto(viewPly + 1);
   else if (k === "ArrowUp") goto(0);
   else if (k === "ArrowDown") goto(active().length);
-  else if (k === "f" || k === "F") $("#btn-flip").click();
+  else if (k === "f" || k === "F") flipBoard();
   else if (k === " ") togglePause();
   else if ((e.ctrlKey || e.metaKey) && k === "z") takeback();
   else if (k === "n" || k === "N") openNewGame();
   else if (k === "h" || k === "H") $("#btn-archive").click();
   else if (k === "m" || k === "M") setSidebar(!$("#sidebar").classList.contains("open"));
   else if (k === "z" || k === "Z") toggleFocus();
-  else if (k === "?") openDialog("#dlg-help");
   else return;
   e.preventDefault();
 });
@@ -10342,17 +10137,18 @@ function renderHome() {
   const resume = inProgress();
   $("#home-resume").classList.toggle("hidden", !resume);
   if (resume) {
-    $("#home-resume-sub").textContent = `${game.white || "White"} vs ${game.black || "Black"}` + (game.remote ? ` · live, code ${formatRoomCode(game.remote.room)}` : ` · ${Math.ceil(game.length / 2)} moves`);
+    $("#home-resume-label").textContent = `Resume ${game.white || "White"} vs ${game.black || "Black"}`;
   }
   const list = storage.loadArchive().slice(0, 5);
-  $("#home-games").innerHTML = list.length ? list.map((g) => {
+  $("#home-recent").classList.toggle("hidden", !list.length);
+  $("#home-games").innerHTML = list.map((g) => {
     const res = g.result ? g.result.replace(/1\/2/g, "½") : "unfinished";
     const cls = g.result === "1-0" ? "w" : g.result === "0-1" ? "b" : g.result ? "d" : "u";
     const d = new Date(g.endedAt || g.startedAt);
     return `<li data-id="${g.id}"><span class="res ${cls}">${res}</span>
       <span class="who">${esc(g.white || "?")} vs ${esc(g.black || "?")}<small>${esc(g.termination || "In progress")} · ${d.toLocaleDateString(void 0, { day: "numeric", month: "short" })}</small></span>
       <span class="acts"><button class="btn small" data-act="review">Review</button>${g.result ? '<button class="btn small" data-act="analyse">Analyse</button>' : ""}</span></li>`;
-  }).join("") : '<li class="empty">Your finished games will appear here.</li>';
+  }).join("");
   renderOffice();
 }
 function renderOffice() {
