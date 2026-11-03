@@ -96,6 +96,7 @@
       <div class="evalbar hidden" id="evalbar" aria-label="Evaluation"><div class="evalbar-fill" id="evalbar-fill"></div><span class="evalbar-num" id="evalbar-num"></span><span class="wb-pct" id="wb-top"></span><span class="wb-pct bot" id="wb-bot"></span></div>
       <div class="board-frame">
         <div id="board" aria-label="Chess board"></div>
+        <button class="pause-cover act-resume" title="Resume (Space)" aria-label="Resume"><svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg></button>
       </div>
       <div class="board-resize" id="board-resize" title="Drag to resize the board · double-click: as large as fits"><svg viewBox="0 0 24 24"><path d="M13 21h8v-8M21 21l-8-8M11 3H3v8M3 3l8 8"/></svg></div>
       <div class="review-banner hidden" id="review-banner">
@@ -129,6 +130,7 @@
     <div class="focus-acts" aria-label="Game actions">
       <button class="sq-btn act-draw" title="Draw"><span class="half">½</span></button>
       <button class="sq-btn act-resign" title="Resign"><svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></button>
+      <button class="sq-btn act-pause hidden" title="Pause (Space)"></button>
       <button class="sq-btn wide act-newgame hidden" title="New game"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
       <button class="sq-btn wide act-rematch hidden" title="Rematch"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg></button>
     </div>
@@ -196,6 +198,7 @@
       <section class="set-pane hidden" data-pane="play">
         <label class="set-row switch"><span>Auto-queen</span><input type="checkbox" data-set="autoQueen" /><span class="track"></span></label>
         <label class="set-row switch"><span>Win chances</span><input type="checkbox" data-set="winBar" /><span class="track"></span></label>
+        <label class="set-row switch" title="Out of time? Give up your best piece for another minute instead of losing"><span>Overtime</span><input type="checkbox" data-set="overtime" /><span class="track"></span></label>
         <label class="set-row switch"><span>Focus mode</span><input type="checkbox" data-set="focus" /><span class="track"></span></label>
         <div class="tools">
           <button type="button" class="btn small" id="btn-pgn-copy">Copy PGN</button>
@@ -240,11 +243,7 @@
         <button type="button" class="btn icon-only ghost" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       </div>
       <input id="ai-name" class="name-input" maxlength="24" autocomplete="off" placeholder="Your name" aria-label="Your name" />
-      <div class="color-pick levels" role="radiogroup" aria-label="Level">
-        <label><input type="radio" name="ai-level" value="easy" /><span>Easy</span></label>
-        <label><input type="radio" name="ai-level" value="medium" checked /><span>Medium</span></label>
-        <label><input type="radio" name="ai-level" value="hard" /><span>Hard</span></label>
-      </div>
+      <div class="chips" id="ai-level" role="radiogroup" aria-label="Level"></div>
       <div class="color-pick">
         <label><input type="radio" name="ai-color" value="w" checked /><span><i class="pc wK"></i>White</span></label>
         <label><input type="radio" name="ai-color" value="random" /><span><b class="duo"><i class="pc wK"></i><i class="pc bK"></i></b>Random</span></label>

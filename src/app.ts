@@ -6,6 +6,7 @@ import { sound } from './sound.ts';
 import { confetti } from './confetti.ts';
 import { packMoves, unpackMoves } from './remote.ts';
 import { Room, newRoomCode, parseRoomCode, formatRoomCode } from './live.ts';
+import { LEVELS, level, pickMove, thinkTime } from './levels.ts';
 import { Engine, type Eval } from './engine.ts';
 import { standings } from './office.ts';
 import { loadOpenings, openingName } from './openings.ts';
@@ -30,6 +31,8 @@ let review = null; // a read-only Game opened from saved games / import
 // a same-laptop timed game resumes paused after a reload; live games keep running
 let paused = game.hasClock && game.length > 0 && !game.over && !game.remote;
 let lastTick = Date.now();
+// live games: how many times either player has paused or resumed; odd = paused. Synced in snapshots.
+let pauseSeq = 0;
 let flipTimer = null;
 let room = null; // live connection for game.remote.room
 let relaysUp = 0; // relays the room is connected to right now
@@ -234,11 +237,13 @@ function renderControls() {
   $('#btn-sound').classList.toggle('off', !settings.sound);
   $('.game').classList.toggle('analysing', !!an);
   for (const b of $$('.act-pause')) {
-    b.classList.toggle('hidden', !game.hasClock || !liveGame || !!game.remote || game.over);
-    b.disabled = game.over || game.length === 0;
-    b.innerHTML = paused ? ICON_RESUME : ICON_PAUSE;
-    b.title = paused ? 'Resume clocks (Space)' : 'Pause clocks (Space)';
+    b.classList.toggle('hidden', !game.hasClock || !liveGame || game.over);
+    b.disabled = game.length === 0;
+    const icon = paused ? ICON_RESUME : ICON_PAUSE;
+    b.innerHTML = b.classList.contains('sq-btn') ? icon.slice(0, icon.indexOf('<span>')) : icon;
+    b.title = paused ? 'Resume (Space)' : 'Pause (Space)';
   }
+  document.body.classList.toggle('paused', paused && canPause());
 }
 
 /** The opening's name above the moves, from lichess's open data set (loaded once, on first use). */
@@ -342,31 +347,31 @@ function renderWinBar() {
 
 // Stockfish 11 Skill Level 0–20 plus a search limit per level; lower skill makes it pick
 // weaker moves on purpose. Roughly: Easy loses to a beginner who is careful, Hard is club strength+.
-const AI_LEVELS = {
-  easy: { label: 'Easy', skill: 0, depth: 2, movetime: 150 },
-  medium: { label: 'Medium', skill: 7, depth: 7, movetime: 400 },
-  hard: { label: 'Hard', skill: 16, depth: 14, movetime: 1200 },
-};
-const aiName = (level) => `Stockfish · ${AI_LEVELS[level]?.label || 'Medium'}`;
+const aiName = (id: string) => `Stockfish · ${level(id).label}`;
 
 /** If it's the computer's turn in the live game, think and play. */
 async function computerMove() {
-  if (!game.ai || game.over || review || game.turn !== game.ai.color) return;
+  if (!game.ai || game.over || review || paused || game.turn !== game.ai.color) return;
   const g = game, turn = ++aiTurn, fen = game.fenAt(game.length);
   const started = Date.now();
-  let uci = null;
+  const lv = level(g.ai.level);
+  let uci = null, think = 300;
   try {
     aiEngine = aiEngine || new Engine(undefined, 16);
-    uci = await aiEngine.play(fen, AI_LEVELS[g.ai.level] || AI_LEVELS.medium);
+    if (lv.id === 'immortal') uci = await aiEngine.play(fen, { skill: 20, depth: lv.depth, movetime: lv.movetime });
+    else {
+      const cands = await aiEngine.topMoves(fen, lv);
+      uci = pickMove(cands, lv);
+      think = thinkTime(cands, lv, g.hasClock ? g.clocks[g.turn] : null);
+    }
   } catch {
     if (turn === aiTurn) toast('Stockfish could not start in this browser. Try reloading the page.');
     return;
   }
-  // never instant: a short beat makes the reply readable
-  const wait = 350 - (Date.now() - started);
+  // a person takes longer over a hard choice than an obvious one
+  const wait = think - (Date.now() - started);
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  if (turn !== aiTurn || game !== g || g.over || review || g.fenAt(g.length) !== fen || !uci) return;
-  if (paused) { paused = false; lastTick = Date.now(); }
+  if (turn !== aiTurn || game !== g || g.over || review || paused || g.fenAt(g.length) !== fen || !uci) return;
   viewPly = g.length;
   applyMove(uci.slice(0, 2), uci.slice(2, 4), uci[4]);
 }
@@ -403,6 +408,20 @@ function persist() {
   storage.saveCurrent(game.toJSON());
 }
 
+/** Overtime: `color` ran out of time and gave up a piece to play on. */
+function onForfeit(color: Color) {
+  const f = game.forfeitAt(game.length);
+  lastTick = Date.now();
+  viewPly = game.length;
+  sound.capture();
+  persist();
+  publish();
+  render();
+  if (f) toast(`${game.nameOf(color) || colorName(color)} gives up the ${f.name} for another minute`);
+  if (game.over) onGameOver();
+  else computerMove();
+}
+
 /* ---------------- clocks ---------------- */
 
 setInterval(() => {
@@ -412,9 +431,12 @@ setInterval(() => {
     game.clocks[c] -= now - lastTick;
     if (game.clocks[c] <= 0) {
       game.clocks[c] = 0;
-      game.flag(c);
-      publish();
-      onGameOver();
+      if (game.forfeit(c)) onForfeit(c);
+      else {
+        game.flag(c);
+        publish();
+        onGameOver();
+      }
     }
     renderClocks();
   }
@@ -425,30 +447,36 @@ setInterval(() => { if (clockRunning()) persist(); }, 3000);
 addEventListener('pagehide', persist);
 document.addEventListener('visibilitychange', () => { if (document.hidden) persist(); });
 
+const canPause = () => !review && game.hasClock && !game.over && game.length > 0;
+
+/** Pause or resume. The board is covered while paused, so nobody thinks on frozen time. */
 function togglePause() {
-  if (review || game.remote || !game.hasClock || game.over || game.length === 0) return;
+  if (!canPause()) return;
   paused = !paused;
+  if (game.remote) pauseSeq += paused === (pauseSeq % 2 === 0) ? 1 : 0;
   lastTick = Date.now();
   persist();
+  publish();
   render();
-  toast(paused ? 'Clocks paused' : 'Clocks running');
+  if (!paused) computerMove();
 }
 
 /* ---------------- game lifecycle ---------------- */
 
-interface NewGame { white: string; black: string; tc: string; remote?: GameData['remote']; ai?: AiSeat | null; id?: string; startedAt?: number }
+interface NewGame { white: string; black: string; tc: string; remote?: GameData['remote']; ai?: AiSeat | null; id?: string; startedAt?: number; ot?: boolean }
 
-function startGame({ white, black, tc, remote = null, ai = null, id, startedAt }: NewGame) {
+function startGame({ white, black, tc, remote = null, ai = null, id, startedAt, ot = settings.overtime }: NewGame) {
   if (game.length && !game.over) storage.archive(game.toJSON()); // keep unfinished games too
   clearTimeout(flipTimer);
   if (!remote || remote.room !== room?.code) leaveRoom();
   stopAnalysis();
   aiTurn++;
-  game = new Game({ white, black, tc, remote, ai, id, startedAt });
+  game = new Game({ white, black, tc, remote, ai, id, startedAt, ot });
   if (remote) { game.white = white; game.black = black; } // an empty seat keeps an empty name
   review = null;
   viewPly = 0;
   paused = false;
+  pauseSeq = 0;
   lastTick = Date.now();
   if (!remote && !ai) Object.assign(settings, { white, black, tc });
   storage.saveSettings(settings);
@@ -508,9 +536,10 @@ function snapshot() {
   return {
     v: 1, g: game.id, st: game.startedAt, tc: game.tc,
     w: game.white, b: game.black, pw: r.pw || '', pb: r.pb || '',
-    m: packMoves(game.plies.map((p) => p.san)),
+    m: packMoves(game.plies.map((p) => p.san), [...game.forfeits]),
+    ot: game.overtime ? 1 : 0, f: game.forfeits.size ? [...game.forfeits] : undefined,
     c: [Math.round(game.clocks.w), Math.round(game.clocks.b)],
-    r: game.result, t: game.termination, o: r.offer || null,
+    r: game.result, t: game.termination, o: r.offer || null, p: pauseSeq,
   };
 }
 
@@ -537,12 +566,23 @@ function leaveRoom() {
 function onRoomSnapshot(snap) {
   if (!snap || snap.v !== 1 || !snap.g) return;
   let moves;
-  try { moves = unpackMoves(snap.m || ''); } catch { return; }
+  try { moves = unpackMoves(snap.m || '', snap.f || []); } catch { return; }
   if (joining) completeJoin(snap, moves);
   else applySnapshot(snap, moves);
 }
 
 const seatOf = (snap) => (snap.pw === settings.pid ? 'w' : snap.pb === settings.pid ? 'b' : null);
+
+/** Plays the snapshot's moves this laptop doesn't have yet, with any overtime forfeits in their places. */
+function playIn(moves: string[], ff: [number, string][] = []) {
+  const gone = new Map(ff);
+  let last = null;
+  for (let i = game.length; i <= moves.length; i++) {
+    if (gone.has(i)) game.applyForfeit(i, gone.get(i));
+    if (i < moves.length) last = game.moveSan(moves[i]) || last;
+  }
+  return last;
+}
 
 /** First snapshot after "Join": take the free seat and set up the game locally. */
 function completeJoin(snap, moves) {
@@ -561,8 +601,9 @@ function completeJoin(snap, moves) {
       room: code, me, offer: snap.o || null,
       pw: me === 'w' ? settings.pid : snap.pw, pb: me === 'b' ? settings.pid : snap.pb,
     },
+    ot: !!snap.ot,
   });
-  for (const san of moves) game.moveSan(san);
+  playIn(moves, snap.f);
   if (snap.r && !game.result) game.finish(snap.r, snap.t || 'Game over');
   if (game.hasClock && snap.c) game.clocks = { w: snap.c[0], b: snap.c[1] };
   viewPly = game.length;
@@ -582,7 +623,7 @@ function applySnapshot(snap, moves) {
     // a new game in this room (rematch); ignore old snapshots of earlier games
     if (!me || (snap.st || 0) <= game.startedAt) return;
     const r = game.remote;
-    startGame({ id: snap.g, startedAt: snap.st, tc: snap.tc, white: snap.w, black: snap.b, remote: { room: r.room, me, pw: snap.pw, pb: snap.pb } });
+    startGame({ id: snap.g, startedAt: snap.st, tc: snap.tc, white: snap.w, black: snap.b, remote: { room: r.room, me, pw: snap.pw, pb: snap.pb }, ot: !!snap.ot });
     toast(`Rematch! You play ${colorName(me).toLowerCase()}.`);
   }
   const r = game.remote;
@@ -592,6 +633,19 @@ function applySnapshot(snap, moves) {
   if (snap.w && r.me !== 'w') game.white = snap.w; // the colleague's name; ours stays ours
   if (snap.b && r.me !== 'b') game.black = snap.b;
 
+  // Overtime race: the other laptop saw a clock run out here and took the piece, while a move
+  // made just before it (on the flagged player's own clock) was on its way. The forfeit stands
+  // and the moves after it are replayed on top, so both laptops agree on the position.
+  const missed = (snap.f || []).filter(([i]) => !game.forfeits.has(i) && i < game.length && moves.slice(0, i).every((s, j) => s === game.plies[j].san));
+  if (missed.length && !game.result) {
+    const d = game.toJSON();
+    game.mergeForfeits(missed);
+    const who = game.fenAt(missed[0][0]).split(' ')[1] as Color;
+    toast(`Time ran out before that move arrived: ${game.nameOf(who) || colorName(who)} gives up the ${game.forfeitAt(missed[0][0])?.name || 'piece'}`);
+    if (game.length < d.moves.length) viewPly = game.length;
+    persist();
+    publish();
+  }
   const local = game.plies.map((p) => p.san);
   // The game ended on the other laptop (their clock saw ours run out, or they resigned or
   // agreed a draw) while a move of ours was still on its way: the result stands, and the
@@ -610,16 +664,28 @@ function applySnapshot(snap, moves) {
   const wasAtEnd = viewPly === game.length;
   const wasOver = game.over;
   let last = null;
-  for (const san of moves.slice(local.length)) last = game.moveSan(san) || last;
+  const forfeitsBefore = game.forfeits.size;
+  last = playIn(moves, snap.f) || last;
+  const forfeited = game.forfeits.size > forfeitsBefore;
   if (snap.r && !game.result) game.finish(snap.r, snap.t || 'Game over');
   r.offer = snap.o || null;
-  if (game.hasClock && snap.c && (last || snap.r)) {
+  // the colleague paused or resumed: the same state and the same clocks on both laptops
+  if ((snap.p || 0) > pauseSeq) {
+    pauseSeq = snap.p;
+    paused = pauseSeq % 2 === 1;
+    if (game.hasClock && snap.c) game.clocks = { w: snap.c[0], b: snap.c[1] };
+    lastTick = Date.now();
+    toast(`${game.nameOf(other(r.me)) || 'Your colleague'} ${paused ? 'paused' : 'resumed'} the game`);
+  }
+  if (game.hasClock && snap.c && (last || snap.r || forfeited)) {
     game.clocks = { w: snap.c[0], b: snap.c[1] };
     if (last) last.clock = game.clocks[last.color];
     lastTick = Date.now();
   }
   if (wasAtEnd) viewPly = game.length;
-  if (last?.captured) sound.capture();
+  if (last?.captured || forfeited) sound.capture();
+  const f = forfeited && game.forfeitAt(game.length);
+  if (f) toast(`${game.nameOf(game.turn) || colorName(game.turn)} gives up the ${f.name} for another minute`);
   persist();
   render();
   if (someoneJoined && r.me) {
@@ -1127,7 +1193,7 @@ $$('.act-analyse').forEach((b) => b.addEventListener('click', () => startAnalysi
 $('#over-analyse').addEventListener('click', () => { $('#dlg-over').close(); startAnalysis(); });
 $('[data-nav="prev"]').addEventListener('click', () => goto(viewPly - 1));
 $('[data-nav="next"]').addEventListener('click', () => goto(viewPly + 1));
-$$('.act-pause').forEach((b) => b.addEventListener('click', togglePause));
+$$('.act-pause, .act-resume').forEach((b) => b.addEventListener('click', togglePause));
 $('#btn-flip2').addEventListener('click', flipBoard);
 $('#btn-flip3').addEventListener('click', flipBoard);
 $('#btn-sound').addEventListener('click', () => {
@@ -1223,13 +1289,13 @@ $('#over-rematch').addEventListener('click', () => {
   const r = game.remote;
   if (r && r.me) {
     // same room, colours swapped; the other laptop picks the new game up from the room
-    startGame({ white: game.black, black: game.white, tc: game.tc, remote: { room: r.room, me: other(r.me), pw: r.pb, pb: r.pw } });
+    startGame({ white: game.black, black: game.white, tc: game.tc, remote: { room: r.room, me: other(r.me), pw: r.pb, pb: r.pw }, ot: game.overtime });
     publish();
     toast(`Rematch: you play ${colorName(game.remote.me).toLowerCase()}`);
     return;
   }
   const ai = game.ai && { color: other(game.ai.color), level: game.ai.level };
-  startGame({ white: game.black, black: game.white, tc: game.tc, ai });
+  startGame({ white: game.black, black: game.white, tc: game.tc, ai, ot: game.overtime });
   toast('Colours swapped');
 });
 $('#over-new').addEventListener('click', () => { $('#dlg-over').close(); game.ai ? openComputer() : openNewGame(); });
@@ -1425,19 +1491,20 @@ function openComputer() {
     const t = timeControl(id);
     return `<label class="chip"><input type="radio" name="ai-tc" value="${id}"${id === tc ? ' checked' : ''} /><span>${t.base ? t.label : 'No clock'}</span></label>`;
   }).join('');
-  const lv = $(`input[name="ai-level"][value="${settings.aiLevel || 'medium'}"]`);
-  if (lv) lv.checked = true;
+  const current = level(settings.aiLevel || 'casual').id;
+  $('#ai-level').innerHTML = LEVELS.map((l) =>
+    `<label class="chip"><input type="radio" name="ai-level" value="${l.id}"${l.id === current ? ' checked' : ''} /><span>${l.label}</span></label>`).join('');
   openDialog('#dlg-ai');
 }
 $('#form-ai').addEventListener('submit', () => {
   const name = $('#ai-name').value.trim() || 'You';
-  const level = (document.querySelector<HTMLInputElement>('input[name="ai-level"]:checked')?.value || 'medium') as AiSeat['level'];
+  const lvId = document.querySelector<HTMLInputElement>('input[name="ai-level"]:checked')?.value || 'casual';
   const tc = document.querySelector<HTMLInputElement>('input[name="ai-tc"]:checked')?.value || 'none';
   let me = (document.querySelector<HTMLInputElement>('input[name="ai-color"]:checked')?.value || 'w') as Color | 'random';
   if (me === 'random') me = Math.random() < 0.5 ? 'w' : 'b';
-  Object.assign(settings, { aiLevel: level, aiTc: tc, ...(name !== 'You' ? { myName: name } : {}) });
-  const bot = aiName(level);
-  startGame({ white: me === 'w' ? name : bot, black: me === 'b' ? name : bot, tc, ai: { color: other(me), level } });
+  Object.assign(settings, { aiLevel: lvId, aiTc: tc, ...(name !== 'You' ? { myName: name } : {}) });
+  const bot = aiName(lvId);
+  startGame({ white: me === 'w' ? name : bot, black: me === 'b' ? name : bot, tc, ai: { color: other(me), level: lvId } });
 });
 $('#home-all').addEventListener('click', () => { renderArchive(); openDialog('#dlg-archive'); });
 $('#sb-home').addEventListener('click', (e) => { e.preventDefault(); setSidebar(false); setView('home'); });

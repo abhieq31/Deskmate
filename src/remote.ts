@@ -19,9 +19,12 @@ const fromB64url = (str) => {
   return Uint8Array.from(bin, (c) => c.charCodeAt(0));
 };
 
-export function packMoves(sans) {
+/** `ff`: overtime forfeits, [ply count, square] — the piece comes off before that move. */
+export function packMoves(sans, ff: [number, string][] = []) {
   const chess = new Chess();
-  const bytes = sans.map((san) => {
+  const gone = new Map(ff);
+  const bytes = sans.map((san, n) => {
+    if (gone.has(n)) chess.remove(gone.get(n));
     const list = sortedMoves(chess);
     const i = list.findIndex((m) => m.san === san);
     if (i < 0) throw new Error(`illegal move ${san}`);
@@ -32,9 +35,11 @@ export function packMoves(sans) {
 }
 
 /** Throws on data that does not decode to legal moves. */
-export function unpackMoves(packed) {
+export function unpackMoves(packed, ff: [number, string][] = []) {
   const chess = new Chess();
-  return [...fromB64url(packed)].map((i) => {
+  const gone = new Map(ff);
+  return [...fromB64url(packed)].map((i, n) => {
+    if (gone.has(n)) chess.remove(gone.get(n));
     const m = sortedMoves(chess)[i];
     if (!m) throw new Error('corrupt move data');
     chess.move(m.san);

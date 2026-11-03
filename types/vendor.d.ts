@@ -29,6 +29,7 @@ declare module '*/vendor/chess.js' {
     isCheck(): boolean;
     board(): ({ square: Square; type: string; color: 'w' | 'b' } | null)[][];
     get(square: Square): { type: string; color: 'w' | 'b' } | undefined;
+    remove(square: string): { type: string; color: 'w' | 'b' } | undefined;
     loadPgn(pgn: string): void;
     pgn(): string;
     header(...args: string[]): Record<string, string>;

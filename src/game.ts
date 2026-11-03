@@ -18,7 +18,7 @@ export interface Ply {
 /** A live game with a colleague: room code, this browser's colour, each seat's player id, a pending offer. */
 export interface RemoteSeat { room: string; me: Color | null; pw: string | null; pb: string | null; offer: Color | null }
 /** A game against the computer: the colour it plays and how strong. */
-export interface AiSeat { color: Color; level: 'easy' | 'medium' | 'hard' }
+export interface AiSeat { color: Color; level: string }
 
 /** A game as saved in the browser and passed between laptops. */
 export interface GameData {
@@ -26,6 +26,38 @@ export interface GameData {
   startedAt?: number; endedAt?: number | null; result?: Result | null; termination?: string | null;
   clocks?: Clocks; moves?: string[]; clk?: (number | null)[];
   remote?: Partial<RemoteSeat> | null; ai?: AiSeat | null;
+  /** overtime on: a flag costs your best piece instead of the game */
+  ot?: boolean;
+  /** pieces given up for overtime: [ply count when it happened, square] */
+  ff?: [number, string][];
+}
+
+/** Overtime: what running out of time costs instead of the game, and what it buys. */
+export const OVERTIME_MS = 60000;
+const FORFEIT_VALUE: Record<string, number> = { q: 9, r: 5, b: 3, n: 3, p: 1 };
+
+/**
+ * The piece `color` gives up when its flag falls: its most valuable one, and of equals the
+ * least active (fewest legal moves), then the first by square. The same answer on every
+ * laptop, so a live game never needs to agree on it. Null: nothing left but the king.
+ */
+export function forfeitSquare(fen: string, color: Color): string | null {
+  const c = new Chess(fen);
+  let best: { sq: string; v: number; mob: number } | null = null;
+  for (const row of c.board()) for (const p of row) {
+    if (!p || p.color !== color || p.type === 'k') continue;
+    const v = FORFEIT_VALUE[p.type];
+    const mob = c.turn() === color ? c.moves({ square: p.square }).length : 0;
+    if (!best || v > best.v || (v === best.v && (mob < best.mob || (mob === best.mob && p.square < best.sq)))) best = { sq: p.square, v, mob };
+  }
+  return best?.sq ?? null;
+}
+
+/** `fen` with the piece on `sq` taken off the board (castling and en passant rights updated). */
+export function withoutPiece(fen: string, sq: string): string {
+  const c = new Chess(fen);
+  c.remove(sq);
+  return c.fen();
 }
 
 export const START_FEN = DEFAULT_POSITION;
@@ -141,6 +173,10 @@ export class Game {
   ai: AiSeat | null;
   chess: Chess;
   plies: Ply[];
+  /** overtime on for this game */
+  overtime: boolean;
+  /** overtime forfeits: ply count when it happened → square of the piece given up */
+  forfeits: Map<number, string>;
 
   constructor(data: GameData = {}) {
     this.id = data.id || uid();
@@ -156,13 +192,30 @@ export class Game {
     // live remote games: room code, the colour this browser plays, the player id in each
     // colour's seat (empty until someone sits there) and a pending draw offer
     this.remote = data.remote ? { room: '', me: null, pw: null, pb: null, offer: null, ...data.remote } : null;
-    // games against the computer: the colour it plays and how strong ('easy' | 'medium' | 'hard')
+    // games against the computer: the colour it plays and how strong (a LevelId, see levels.ts)
     this.ai = data.ai ? { color: data.ai.color, level: data.ai.level } : null;
+    this.overtime = !!data.ot;
+    this._replay(data.moves || [], data.clk || [], data.ff || []);
+  }
+
+  /**
+   * Rebuilds the position from the moves, with any overtime forfeits in their places. A move
+   * that is no longer legal (a forfeit merged in under it) ends the replay there.
+   */
+  _replay(moves: string[], clk: (number | null)[], ff: [number, string][]) {
     this.chess = new Chess();
     this.plies = [];
-    for (const san of data.moves || []) this._push(this.chess.move(san));
+    const gone = new Map(ff);
+    this.forfeits = new Map();
+    for (let i = 0; i <= moves.length; i++) {
+      if (gone.has(i)) { this.forfeits.set(i, gone.get(i)); this.chess.remove(gone.get(i)); }
+      if (i === moves.length) break;
+      let m;
+      try { m = this.chess.move(moves[i]); } catch { break; }
+      this._push(m);
+    }
     // time left on the mover's clock after each move (ms), when the game had a clock
-    (data.clk || []).forEach((ms, i) => { if (this.plies[i] && ms != null) this.plies[i].clock = ms; });
+    clk.forEach((ms, i) => { if (this.plies[i] && ms != null) this.plies[i].clock = ms; });
   }
 
   get tcInfo(): TimeControl { return timeControl(this.tc); }
@@ -178,7 +231,10 @@ export class Game {
     });
   }
 
-  fenAt(ply: number): string { return ply === 0 ? START_FEN : this.plies[ply - 1].fen; }
+  fenAt(ply: number): string {
+    const fen = ply === 0 ? START_FEN : this.plies[ply - 1].fen;
+    return this.forfeits.has(ply) ? withoutPiece(fen, this.forfeits.get(ply)) : fen;
+  }
   lastMoveAt(ply: number): [string, string] | null { return ply === 0 ? null : [this.plies[ply - 1].from, this.plies[ply - 1].to]; }
 
   /** Map<from, to[]> of legal moves in the live position. */
@@ -233,6 +289,42 @@ export class Game {
 
   resign(color: Color) { this.finish(color === 'w' ? '0-1' : '1-0', `${this.nameOf(color)} resigned`); }
   agreeDraw() { this.finish('1/2-1/2', 'Draw by agreement'); }
+  /**
+   * Overtime: `color` (to move, out of time) gives up its best piece and plays on with a minute.
+   * Returns the square given up, or null when there is nothing left to give (then it's a flag).
+   */
+  forfeit(color: Color): string | null {
+    if (this.over || !this.overtime || this.turn !== color || this.forfeits.has(this.length)) return null;
+    const sq = forfeitSquare(this.chess.fen(), color);
+    if (!sq) return null;
+    this.applyForfeit(this.length, sq);
+    this.clocks[color] = OVERTIME_MS;
+    return sq;
+  }
+
+  /** The piece given up for overtime at `ply`, if one was: its square and its name ("queen"). */
+  forfeitAt(ply: number): { sq: string; name: string } | null {
+    const sq = this.forfeits.get(ply);
+    if (!sq) return null;
+    const piece = fenPieces(ply === 0 ? START_FEN : this.plies[ply - 1].fen).get(sq);
+    return { sq, name: ({ Q: 'queen', R: 'rook', B: 'bishop', N: 'knight', P: 'pawn' })[piece?.[1]] || 'piece' };
+  }
+
+  /** Adds forfeits the other laptop made at earlier plies, keeping the moves after them that stay legal. */
+  mergeForfeits(ff: [number, string][]) {
+    const d = this.toJSON();
+    this._replay(d.moves, d.clk || [], [...(d.ff || []), ...ff]);
+    this._detectEnd();
+  }
+
+  /** Records a forfeit made at `ply` (the current one), e.g. one the other laptop made. */
+  applyForfeit(ply: number, sq: string) {
+    if (ply !== this.length || this.forfeits.has(ply)) return;
+    this.forfeits.set(ply, sq);
+    this.chess.remove(sq);
+    this._detectEnd();
+  }
+
   flag(color: Color) {
     const other: Color = color === 'w' ? 'b' : 'w';
     if (bareKing(this.chess.fen(), other)) this.finish('1/2-1/2', 'Time out vs insufficient material');
@@ -254,8 +346,13 @@ export class Game {
 
   undo() {
     if (!this.plies.length) return false;
-    this.chess.undo();
-    this.plies.pop();
+    if (this.forfeits.size) {
+      const d = this.toJSON();
+      this._replay(d.moves.slice(0, -1), (d.clk || []).slice(0, -1), d.ff || []);
+    } else {
+      this.chess.undo();
+      this.plies.pop();
+    }
     this.result = this.termination = this.endedAt = null;
     return true;
   }
@@ -277,6 +374,8 @@ export class Game {
       clk: this.plies.some((p) => p.clock != null) ? this.plies.map((p) => (p.clock == null ? null : Math.round(p.clock))) : undefined,
       remote: this.remote,
       ai: this.ai || undefined,
+      ot: this.overtime || undefined,
+      ff: this.forfeits.size ? [...this.forfeits] : undefined,
     };
   }
 
@@ -299,6 +398,8 @@ export class Game {
       return `{[%clk ${Math.floor(t / 3600)}:${String(Math.floor(t / 60) % 60).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}]}`;
     };
     this.plies.forEach((p, i) => {
+      const f = this.forfeitAt(i);
+      if (f) parts.push(`{Overtime: ${this.nameOf(p.color)} gives up the ${f.name} on ${f.sq}}`);
       if (i % 2 === 0) parts.push(`${i / 2 + 1}.`);
       parts.push(p.san);
       if (p.clock != null) parts.push(clk(p.clock));

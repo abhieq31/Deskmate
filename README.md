@@ -29,9 +29,19 @@ Please use it in line with your employer's policies.
   gets a 6-character code like `K7Q-M2X`. The other types it in once, and
   moves appear on both screens within moments. Clocks, draw offers,
   resignations and rematches sync too. ([How it works](#play-a-colleague))
-- **Play the computer** when you're alone at your desk: Easy, Medium or
-  Hard (Stockfish with its skill level turned down), any colour, with or
-  without a clock. Takeback undoes your move and its reply.
+- **Play the computer** when you're alone at your desk, at seven levels
+  from Beginner to Immortal, any colour, with or without a clock. Below
+  Immortal it plays like a person, not like a crippled engine: it looks a
+  few moves ahead, weighs a handful of moves and picks one that looks good
+  to it, and it takes longer over hard choices than obvious ones.
+  ([How strong is it?](#how-strong-is-the-computer)) Takeback undoes your
+  move and its reply.
+- **Pause** any timed game, against a colleague too: both clocks stop and
+  the board is covered on both laptops until either of you resumes. Space
+  pauses and resumes.
+- **Overtime.** Out of time? You don't lose: you give up your best piece
+  (queen, then rook, then bishop or knight, then a pawn) and get another
+  minute. Only a bare king loses on time. Turn it off in Settings → Play.
 - **The office table.** The home page keeps a league table of everyone who
   has played on that laptop: played, won, drawn, lost, points. Settle who
   is actually best on the floor.
@@ -105,6 +115,30 @@ Please use it in line with your employer's policies.
 - **PGN export**, FEN copy and takeback.
 
 <img src="docs/analysis.png" alt="Post-game analysis: evaluation bar, best-move arrow, evaluation graph and accuracy for both players" width="760" />
+
+## How strong is the computer?
+
+Each level searches to a fixed depth with several candidate moves, then
+picks one with probability `exp(−loss / T)`, where `loss` is how much worse
+than its best the move looks to it, in centipawns. Immortal is Stockfish 11
+at full strength. The numbers below come from games between neighbouring
+levels in the browser build (6 games per pair), every move scored by a separate Stockfish
+search (depth 11), in `src/levels.ts`:
+
+| Level | Depth | Candidates | T (cp) | Avg. loss per move (cp) | Beat the level below |
+| --- | --- | --- | --- | --- | --- |
+| Beginner | 2 | 40 | 80 | ~140, a blunder every ~10 moves | — |
+| Casual | 4 | 24 | 30 | ~100 | 6/6 |
+| Club | 6 | 12 | 20 | ~75 | 6/6 |
+| Expert | 9 | 8 | 15 | ~50 | 6/6 |
+| Master | 12 | 5 | 9 | ~30 | 6/6 |
+| Grandmaster | 15 | 3 | 4 | ~25 | 5/6 |
+| Immortal | 22 | 1 | 0 | ~20 (the scorer's own noise) | 5.5/6 |
+
+The names are a rough guide to the kind of player each one feels like, not
+measured ratings: an engine's loss per move maps onto human ratings only
+loosely, and the scoring search is weaker than the top levels, so it
+can't tell Grandmaster and Immortal apart move by move, only by results.
 
 ## Play a colleague
 
@@ -190,6 +224,7 @@ src/game.ts           game model on top of chess.js: plies, results, PGN (pure, 
 src/live.ts           live rooms: room codes, signed snapshots over Nostr relays (tested)
 src/remote.ts         compact move encoding for snapshots, one byte per move (tested)
 src/engine.ts         Stockfish in a Web Worker over UCI (analysis and play)
+src/levels.ts         the computer's levels: how it picks a move and how long it thinks (tested)
 src/analysis.ts       win chances, ??/?/?! classification, accuracy (tested)
 src/office.ts         the office table from saved games (tested)
 src/openings.ts       opening names from vendor/openings

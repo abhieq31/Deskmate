@@ -1,4 +1,5 @@
 // Stockfish in a Web Worker, spoken to over UCI. Loaded only when someone asks for an analysis.
+import { mateScore } from './levels.ts';
 
 /** Where the app lives, so the engine is found next to it on any host (…/deskmate, …/Deskmate/, file). */
 function appBase() {
@@ -167,6 +168,49 @@ export class Engine {
         }, movetime + 4000);
       });
       this._send(`setoption name Skill Level value ${skill}`);
+      this._send(`position fen ${fen}`);
+      this._send(`go depth ${depth} movetime ${movetime}`);
+      return done;
+    };
+    const result = this.busy.then(run, run);
+    this.busy = result.catch(() => {});
+    return result;
+  }
+
+  /**
+   * The `multipv` best moves in a position, each scored in centipawns from the side to move
+   * (mates as mateScore). For the computer's human-like levels, which pick among them.
+   */
+  topMoves(fen: string, { depth, movetime, multipv }: Limits & { multipv: number }): Promise<{ uci: string; score: number }[]> {
+    const run = async () => {
+      await this.start();
+      const lines = new Map<number, { uci: string; score: number }>();
+      const done = new Promise<{ uci: string; score: number }[]>((resolve) => {
+        const finish = () => {
+          this.listeners.delete(l);
+          clearTimeout(watchdog);
+          this._send('setoption name MultiPV value 1');
+          resolve([...lines.values()]);
+        };
+        const l = (line: string) => {
+          if (line.startsWith('info') && line.includes(' pv ') && !/ (upper|lower)bound /.test(line)) {
+            const m = / multipv (\d+) score (cp|mate) (-?\d+) .* pv ([a-h][1-8][a-h][1-8][qrbn]?)/.exec(line);
+            if (m) lines.set(+m[1], { uci: m[4], score: m[2] === 'cp' ? +m[3] : mateScore(+m[3]) });
+          } else if (line.startsWith('bestmove')) {
+            // no legal move info but a bestmove (one legal move at low depth): play it
+            const b = /^bestmove ([a-h][1-8][a-h][1-8][qrbn]?)/.exec(line);
+            if (!lines.size && b) lines.set(1, { uci: b[1], score: 0 });
+            finish();
+          }
+        };
+        this.listeners.add(l);
+        const watchdog = setTimeout(() => {
+          this._send('stop');
+          setTimeout(() => { if (this.listeners.has(l)) finish(); }, 3000);
+        }, movetime + 4000);
+      });
+      this._send('setoption name Skill Level value 20');
+      this._send(`setoption name MultiPV value ${multipv}`);
       this._send(`position fen ${fen}`);
       this._send(`go depth ${depth} movetime ${movetime}`);
       return done;

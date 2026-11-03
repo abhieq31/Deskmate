@@ -38,6 +38,7 @@ export const DEFAULT_SETTINGS = {
   theme: 'ember',
   focus: true, // during a game: only the board, the players and the clocks
   winBar: true, // a slim bar by the board with each side's winning chances
+  overtime: true, // out of time: give up your best piece for another minute instead of losing
   notation: 'figurine', // moves as ♘f3, or Nf3 with 'letter'
   animation: 'medium', // piece slides: 'none' | 'fast' | 'medium' | 'slow'
   celebration: 'confetti', // or 'none'

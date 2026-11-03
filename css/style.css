@@ -1687,6 +1687,40 @@ body.focus .sidebar, body.focus .mobile-bar, body.focus .panel {
   border-radius: 6px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 80px rgba(229, 56, 59, 0.05);
   perspective: 1600px;
+  position: relative;
+}
+
+/* paused: the board is covered — nothing to think about on frozen time, nothing to see over a shoulder */
+.pause-cover {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  place-items: center;
+  border: 0;
+  border-radius: inherit;
+  cursor: pointer;
+  background: #161618;
+  color: var(--text-strong);
+}
+
+.pause-cover svg {
+  width: 10%;
+  height: 10%;
+  fill: currentColor;
+  opacity: 0.7;
+}
+
+.pause-cover:hover svg {
+  opacity: 1;
+}
+
+body.paused .pause-cover {
+  display: grid;
+}
+
+body.paused .evalbar {
+  visibility: hidden;
 }
 
 .board {
