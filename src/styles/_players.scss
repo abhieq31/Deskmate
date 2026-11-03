@@ -11,6 +11,8 @@
 .pmeta { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
 .pline { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .pname { color: var(--text-strong); font-weight: 700; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prating { color: var(--muted); font: 500 0.85rem var(--mono); flex: none; }
+.prating:empty { display: none; }
 .pstatus { font-size: 0.8rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player.to-move .pstatus { color: var(--accent-2); }
 .player.winner .pstatus { color: var(--gold); font-weight: 600; }

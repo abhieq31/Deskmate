@@ -44,6 +44,10 @@ textarea { font-family: var(--mono); font-size: 0.85rem; resize: vertical; margi
 
 .over { text-align: center; width: min(420px, calc(100vw - 24px)); }
 .over h2 { font-size: 1.7rem; margin-bottom: 6px; }
+.over-rating { display: flex; justify-content: center; gap: 18px; margin: 4px 0 0; font: 600 0.95rem var(--mono); color: var(--text-strong); }
+.over-rating:empty { display: none; }
+.over-rating .up { color: #6fbf73; }
+.over-rating .down { color: #f08c8c; }
 .over-crown {
   font-size: 3.4rem; line-height: 1; margin-bottom: 8px; color: var(--gold);
   text-shadow: 0 0 24px rgba(232, 182, 76, 0.6); animation: crown 1.2s cubic-bezier(.2, 1.4, .4, 1);

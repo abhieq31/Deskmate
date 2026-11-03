@@ -29,8 +29,8 @@ Please use it in line with your employer's policies.
   gets a 6-character code like `K7Q-M2X`. The other types it in once, and
   moves appear on both screens within moments. Clocks, draw offers,
   resignations and rematches sync too. ([How it works](#play-a-colleague))
-- **Play the computer** when you're alone at your desk, at seven levels
-  from Beginner to Immortal, any colour, with or without a clock. Below
+- **Play the computer** when you're alone at your desk, at eight levels
+  from Newcomer to Immortal, any colour, with or without a clock. Below
   Immortal it plays like a person, not like a crippled engine: it looks a
   few moves ahead, weighs a handful of moves and picks one that looks good
   to it, and it takes longer over hard choices than obvious ones.
@@ -42,8 +42,10 @@ Please use it in line with your employer's policies.
 - **Overtime.** Out of time? You don't lose: you give up your best piece
   (queen, then rook, then bishop or knight, then a pawn) and get another
   minute. Only a bare king loses on time. Turn it off in Settings → Play.
+- **Ratings.** Everyone who plays gets an Elo rating, shown by their name
+  and saved in the browser. ([How](#ratings))
 - **The office table.** The home page keeps a league table of everyone who
-  has played on that laptop: played, won, drawn, lost, points. Settle who
+  has played on that laptop: played, won, drawn, lost, rating. Settle who
   is actually best on the floor.
 - **Ten clocks**, from 1+0 to 30+0, or none.
 - **A home page** with Play a colleague, Join with a code, Play on this
@@ -120,25 +122,45 @@ Please use it in line with your employer's policies.
 
 Each level searches to a fixed depth with several candidate moves, then
 picks one with probability `exp(−loss / T)`, where `loss` is how much worse
-than its best the move looks to it, in centipawns. Immortal is Stockfish 11
-at full strength. The numbers below come from games between neighbouring
-levels in the browser build (6 games per pair), every move scored by a separate Stockfish
-search (depth 11), in `src/levels.ts`:
+than its best the move looks to it, in centipawns. The three weakest levels
+also notice only a few of the legal moves each turn, at random (2, 4 or 8),
+so, like a person starting out, they miss the piece you left hanging as
+often as their own. Immortal is Stockfish 11 at full strength.
 
-| Level | Depth | Candidates | T (cp) | Avg. loss per move (cp) | Beat the level below |
-| --- | --- | --- | --- | --- | --- |
-| Beginner | 2 | 40 | 80 | ~140, a blunder every ~10 moves | — |
-| Casual | 4 | 24 | 30 | ~100 | 6/6 |
-| Club | 6 | 12 | 20 | ~75 | 6/6 |
-| Expert | 9 | 8 | 15 | ~50 | 6/6 |
-| Master | 12 | 5 | 9 | ~30 | 6/6 |
-| Grandmaster | 15 | 3 | 4 | ~25 | 5/6 |
-| Immortal | 22 | 1 | 0 | ~20 (the scorer's own noise) | 5.5/6 |
+The measurements come from games between neighbouring levels in the browser
+build, every move scored by a separate Stockfish search (depth 11); the
+parameters live in `src/levels.ts`:
 
-The names are a rough guide to the kind of player each one feels like, not
-measured ratings: an engine's loss per move maps onto human ratings only
-loosely, and the scoring search is weaker than the top levels, so it
-can't tell Grandmaster and Immortal apart move by move, only by results.
+| Level | Rating | Notices | Depth | T (cp) | Avg. loss per move (cp) | Blunders | Beat the level below |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Newcomer | 250 | 2 moves | 1 | 30 | ~300 | 1 move in 4 | — |
+| Beginner | 500 | 4 moves | 2 | 30 | ~250 | 1 in 6 | 10/10 |
+| Casual | 800 | 8 moves | 2 | 40 | ~200 | 1 in 7 | 9/10 |
+| Club | 1100 | all | 2 | 80 | ~135 | 1 in 12 | 10/10 |
+| Expert | 1400 | all | 4 | 30 | ~95 | 1 in 35 | 10/10 |
+| Master | 1900 | all | 9 | 15 | ~50 | rare | 6/6 |
+| Grandmaster | 2300 | all | 12 | 9 | ~30 | rare | 6/6 |
+| Immortal | 3000 | all | 22 | 0 | ~20 (the scorer's noise) | none | 5.5/6 |
+
+The ratings are estimates of how each level plays against people, and they
+are what your rating is measured against. The ladder's order is measured;
+the absolute numbers are not (engine-vs-engine results and loss per move
+map onto human ratings only loosely). If a level feels too strong or too
+weak for its number, its row in `src/levels.ts` is the one place to change.
+
+## Ratings
+
+Everyone who plays on a laptop gets an Elo rating, kept in that browser.
+You start at 800. A game moves it by `K × (score − expected)`, with K = 40
+for your first 20 games and 20 after, and `expected = 1 / (1 + 10^((them − you) / 400))`.
+Rated: games against the computer (against the level's rating), games on one
+laptop (both players), and live games (against the rating your colleague's
+own laptop sends). Unfinished games and placeholder names ("White") are not.
+
+Only results are stored (`deskmate:results`, about 100 bytes a game); the
+ratings are replayed from them in order (`src/rating.ts`). Deleting saved
+games doesn't touch your rating, and a takeback that changes a result can't
+count it twice.
 
 ## Play a colleague
 
@@ -225,6 +247,7 @@ src/live.ts           live rooms: room codes, signed snapshots over Nostr relays
 src/remote.ts         compact move encoding for snapshots, one byte per move (tested)
 src/engine.ts         Stockfish in a Web Worker over UCI (analysis and play)
 src/levels.ts         the computer's levels: how it picks a move and how long it thinks (tested)
+src/rating.ts         Elo ratings replayed from the saved results (tested)
 src/analysis.ts       win chances, ??/?/?! classification, accuracy (tested)
 src/office.ts         the office table from saved games (tested)
 src/openings.ts       opening names from vendor/openings

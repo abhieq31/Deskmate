@@ -16,7 +16,8 @@ export interface Ply {
 }
 
 /** A live game with a colleague: room code, this browser's colour, each seat's player id, a pending offer. */
-export interface RemoteSeat { room: string; me: Color | null; pw: string | null; pb: string | null; offer: Color | null }
+export interface RemoteSeat { room: string; me: Color | null; pw: string | null; pb: string | null; offer: Color | null; or?: number | null }
+// `or`: the colleague's rating, as their own laptop has it
 /** A game against the computer: the colour it plays and how strong. */
 export interface AiSeat { color: Color; level: string }
 

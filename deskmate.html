@@ -2167,6 +2167,16 @@ body.paused .evalbar {
   white-space: nowrap;
 }
 
+.prating {
+  color: var(--muted);
+  font: 500 0.85rem var(--mono);
+  flex: none;
+}
+
+.prating:empty {
+  display: none;
+}
+
 .pstatus {
   font-size: 0.8rem;
   color: var(--muted);
@@ -2481,6 +2491,27 @@ textarea {
 .over h2 {
   font-size: 1.7rem;
   margin-bottom: 6px;
+}
+
+.over-rating {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin: 4px 0 0;
+  font: 600 0.95rem var(--mono);
+  color: var(--text-strong);
+}
+
+.over-rating:empty {
+  display: none;
+}
+
+.over-rating .up {
+  color: #6fbf73;
+}
+
+.over-rating .down {
+  color: #f08c8c;
 }
 
 .over-crown {
@@ -3223,7 +3254,7 @@ textarea {
       </section>
       <section class="home-recent hidden" id="home-office">
         <div class="home-recent-head"><h2>Office table</h2></div>
-        <table class="office"><thead><tr><th></th><th class="nm">Player</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Pts</th></tr></thead><tbody id="office-table"></tbody></table>
+        <table class="office"><thead><tr><th></th><th class="nm">Player</th><th>P</th><th>W</th><th>D</th><th>L</th><th>Rating</th></tr></thead><tbody id="office-table"></tbody></table>
       </section>
       <footer class="home-foot">
         <a class="link-btn" href="https://github.com/abhieq31/Deskmate" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" class="fill"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .8.1-.7.4-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .6 1.4.2 2.4.1 2.7a3.9 3.9 0 0 1 1 2.7c0 3.9-2.3 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg> Source code</a>
@@ -3248,7 +3279,7 @@ textarea {
     <section class="player top" id="player-top">
       <span class="avatar" aria-hidden="true"></span>
       <div class="pmeta">
-        <div class="pline"><span class="pname" data-name></span><span class="pstatus" data-status></span></div>
+        <div class="pline"><span class="pname" data-name></span><span class="prating" data-rating></span><span class="pstatus" data-status></span></div>
         <span class="material" data-material></span>
       </div>
     </section>
@@ -3270,7 +3301,7 @@ textarea {
     <section class="player bottom" id="player-bottom">
       <span class="avatar" aria-hidden="true"></span>
       <div class="pmeta">
-        <div class="pline"><span class="pname" data-name></span><span class="pstatus" data-status></span></div>
+        <div class="pline"><span class="pname" data-name></span><span class="prating" data-rating></span><span class="pstatus" data-status></span></div>
         <span class="material" data-material></span>
       </div>
     </section>
@@ -3423,6 +3454,7 @@ textarea {
     <div class="over-crown" aria-hidden="true">♔</div>
     <h2 id="over-title"></h2>
     <p class="muted" id="over-reason"></p>
+    <p class="over-rating" id="over-rating"></p>
     <div class="modal-actions wrap">
       <button class="btn" id="over-analyse">Analyse</button>
       <button class="btn" id="over-new">New game</button>
@@ -3561,12 +3593,12 @@ function peg$subclass(child, parent) {
   C.prototype = parent.prototype;
   child.prototype = new C();
 }
-function peg$SyntaxError(message, expected, found, location2) {
+function peg$SyntaxError(message, expected2, found, location2) {
   var self = Error.call(this, message);
   if (Object.setPrototypeOf) {
     Object.setPrototypeOf(self, peg$SyntaxError.prototype);
   }
-  self.expected = expected;
+  self.expected = expected2;
   self.found = found;
   self.location = location2;
   self.name = "SyntaxError";
@@ -3609,7 +3641,7 @@ peg$SyntaxError.prototype.format = function(sources) {
   }
   return str;
 };
-peg$SyntaxError.buildMessage = function(expected, found) {
+peg$SyntaxError.buildMessage = function(expected2, found) {
   var DESCRIBE_EXPECTATION_FNS = {
     literal: function(expectation) {
       return '"' + literalEscape(expectation.text) + '"';
@@ -3650,8 +3682,8 @@ peg$SyntaxError.buildMessage = function(expected, found) {
   function describeExpectation(expectation) {
     return DESCRIBE_EXPECTATION_FNS[expectation.type](expectation);
   }
-  function describeExpected(expected2) {
-    var descriptions = expected2.map(describeExpectation);
+  function describeExpected(expected3) {
+    var descriptions = expected3.map(describeExpectation);
     var i, j;
     descriptions.sort();
     if (descriptions.length > 0) {
@@ -3675,7 +3707,7 @@ peg$SyntaxError.buildMessage = function(expected, found) {
   function describeFound(found2) {
     return found2 ? '"' + literalEscape(found2) + '"' : "end of input";
   }
-  return "Expected " + describeExpected(expected) + " but " + describeFound(found) + " found.";
+  return "Expected " + describeExpected(expected2) + " but " + describeFound(found) + " found.";
 };
 function peg$parse(input, options) {
   options = options !== void 0 ? options : {};
@@ -3857,7 +3889,7 @@ function peg$parse(input, options) {
     };
     return res;
   }
-  function peg$fail(expected) {
+  function peg$fail(expected2) {
     if (peg$currPos < peg$maxFailPos) {
       return;
     }
@@ -3865,12 +3897,12 @@ function peg$parse(input, options) {
       peg$maxFailPos = peg$currPos;
       peg$maxFailExpected = [];
     }
-    peg$maxFailExpected.push(expected);
+    peg$maxFailExpected.push(expected2);
   }
-  function peg$buildStructuredError(expected, found, location2) {
+  function peg$buildStructuredError(expected2, found, location2) {
     return new peg$SyntaxError(
-      peg$SyntaxError.buildMessage(expected, found),
-      expected,
+      peg$SyntaxError.buildMessage(expected2, found),
+      expected2,
       found,
       location2
     );
@@ -7829,9 +7861,128 @@ var Board = class {
   }
 };
 
+// src/levels.ts
+var LEVELS = [
+  { id: "newcomer", label: "Newcomer", rating: 250, depth: 1, multipv: 60, sees: 2, temperature: 30, movetime: 300 },
+  { id: "beginner", label: "Beginner", rating: 500, depth: 2, multipv: 60, sees: 4, temperature: 30, movetime: 300 },
+  { id: "casual", label: "Casual", rating: 800, depth: 2, multipv: 60, sees: 8, temperature: 40, movetime: 300 },
+  { id: "club", label: "Club", rating: 1100, depth: 2, multipv: 40, sees: 0, temperature: 80, movetime: 300 },
+  { id: "expert", label: "Expert", rating: 1400, depth: 4, multipv: 24, sees: 0, temperature: 30, movetime: 400 },
+  { id: "master", label: "Master", rating: 1900, depth: 9, multipv: 8, sees: 0, temperature: 15, movetime: 700 },
+  { id: "grandmaster", label: "Grandmaster", rating: 2300, depth: 12, multipv: 5, sees: 0, temperature: 9, movetime: 1e3 },
+  { id: "immortal", label: "Immortal", rating: 3e3, depth: 22, multipv: 1, sees: 0, temperature: 0, movetime: 2500 }
+];
+var OLD = { easy: "beginner", medium: "casual", hard: "club" };
+function level(id) {
+  const key = OLD[id] || id;
+  return LEVELS.find((l) => l.id === key) || LEVELS[2];
+}
+var mateScore = (n) => n > 0 ? 1e5 - n * 100 : -1e5 - n * 100;
+function noticed(cands, n, rnd) {
+  if (!n || n >= cands.length) return cands;
+  const pool = cands.slice();
+  for (let i = 0; i < n; i++) {
+    const j = i + Math.floor(rnd() * (pool.length - i));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, n);
+}
+function pickMove(cands, lv, rnd = Math.random) {
+  if (!cands.length) return null;
+  const seen = noticed(cands, lv.sees, rnd);
+  const best = Math.max(...seen.map((c) => c.score));
+  if (lv.temperature <= 0) return seen.find((c) => c.score === best).uci;
+  if (best >= 5e4) return seen.find((c) => c.score === best).uci;
+  const w = seen.map((c) => Math.exp(-Math.min(best - c.score, 3e3) / lv.temperature));
+  let r = rnd() * w.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < seen.length; i++) {
+    r -= w[i];
+    if (r <= 0) return seen[i].uci;
+  }
+  return seen[seen.length - 1].uci;
+}
+function thinkTime(cands, lv, clockMs, rnd = Math.random) {
+  if (lv.id === "immortal") return 300;
+  const sorted = cands.map((c) => c.score).sort((a, b) => b - a);
+  const close = sorted.filter((s) => sorted[0] - s <= 40).length;
+  const obvious = sorted.length === 1 || sorted[0] - (sorted[1] ?? -Infinity) >= 200;
+  const base = obvious ? 600 : 900 + 450 * Math.min(close, 4);
+  let ms = base * (0.6 + 0.8 * rnd());
+  if (clockMs != null) ms = Math.min(ms, clockMs / 30);
+  return Math.max(250, Math.round(ms));
+}
+
+// src/rating.ts
+var START_RATING = 800;
+var ANON = /* @__PURE__ */ new Set(["", "?", "white", "black", "opponent", "player 1", "player 2"]);
+function playerKey(name) {
+  const key = String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
+  return ANON.has(key) ? null : key;
+}
+var expected = (a, b) => 1 / (1 + 10 ** ((b - a) / 400));
+var K = (games) => games < 20 ? 40 : 20;
+function resultOf(g) {
+  if (!g.id || !["1-0", "0-1", "1/2-1/2"].includes(g.result)) return null;
+  const fixed = {};
+  let bot;
+  if (g.ai) {
+    bot = g.ai.color;
+    fixed[bot] = level(g.ai.level).rating;
+  }
+  const r = g.remote;
+  if (r?.me && r.or) fixed[r.me === "w" ? "b" : "w"] = r.or;
+  return {
+    id: g.id,
+    at: g.endedAt || g.startedAt || 0,
+    white: g.white || "",
+    black: g.black || "",
+    result: g.result,
+    ...Object.keys(fixed).length ? { fixed } : {},
+    ...bot ? { bot } : {}
+  };
+}
+function rate(results) {
+  const players = /* @__PURE__ */ new Map();
+  const changes = /* @__PURE__ */ new Map();
+  const ordered = [...results].sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1));
+  for (const g of ordered) {
+    const side = (c) => {
+      const name = c === "w" ? g.white : g.black;
+      const key = c === g.bot ? null : playerKey(name);
+      const fixed = g.fixed?.[c];
+      if (key && !players.has(key)) players.set(key, { name: name.trim().replace(/\s+/g, " "), rating: START_RATING, games: 0 });
+      return { key, fixed, rating: fixed ?? (key ? players.get(key).rating : null) };
+    };
+    const w = side("w"), b = side("b");
+    if (w.rating == null || b.rating == null) continue;
+    const score = g.result === "1-0" ? 1 : g.result === "0-1" ? 0 : 0.5;
+    const out = {};
+    for (const [c, me, them, s] of [["w", w, b, score], ["b", b, w, 1 - score]]) {
+      if (!me.key) continue;
+      const p = players.get(me.key);
+      if (me.fixed != null) {
+        p.rating = me.fixed;
+        continue;
+      }
+      const after = Math.max(100, Math.round(me.rating + K(p.games) * (s - expected(me.rating, them.rating))));
+      out[c] = { name: p.name, before: me.rating, after };
+    }
+    for (const c of ["w", "b"]) {
+      const ch = out[c];
+      if (!ch) continue;
+      const p = players.get((c === "w" ? w : b).key);
+      p.rating = ch.after;
+      p.games++;
+    }
+    changes.set(g.id, out);
+  }
+  return { players, changes };
+}
+
 // src/storage.ts
-var KEYS = { current: "deskmate:current", archive: "deskmate:archive", settings: "deskmate:settings" };
+var KEYS = { current: "deskmate:current", archive: "deskmate:archive", settings: "deskmate:settings", results: "deskmate:results" };
 var ARCHIVE_LIMIT = 300;
+var RESULTS_LIMIT = 5e3;
 try {
   for (const [name, key] of Object.entries(KEYS)) {
     const legacy = `obchess:${name}`;
@@ -7911,7 +8062,21 @@ var storage = {
   removeFromArchive(id) {
     write(KEYS.archive, read(KEYS.archive, []).filter((g) => g.id !== id));
   },
-  clearArchive: () => write(KEYS.archive, [])
+  clearArchive: () => write(KEYS.archive, []),
+  /** Every rated result, oldest first. The first time, it starts from the saved games. */
+  loadResults() {
+    const list = read(KEYS.results, null);
+    if (list) return list;
+    const seeded = read(KEYS.archive, []).map(resultOf).filter(Boolean).reverse();
+    write(KEYS.results, seeded);
+    return seeded;
+  },
+  /** Insert or replace one game's result (a takeback can change it). */
+  saveResult(r) {
+    const list = storage.loadResults().filter((x) => x.id !== r.id);
+    list.push(r);
+    write(KEYS.results, list.slice(-RESULTS_LIMIT));
+  }
 };
 
 // src/sound.ts
@@ -8685,46 +8850,6 @@ var Room = class {
   }
 };
 
-// src/levels.ts
-var LEVELS = [
-  { id: "beginner", label: "Beginner", depth: 2, multipv: 40, temperature: 80, movetime: 300 },
-  { id: "casual", label: "Casual", depth: 4, multipv: 24, temperature: 30, movetime: 400 },
-  { id: "club", label: "Club", depth: 6, multipv: 12, temperature: 20, movetime: 500 },
-  { id: "expert", label: "Expert", depth: 9, multipv: 8, temperature: 15, movetime: 700 },
-  { id: "master", label: "Master", depth: 12, multipv: 5, temperature: 9, movetime: 1e3 },
-  { id: "grandmaster", label: "Grandmaster", depth: 15, multipv: 3, temperature: 4, movetime: 1500 },
-  { id: "immortal", label: "Immortal", depth: 22, multipv: 1, temperature: 0, movetime: 2500 }
-];
-var OLD = { easy: "casual", medium: "club", hard: "expert" };
-function level(id) {
-  const key = OLD[id] || id;
-  return LEVELS.find((l) => l.id === key) || LEVELS[2];
-}
-var mateScore = (n) => n > 0 ? 1e5 - n * 100 : -1e5 - n * 100;
-function pickMove(cands, lv, rnd = Math.random) {
-  if (!cands.length) return null;
-  const best = Math.max(...cands.map((c) => c.score));
-  if (lv.temperature <= 0) return cands.find((c) => c.score === best).uci;
-  if (best >= 5e4) return cands.find((c) => c.score === best).uci;
-  const w = cands.map((c) => Math.exp(-Math.min(best - c.score, 3e3) / lv.temperature));
-  let r = rnd() * w.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < cands.length; i++) {
-    r -= w[i];
-    if (r <= 0) return cands[i].uci;
-  }
-  return cands[cands.length - 1].uci;
-}
-function thinkTime(cands, lv, clockMs, rnd = Math.random) {
-  if (lv.id === "immortal") return 300;
-  const sorted = cands.map((c) => c.score).sort((a, b) => b - a);
-  const close = sorted.filter((s) => sorted[0] - s <= 40).length;
-  const obvious = sorted.length === 1 || sorted[0] - (sorted[1] ?? -Infinity) >= 200;
-  const base = obvious ? 600 : 900 + 450 * Math.min(close, 4);
-  let ms = base * (0.6 + 0.8 * rnd());
-  if (clockMs != null) ms = Math.min(ms, clockMs / 30);
-  return Math.max(250, Math.round(ms));
-}
-
 // src/engine.ts
 function appBase() {
   const p = location.pathname;
@@ -8968,13 +9093,13 @@ var Engine = class {
 };
 
 // src/office.ts
-var ANON = /* @__PURE__ */ new Set(["", "?", "white", "black", "opponent", "player 1", "player 2"]);
+var ANON2 = /* @__PURE__ */ new Set(["", "?", "white", "black", "opponent", "player 1", "player 2"]);
 function standings(games) {
   const rows = /* @__PURE__ */ new Map();
   const row = (raw) => {
     const name = String(raw || "").trim().replace(/\s+/g, " ");
     const key = name.toLowerCase();
-    if (ANON.has(key)) return null;
+    if (ANON2.has(key)) return null;
     if (!rows.has(key)) rows.set(key, { name, played: 0, won: 0, drawn: 0, lost: 0, score: 0 });
     return rows.get(key);
   };
@@ -9084,6 +9209,7 @@ var viewPly = game.length;
 var review = null;
 var paused = game.hasClock && game.length > 0 && !game.over && !game.remote;
 var lastTick = Date.now();
+var ratings = rate(storage.loadResults());
 var pauseSeq = 0;
 var flipTimer = null;
 var room = null;
@@ -9131,6 +9257,12 @@ function render() {
   applyFocus();
   scheduleWinBar();
 }
+function ratingOf(g, color) {
+  if (g.ai?.color === color) return level(g.ai.level).rating;
+  if (g.remote?.me && g.remote.me !== color && g.remote.or) return g.remote.or;
+  const key = playerKey(g.nameOf(color));
+  return key ? ratings.players.get(key)?.rating ?? START_RATING : null;
+}
 function renderPlayers() {
   const g = active();
   const fen = g.fenAt(viewPly);
@@ -9144,6 +9276,8 @@ function renderPlayers() {
     const here = review || seated(color);
     card.dataset.color = color;
     card.querySelector("[data-name]").textContent = (here ? g.nameOf(color) || colorName(color) : "Opponent") + (!review && g.remote?.me === color ? " (you)" : "");
+    const rt = here ? ratingOf(g, color) : null;
+    card.querySelector("[data-rating]").textContent = rt == null ? "" : String(rt);
     const m = mat[color];
     const groups = [];
     for (const r of m.pieces) (groups.at(-1)?.[0] === r ? groups.at(-1) : groups[groups.push([]) - 1]).push(r);
@@ -9400,16 +9534,29 @@ function scheduleFlip(delay = 300) {
 function onGameOver() {
   persist();
   storage.archive(game.toJSON());
+  const entry = resultOf(game.toJSON());
+  if (entry) {
+    storage.saveResult(entry);
+    ratings = rate(storage.loadResults());
+  }
   render();
   const g = game;
   $("#over-title").textContent = g.winnerText();
   $("#over-reason").textContent = g.termination;
+  const ch = ratings.changes.get(g.id) || {};
+  $("#over-rating").innerHTML = ["w", "b"].filter((c) => ch[c] && (!g.remote?.me || g.remote.me === c)).map((c) => {
+    const { name, before, after } = ch[c];
+    const d = after - before;
+    return `<span>${esc(name)} ${after} <b class="${d >= 0 ? "up" : "down"}">${d >= 0 ? "+" : "−"}${Math.abs(d)}</b></span>`;
+  }).join("");
   $("#dlg-over").classList.toggle("drawn", g.result === "1/2-1/2");
   $("#dlg-over .over-crown").textContent = g.result === "1-0" ? "♔" : g.result === "0-1" ? "♚" : "½";
   setTimeout(() => {
     if (game !== g || !g.over) return;
     openDialog("#dlg-over");
-    if (g.result !== "1/2-1/2" && settings.celebration !== "none") confetti();
+    const winner = g.result === "1-0" ? "w" : g.result === "0-1" ? "b" : null;
+    const ours = winner && winner !== g.ai?.color && (!g.remote?.me || g.remote.me === winner);
+    if (ours && settings.celebration !== "none") confetti();
   }, 650);
 }
 function persist() {
@@ -9541,7 +9688,9 @@ function snapshot() {
     r: game.result,
     t: game.termination,
     o: r.offer || null,
-    p: pauseSeq
+    p: pauseSeq,
+    rw: ratingOf(game, "w") || void 0,
+    rb: ratingOf(game, "b") || void 0
   };
 }
 function publish() {
@@ -9611,6 +9760,7 @@ function completeJoin(snap, moves) {
     },
     ot: !!snap.ot
   });
+  game.remote.or = (me === "w" ? snap.rb : snap.rw) || null;
   playIn(moves, snap.f);
   if (snap.r && !game.result) game.finish(snap.r, snap.t || "Game over");
   if (game.hasClock && snap.c) game.clocks = { w: snap.c[0], b: snap.c[1] };
@@ -9635,6 +9785,8 @@ function applySnapshot(snap, moves) {
   const someoneJoined = !r.pw && snap.pw || !r.pb && snap.pb;
   if (snap.pw) r.pw = snap.pw;
   if (snap.pb) r.pb = snap.pb;
+  const theirs = r.me === "w" ? snap.rb : snap.rw;
+  if (theirs) r.or = theirs;
   if (snap.w && r.me !== "w") game.white = snap.w;
   if (snap.b && r.me !== "b") game.black = snap.b;
   const missed = (snap.f || []).filter(([i]) => !game.forfeits.has(i) && i < game.length && moves.slice(0, i).every((s, j) => s === game.plies[j].san));
@@ -10415,9 +10567,9 @@ function renderHome() {
   renderOffice();
 }
 function renderOffice() {
-  const rows = standings(storage.loadArchive()).slice(0, 8);
+  const rows = standings(storage.loadArchive()).map((r) => ({ ...r, rating: ratings.players.get(playerKey(r.name))?.rating })).filter((r) => r.rating != null).sort((a, b) => b.rating - a.rating).slice(0, 8);
   $("#home-office").classList.toggle("hidden", !rows.length);
-  $("#office-table").innerHTML = rows.map((r, i) => `<tr><td class="rk">${i + 1}</td><td class="nm">${esc(r.name)}</td><td>${r.played}</td><td>${r.won}</td><td>${r.drawn}</td><td>${r.lost}</td><td class="pts">${String(r.score).replace(".5", "½")}</td></tr>`).join("");
+  $("#office-table").innerHTML = rows.map((r, i) => `<tr><td class="rk">${i + 1}</td><td class="nm">${esc(r.name)}</td><td>${r.played}</td><td>${r.won}</td><td>${r.drawn}</td><td>${r.lost}</td><td class="pts">${r.rating}</td></tr>`).join("");
 }
 $("#home-games").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-act]");

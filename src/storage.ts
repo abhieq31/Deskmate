@@ -1,6 +1,10 @@
 // localStorage persistence. Everything stays in this browser; nothing is sent anywhere.
-const KEYS = { current: 'deskmate:current', archive: 'deskmate:archive', settings: 'deskmate:settings' };
+import { resultOf, type RatedResult } from './rating.ts';
+
+const KEYS = { current: 'deskmate:current', archive: 'deskmate:archive', settings: 'deskmate:settings', results: 'deskmate:results' };
 const ARCHIVE_LIMIT = 300;
+// results behind the ratings: ~100 bytes each, kept far longer than the full games
+const RESULTS_LIMIT = 5000;
 
 // the app used to be called OBChess: carry its saved data over once
 try {
@@ -76,4 +80,19 @@ export const storage = {
     write(KEYS.archive, read(KEYS.archive, []).filter((g) => g.id !== id));
   },
   clearArchive: () => write(KEYS.archive, []),
+
+  /** Every rated result, oldest first. The first time, it starts from the saved games. */
+  loadResults(): RatedResult[] {
+    const list = read(KEYS.results, null);
+    if (list) return list;
+    const seeded = read(KEYS.archive, []).map(resultOf).filter(Boolean).reverse();
+    write(KEYS.results, seeded);
+    return seeded;
+  },
+  /** Insert or replace one game's result (a takeback can change it). */
+  saveResult(r: RatedResult) {
+    const list = storage.loadResults().filter((x) => x.id !== r.id);
+    list.push(r);
+    write(KEYS.results, list.slice(-RESULTS_LIMIT));
+  },
 };

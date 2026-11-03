@@ -7,6 +7,7 @@ import { confetti } from './confetti.ts';
 import { packMoves, unpackMoves } from './remote.ts';
 import { Room, newRoomCode, parseRoomCode, formatRoomCode } from './live.ts';
 import { LEVELS, level, pickMove, thinkTime } from './levels.ts';
+import { rate, resultOf, playerKey, START_RATING } from './rating.ts';
 import { Engine, type Eval } from './engine.ts';
 import { standings } from './office.ts';
 import { loadOpenings, openingName } from './openings.ts';
@@ -31,6 +32,8 @@ let review = null; // a read-only Game opened from saved games / import
 // a same-laptop timed game resumes paused after a reload; live games keep running
 let paused = game.hasClock && game.length > 0 && !game.over && !game.remote;
 let lastTick = Date.now();
+// everyone's rating, replayed from the results saved on this laptop (rating.ts)
+let ratings = rate(storage.loadResults());
 // live games: how many times either player has paused or resumed; odd = paused. Synced in snapshots.
 let pauseSeq = 0;
 let flipTimer = null;
@@ -84,6 +87,14 @@ function render() {
   scheduleWinBar();
 }
 
+/** A side's rating: the computer's level, a colleague's own number, or this laptop's for a named player. */
+function ratingOf(g: Game, color: Color): number | null {
+  if (g.ai?.color === color) return level(g.ai.level).rating;
+  if (g.remote?.me && g.remote.me !== color && g.remote.or) return g.remote.or;
+  const key = playerKey(g.nameOf(color));
+  return key ? ratings.players.get(key)?.rating ?? START_RATING : null;
+}
+
 function renderPlayers() {
   const g = active();
   const fen = g.fenAt(viewPly);
@@ -98,6 +109,8 @@ function renderPlayers() {
     card.dataset.color = color;
     card.querySelector('[data-name]').textContent =
       (here ? g.nameOf(color) || colorName(color) : 'Opponent') + (!review && g.remote?.me === color ? ' (you)' : '');
+    const rt = here ? ratingOf(g, color) : null;
+    card.querySelector('[data-rating]').textContent = rt == null ? '' : String(rt);
     // pieces this player has taken, grouped by kind like chess.com, then the points lead
     const m = mat[color];
     const groups = [];
@@ -391,16 +404,29 @@ function scheduleFlip(delay = 300) {
 function onGameOver() {
   persist();
   storage.archive(game.toJSON());
+  const entry = resultOf(game.toJSON());
+  if (entry) { storage.saveResult(entry); ratings = rate(storage.loadResults()); }
   render();
   const g = game;
   $('#over-title').textContent = g.winnerText();
   $('#over-reason').textContent = g.termination;
+  const ch = ratings.changes.get(g.id) || {};
+  $('#over-rating').innerHTML = (['w', 'b'] as const)
+    .filter((c) => ch[c] && (!g.remote?.me || g.remote.me === c))
+    .map((c) => {
+      const { name, before, after } = ch[c];
+      const d = after - before;
+      return `<span>${esc(name)} ${after} <b class="${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '+' : '−'}${Math.abs(d)}</b></span>`;
+    }).join('');
   $('#dlg-over').classList.toggle('drawn', g.result === '1/2-1/2');
   $('#dlg-over .over-crown').textContent = g.result === '1-0' ? '♔' : g.result === '0-1' ? '♚' : '½';
   setTimeout(() => {
     if (game !== g || !g.over) return;
     openDialog('#dlg-over');
-    if (g.result !== '1/2-1/2' && settings.celebration !== 'none') confetti();
+    // celebrate a win by someone at this laptop, not the computer's or the colleague's
+    const winner = g.result === '1-0' ? 'w' : g.result === '0-1' ? 'b' : null;
+    const ours = winner && winner !== g.ai?.color && (!g.remote?.me || g.remote.me === winner);
+    if (ours && settings.celebration !== 'none') confetti();
   }, 650);
 }
 
@@ -540,6 +566,7 @@ function snapshot() {
     ot: game.overtime ? 1 : 0, f: game.forfeits.size ? [...game.forfeits] : undefined,
     c: [Math.round(game.clocks.w), Math.round(game.clocks.b)],
     r: game.result, t: game.termination, o: r.offer || null, p: pauseSeq,
+    rw: ratingOf(game, 'w') || undefined, rb: ratingOf(game, 'b') || undefined,
   };
 }
 
@@ -603,6 +630,7 @@ function completeJoin(snap, moves) {
     },
     ot: !!snap.ot,
   });
+  game.remote.or = (me === 'w' ? snap.rb : snap.rw) || null;
   playIn(moves, snap.f);
   if (snap.r && !game.result) game.finish(snap.r, snap.t || 'Game over');
   if (game.hasClock && snap.c) game.clocks = { w: snap.c[0], b: snap.c[1] };
@@ -630,6 +658,8 @@ function applySnapshot(snap, moves) {
   const someoneJoined = (!r.pw && snap.pw) || (!r.pb && snap.pb);
   if (snap.pw) r.pw = snap.pw;
   if (snap.pb) r.pb = snap.pb;
+  const theirs = r.me === 'w' ? snap.rb : snap.rw;
+  if (theirs) r.or = theirs;
   if (snap.w && r.me !== 'w') game.white = snap.w; // the colleague's name; ours stays ours
   if (snap.b && r.me !== 'b') game.black = snap.b;
 
@@ -1463,10 +1493,15 @@ function renderHome() {
 
 /** The office table: everyone who has played on this laptop, best score first. */
 function renderOffice() {
-  const rows = standings(storage.loadArchive()).slice(0, 8);
+  // people only (the computer isn't a colleague), best rated first
+  const rows = standings(storage.loadArchive())
+    .map((r) => ({ ...r, rating: ratings.players.get(playerKey(r.name))?.rating }))
+    .filter((r) => r.rating != null)
+    .sort((a, b) => b.rating - a.rating)
+    .slice(0, 8);
   $('#home-office').classList.toggle('hidden', !rows.length);
   $('#office-table').innerHTML = rows.map((r, i) => `<tr><td class="rk">${i + 1}</td><td class="nm">${esc(r.name)}</td>` +
-    `<td>${r.played}</td><td>${r.won}</td><td>${r.drawn}</td><td>${r.lost}</td><td class="pts">${String(r.score).replace('.5', '½')}</td></tr>`).join('');
+    `<td>${r.played}</td><td>${r.won}</td><td>${r.drawn}</td><td>${r.lost}</td><td class="pts">${r.rating}</td></tr>`).join('');
 }
 
 $('#home-games').addEventListener('click', (e) => {
